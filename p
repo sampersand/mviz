@@ -35,7 +35,7 @@ OptParse.new do |op|
     $files = true
   end
 
-  op.on '-N', '--[no-]number-args', "Number args; Not useful with -f. (default: when output's a tty)" do |nl|
+  op.on '--[no-]number-args', "Number outputs; Not useful with -f. (default: when output's a tty)" do |nl|
     $number_lines = nl
   end
 
@@ -230,39 +230,41 @@ if !$files
     puts
   end
 else
-  $<.binmode
   INPUT = String.new(capacity: 4096, encoding: $encoding)
-  loop do # TODO: handle directories
-    p $<.file.__id__
-    begin
-      $<.file.sysread(4096, INPUT)
-    rescue EOFError
-      p :done
-      break
-    end
-
-    (INPUT.prepend $tmp; $tmp = nil) if $tmp
-    if !(q=INPUT.byteslice(-1..)).valid_encoding?
-      if !(q=INPUT.byteslice(-2..)).valid_encoding?
-        if !(q=INPUT.byteslice(-3..)).valid_encoding?
-          # Need to support versions without `.bytesplice`
-          $tmp = q; INPUT.force_encoding('binary').slice!(-3..); INPUT.force_encoding $encoding
-        else
-          $tmp = q; INPUT.force_encoding('binary').slice!(-2..); INPUT.force_encoding $encoding
+  $*.unshift '/dev/stdin' if $*.empty?
+  while (arg = $*.shift)
+    open arg, 'rb', encoding: 'binary' do |file|
+      loop do
+        begin
+          file.sysread(4096, INPUT)
+        rescue EOFError
+          break
         end
-      else
-        $tmp = q; INPUT.force_encoding('binary').slice!(-1..); INPUT.force_encoding $encoding
+
+        (INPUT.prepend $tmp; $tmp = nil) if $tmp
+        if !(q=INPUT.byteslice(-1..)).valid_encoding?
+          if !(q=INPUT.byteslice(-2..)).valid_encoding?
+            if !(q=INPUT.byteslice(-3..)).valid_encoding?
+              # Need to support versions without `.bytesplice`
+              $tmp = q; INPUT.force_encoding('binary').slice!(-3..); INPUT.force_encoding $encoding
+            else
+              $tmp = q; INPUT.force_encoding('binary').slice!(-2..); INPUT.force_encoding $encoding
+            end
+          else
+            $tmp = q; INPUT.force_encoding('binary').slice!(-1..); INPUT.force_encoding $encoding
+          end
+        end
+
+        handle INPUT
+        $stdout.syswrite OUTPUT
+        OUTPUT.clear
+      end
+
+      if $tmp
+        handle $tmp
+        $stdout.syswrite OUTPUT
       end
     end
-
-    handle INPUT
-    $stdout.syswrite OUTPUT
-    OUTPUT.clear
-  end
-
-  if $tmp
-    handle $tmp
-    $stdout.syswrite OUTPUT
   end
 
   $no_newline and $stdout.syswrite "\n"
