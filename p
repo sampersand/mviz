@@ -21,53 +21,53 @@ OptParse.new do |op|
 
   op.separator "\nGeneric Options"
 
-  op.on '-h', '--help', 'Print this and then exit' do
-    puts op.help
-    exit
-  end
+  op.on '-h', '--help', 'Print this and then exit' do puts op.help; exit end
+  op.on       '--version', 'Print the version' do puts op.ver; exit end
+  op.on '-f', '--files', 'Interpret arguments as filenames to be read instead of strings' do $files = true end
 
-  op.on '--version', 'Print the version' do
-    puts op.ver
-    exit
-  end
-
-  op.on '-f', '--files', 'Interpret arguments as filenames to be read instead of strings' do
-    $files = true
-  end
-
-  op.on '--[no-]number-args', "Number outputs; Not useful with -f. (default: when output's a tty)" do |nl|
-    $number_lines = nl
-  end
-
+  op.separator "\nHow to Output (todo: clean this section up)"
+  # This has to be cleaned up a bit.
+  op.on '--[no-]number-lines', '--[no-]heading', 'Number args without -f; add headings with -f. (default: true if output is a tty)' do |x| $number_lines = x end
   op.on       '--trailing-newline', 'Print a final trailing newline; only useful with -f. (default)' do $no_newline = false end
   op.on '-n', '--no-trailing-newline', 'Suppress final trailing newline.' do $no_newline = true end
   # op.on '-N', '--[no-]number-lines', 'Number arguments; defaults to on when output is a TTY' do |nl| $number_lines = nl end
 
-  op.on '-d', '--delete', 'Delete invalid characters instead of printing them' do $delete = true end
+  op.separator "\nWhat to Escape."
 
-  op.separator "\nWhat to Escape"
-  op.on       '--escape-newline', 'Escape newlines. (default)' do $escape_newline = true end
-  op.on '-l', '--no-escape-newline', "Don't escape newlines (\"Line-oriented mode\")" do $escape_newline = false end
-  op.on       '--escape-tab', 'Escape tabs. (default)' do $escape_tab = true end
-  op.on '-t', '--no-escape-tab', "Don't escape tabs" do $escape_tab = false end
-  op.on '-s', '--[no-]escape-space', 'Escape spaces; only useful when in visual mode.' do |es| $escape_space = es end
-  op.on       '--[no-]escape-outer-space', 'Like --escape-space, but only leading/trailing spaces',
-                                           'Not useful with -f. (default)' do |ess| $escape_surronding_spaces = ess end
-  op.on '-B', '--[no-]escape-backslash', 'Escape backslashes (default: off when in --visual)' do |eb| $escape_backslash = eb end
-  op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters via `\u{...}`' do |eu| $escape_unicode = eu end
-  op.on '-P', '--[no-]escape-print', 'Escape all non-print characters (including unicode ones)' do |ep| $escape_print = ep end
+  op.on       '--[no-]escape-newline', 'Escape newlines. (default)' do |x| $escape_newline = x end
+  op.on '-l', 'Shorthand for --no-escape-newline. ("Line-oriented mode")' do $escape_newline = false end
+  op.on       '--[no-]escape-tab', 'Escape tabs. (default)' do |x| $escape_tab = x end
+  op.on '-t', 'Shorthand for --no-escape-tabs.' do $escape_tab = false end
+
+  op.on '-s', '--[no-]escape-space', 'Escape spaces by visualizing them. Only useful in visual mode.' do |es| $escape_space = es end
+
+  op.on '--[no-]escape-outer-space', 'Visualize leading and trailing whitespace. (default); not useful with -f' do |ess|
+    $escape_surronding_spaces = ess
+  end
+
+  op.on '-B', '--[no-]escape-backslash', 'Escape backslashes (default when in visual)' do |eb|
+    $escape_backslash = eb
+  end
+
+  op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters via `\u{...}`' do |eu|
+    $escape_unicode = eu
+  end
+
+  op.on '-P', '--[no-]escape-print', 'Escape all non-print characters (including unicode ones) TODO' do |ep| $escape_print = ep end
   # op.on '-a', '--escape-all', 'Escapes all characters' do $escape_space = $escape_backslash = $escape_tab = $escape_newline = $escape_unicode = true end
   # op.on '-w', '--no-escape-whitespace', 'Do not escape whitespace' do $escape_space = $escape_tab = $escape_newline = $escape_surronding_spaces = false end
 
-  op.on "\nHow to Escape"
-  $c_escapes = true
+  op.separator "\nHow to Escape"
+  op.on '-d', '--delete', 'Delete invalid characters instead of printing them' do
+    $delete = true
+  end
+
   op.on '-v', '--visualize', 'Enable visual effects. (default: when output is a tty)' do $visual = true end
   op.on '-V', '--no-visualize', "Don't enable visual effects" do $visual = false end
   op.on       '--[no-]visualize-invalid', 'Enable a separator colour for invalid bytes when in visual mode',
                                           'Not all output encodings have invalid bytes, eg -b. (default)' do |iv| $invalid_visual = iv end
   op.on       '--c-escapes', 'Use C-style escapes (\n, \t, etc, and \xHH). (default)' do $c_escapes = true end
   op.on '-x', '--hex-escapes', "Escape in \\xHH format. (doesn't affect backslashes or unicode)" do $c_escapes = false end
-  # TODO: octal?
 
   op.on "\nOutput Encodings (all inputs are assumed binary)"
   op.on '-E', '--encoding=ENCODING', 'The output encoding; Specify `list` for the list.' do |enc|
@@ -87,6 +87,8 @@ OptParse.new do |op|
   op.on '--[no-]encoding-failure-err', 'Invalid bytes cause non-zero exit. (default: output isnt a tty)' do |efe| $encoding_failure_error = efe end
 
   op.on_tail "\nnote: IF any invalid bytes for the output encoding are read, the exit status is based on `--encoding-failure-err`"
+
+
 
   op.require_exact = true if defined? op.require_exact = true
   op.on 'ENVIRONMENT: P_BEGIN_STANDOUT; P_END_STANDOUT; P_BEGIN_ERR; P_END_ERR'
@@ -109,11 +111,13 @@ defined? $escape_spaces            or $escape_spaces = !$files
 defined? $escape_tab               or $escape_tab = true
 defined? $escape_newline           or $escape_newline = true
 defined? $escape_print             or $escape_print = true
-defined? $number_lines             or $number_lines = !$files && $stdout.tty?
+defined? $number_lines             or $number_lines = $stdout.tty?
 defined? $escape_backslash         or $escape_backslash = !$visual
 defined? $invalid_visual           or $invalid_visual = true
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 defined? $encoding                 or $encoding = Encoding.find('locale')
+defined? $c_escapes                or $c_escapes = true
+
 
 ####################################################################################################
 #                                                                                                  #
@@ -234,6 +238,7 @@ else
   $*.unshift '/dev/stdin' if $*.empty?
   while (arg = $*.shift)
     open arg, 'rb', encoding: 'binary' do |file|
+      $number_lines and print "\n==[#{arg}]==\n" # TODO: clean this up
       loop do
         begin
           file.sysread(4096, INPUT)
