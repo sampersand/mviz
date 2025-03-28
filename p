@@ -18,7 +18,7 @@ OptParse.new do |op|
   op.banner = <<~BANNER
     usage: #{op.program_name} [options] [string ...]
            #{op.program_name} -f/--files [options] [file ...]
-    With no arguments, second form is assumed if stdin isnt a tty.
+    When no arguments, and stdin isn't a tty, the second form is assumed.
   BANNER
   op.require_exact = true if defined? op.require_exact = true
 
