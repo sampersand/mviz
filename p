@@ -163,23 +163,22 @@ ESCAPES = Hash.new
 ## NOTE: All encodings that ruby supports are ascii-compatible, other than utf-{16,32}{be,le}
 
 ## Default escape sequences
+Encoding.default_internal = Encoding::UTF_8
 
 # Set the default escapes for all "C0" control characters, as well as `DEL`.
-[*0x00...0x20, 0x7F].map { |c| c.chr $output_encoding }.each do |char|
+[*0x00...0x20, 0x7F].map(&:chr).each do |char|
   ESCAPES[char] = visualize_hex(char)
 end
 
 if $pictures
   (0x00...0x20).each do |char|
-    ESCAPES[char.chr($output_encoding)] = visualize (0x2400 + char).chr('utf-8')
+    ESCAPES[char.chr] = visualize (0x2400 + char).chr(Encoding::UTF_8)
   end
-  ESCAPES[0x7f.chr($output_encoding)] = visualize "\u{2421}"
+  ESCAPES[0x7f.chr] = visualize "\u{2421}"
 end
 
-
 ## Normal print characters
-(0x20...0x7F).map{ |c| c.chr #$encoding
-}.each do |char|
+(0x20...0x7F).map(&:chr).each do |char|
   ESCAPES[char] = char
 end
 
@@ -209,6 +208,13 @@ $encoding == Encoding::BINARY and (0x80..0xFF).map{ |c| c.chr $encoding }.each d
   ESCAPES[char] = visualize_hex(char)
 end
 
+# If not using an ascii-compatible encoding like UTF-16, then change all the keys to the compatible
+# version. This is de-optimized, because UTF-16 conversions aren't common, so doing it at the end
+# here is fine.
+unless $encoding.ascii_compatible?
+  ESCAPES.replace ESCAPES.map { |char, escape| [char.encode($encoding), escape] }.to_h
+end
+
 ####################################################################################################
 #                                                                                                  #
 #                                         Handle Arguments                                         #
@@ -218,20 +224,12 @@ end
 CAPACITY = 4096
 OUTPUT = String.new(capacity: CAPACITY * 8, encoding: Encoding::BINARY)
 
-
-# p ESCAPES.keys
-# p ESCAPES["a"]
-# p ESCAPES["a".+@.force_encoding('utf-8')]
-# p ESCAPES["a".+@.encode('utf-16le')]
-# exit
 def handle(string)
   # Print the contents of the string; we use an `OUTPUT`
   OUTPUT.clear
 
   string.force_encoding($encoding).each_char do |char|
     OUTPUT << (
-          # p "char: #{char.bytes} #{ESCAPES[char].bytes} #{ESCAPES["a"].inspect}"
-
       ESCAPES[char] ||=
         if !char.valid_encoding?
           $ENCODING_FAILED = true
