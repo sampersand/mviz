@@ -4,6 +4,9 @@ defined?(RubyVM::YJIT.enable) and RubyVM::YJIT.enable
 
 require 'optparse'
 
+## Default escape sequences
+Encoding.default_internal = Encoding::UTF_8
+
 ####################################################################################################
 #                                                                                                  #
 #                                         Parse Arguments                                          #
@@ -129,10 +132,9 @@ defined? $c_escapes                or $c_escapes = true
 # encoding failure occurred
 $encoding_failure_error and at_exit { exit !$ENCODING_FAILED }
 
-
 ####################################################################################################
 #                                                                                                  #
-#                                        Create Escape Hash                                        #
+#                                       Visualizing Escapes                                        #
 #                                                                                                  #
 ####################################################################################################
 
@@ -147,26 +149,29 @@ end
 # - if `$visual` is specified, then `start` and `stop` surround `string`
 # - else, `string` is returned.
 def visualize(string, start: BEGIN_STANDOUT, stop: END_STANDOUT)
-  return '' if $delete
-
-  if $visual
-    "#{start}#{string}#{stop}"
-  else
-    string
+  case
+  when $delete then ''
+  when $visual then "#{start}#{string}#{stop}"
+  else              string
   end
 end
+
+####################################################################################################
+#                                                                                                  #
+#                                        Create Escape Hash                                        #
+#                                                                                                  #
+####################################################################################################
 
 ## Construct the `ESCAPES` hash, whose keys are characters, and values are the desired escape
 # sequences.
 ESCAPES = Hash.new
 
-## NOTE: All encodings that ruby supports are ascii-compatible, other than utf-{16,32}{be,le}
+## NOTE: The ranges here use hex escapes for the characters to make it more obvious what the bounds
+# are; th
 
-## Default escape sequences
-Encoding.default_internal = Encoding::UTF_8
-
-# Set the default escapes for all "C0" control characters, as well as `DEL`.
-[*0x00...0x20, 0x7F].map(&:chr).each do |char|
+## Escape the lower control characters (i.e. \x00..\x20 and \x7F) with their hex escapes. Note that
+# some of these escapes escapes may be overwritten below by user options (like `--c-escapes`).
+[*"\0"..."\x20", "\x7F"].each do |char|
   ESCAPES[char] = visualize_hex(char)
 end
 
@@ -174,11 +179,12 @@ if $pictures
   (0x00...0x20).each do |char|
     ESCAPES[char.chr] = visualize (0x2400 + char).chr(Encoding::UTF_8)
   end
+
   ESCAPES[0x7f.chr] = visualize "\u{2421}"
 end
 
-## Normal print characters
-(0x20...0x7F).map(&:chr).each do |char|
+## Normal print characters (space thru tilde)
+("\x20".."\x7F").each do |char|
   ESCAPES[char] = char
 end
 
@@ -202,18 +208,21 @@ ESCAPES["\t"] = "\t" unless $escape_tab
 ESCAPES['\\'] = visualize('\\\\') if $escape_backslash
 ESCAPES[' ']  = visualize(' ') if $escape_space
 
-# Escape the high-bit characters when we're in binary mode; We need to do this because the high-bit
-# characters are technically valid (ie `"\x80".force_encoding("binary").)
-$encoding == Encoding::BINARY and (0x80..0xFF).map{ |c| c.chr $encoding }.each do |char|
-  ESCAPES[char] = visualize_hex(char)
-end
-
-# If not using an ascii-compatible encoding like UTF-16, then change all the keys to the compatible
-# version. This is de-optimized, because UTF-16 conversions aren't common, so doing it at the end
-# here is fine.
-unless $encoding.ascii_compatible?
+if $encoding == Encoding::BINARY
+  # Escape the high-bit characters when we're in binary mode; We need to do this because the
+  # high-bit characters are technically valid (ie `"\x80".force_encoding("binary").)
+  ("\x80".."\xFF").map(&:chr).each do |char|
+    ESCAPES[char] = visualize_hex(char)
+  end
+elsif !$encoding.ascii_compatible?
+  # If not using an ascii-compatible encoding like UTF-16, then change all the keys to the
+  # compatible version. This is de-optimized, because UTF-16 conversions aren't common, so doing it
+  # at the end here is fine.
   ESCAPES.replace ESCAPES.map { |char, escape| [char.encode($encoding), escape] }.to_h
 end
+
+p ESCAPES
+exit
 
 ####################################################################################################
 #                                                                                                  #
