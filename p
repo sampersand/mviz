@@ -162,9 +162,9 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-## Construct the `ESCAPES` hash, whose keys are characters, and values are the desired escape
-# sequences.
-ESCAPES = Hash.new
+## Construct the `CHARACTERS` hash, whose keys are characters, and values are the corresponding
+# sequences to be printed.
+CHARACTERS = {}
 
 ################################################################################
 #                               Set the Defaults                               #
@@ -173,12 +173,12 @@ ESCAPES = Hash.new
 ## Escape the lower control characters (i.e. \x00..\x1F and \x7F) with their hex escapes. Note that
 # some of these escapes escapes may be overwritten below by user options (like `--c-escapes`).
 [*"\0".."\x1F", "\x7F"].each do |char|
-  ESCAPES[char] = visualize_hex(char)
+  CHARACTERS[char] = visualize_hex(char)
 end
 
 ## Add in normal ASCII printable characters (i.e. \x20..\x7E).
 (' '..'~').each do |char|
-  ESCAPES[char] = char
+  CHARACTERS[char] = char
 end
 
 ## Escape the high-bit characters (i.e. \x80..\xFF) when we're outputting binary data, because the
@@ -186,7 +186,7 @@ end
 # true), so our logic later on would print them out verbatim.
 if $encoding == Encoding::BINARY
   ("\x80".."\xFF").each do |char|
-    ESCAPES[char] = visualize_hex(char)
+    CHARACTERS[char] = visualize_hex(char)
   end
 end
 
@@ -198,31 +198,59 @@ end
 # instead of whatever else.
 if $pictures
   (0x00...0x20).each do |char|
-    ESCAPES[char.chr] = visualize (0x2400 + char).chr(Encoding::UTF_8)
+    CHARACTERS[char.chr] = visualize (0x2400 + char).chr(Encoding::UTF_8)
   end
 
-  ESCAPES["\x7F"] = visualize "\u{2421}"
+  CHARACTERS["\x7F"] = visualize "\u{2421}"
 end
 
 ## If C-Style escapes were specified, then change a subset of the control characters to use the
 # alternative syntax instead of their hex escapes.
 if $c_escapes
-  ESCAPES["\0"] = visualize '\0'
-  ESCAPES["\a"] = visualize '\a'
-  ESCAPES["\b"] = visualize '\b'
-  ESCAPES["\t"] = visualize '\t'
-  ESCAPES["\n"] = visualize '\n'
-  ESCAPES["\v"] = visualize '\v'
-  ESCAPES["\f"] = visualize '\f'
-  ESCAPES["\r"] = visualize '\r'
-  ESCAPES["\e"] = visualize '\e'
+  CHARACTERS["\0"] = visualize '\0'
+  CHARACTERS["\a"] = visualize '\a'
+  CHARACTERS["\b"] = visualize '\b'
+  CHARACTERS["\t"] = visualize '\t'
+  CHARACTERS["\n"] = visualize '\n'
+  CHARACTERS["\v"] = visualize '\v'
+  CHARACTERS["\f"] = visualize '\f'
+  CHARACTERS["\r"] = visualize '\r'
+  CHARACTERS["\e"] = visualize '\e'
 end
 
 ## Individual character escapes
-ESCAPES["\n"] = "\n" unless $escape_newline
-ESCAPES["\t"] = "\t" unless $escape_tab
-ESCAPES['\\'] = visualize('\\\\') if $escape_backslash
-ESCAPES[' ']  = visualize(' ') if $escape_space
+CHARACTERS["\n"] = "\n" unless $escape_newline
+CHARACTERS["\t"] = "\t" unless $escape_tab
+CHARACTERS['\\'] = visualize('\\\\') if $escape_backslash
+CHARACTERS[' ']  = visualize(' ') if $escape_space
+
+################################################################################
+#                             Any Other Characters                             #
+################################################################################
+
+## Handle characters without entries in CHARACTERS by adding their value to `CHARACTERS`:
+#
+# 1. If the character's not valid for $encoding (eg an invalid UTF-8 byte), then `$ENCODING_FAILED`
+#    is set (for later use for the exit status of `p`) and an "error" visualization is used (unless
+#    `--no-visualize-invalid` was given).
+# 2. If the character is valid, but `--escape-unicode` was passed in, then the character is escaped
+#    with the `\u{...}` syntax (`...` being the unicode codepoint for the character). This might be
+#    separated further in the future to allow for more precise handling over _what_ becomes escaped.
+# 3. Otherwise, the character (and all its bytes) are used directly.
+#
+# Note that the escapes are cached for further re-use. While theoretically over time memory
+# consumption may grow, in reality there's not enough unique characters for this to be a problem.
+CHARACTERS.default_proc = proc do |hash, char|
+  hash[char] =
+    if !char.valid_encoding?
+      $ENCODING_FAILED = true # for the exit status with `$encoding_failure_error`.
+      $invalid_visual ? visualize_hex(char, start: BEGIN_ERR, stop: END_ERR) : visualize_hex(char)
+    elsif $escape_unicode
+      visualize '\u{%04X}' % char.codepoints.sum
+    else
+      char
+    end
+end
 
 ################################################################################
 #                    Handle Non-ASCII Compatible Characters                    #
@@ -230,11 +258,11 @@ ESCAPES[' ']  = visualize(' ') if $escape_space
 
 ## If not using ASCII-compatible encodings (like UTF-16), then encode all the keys to the encoding.
 # This is required because hash lookups in ruby are based on "compatible" encodings, and all of the
-# values added to ESCAPES previously are all ASCII-based. (This section is de-optimized, i.e. we
+# values added to CHARACTERS previously are all ASCII-based. (This section is de-optimized, i.e. we
 # do it at the end here instead of converting every string in-place, because conversions to/from
 # UTF-16 aren't a terribly common use-case; Users have to explicitly supply `--encoding=UTF-16`.)
 unless $encoding.ascii_compatible?
-  ESCAPES.transform_keys!(&:encode) # Can't use `encode!` because keys of hashes are frozen
+  CHARACTERS.transform_keys!(&:encode) # Can't use `encode!` because keys of hashes are frozen
 end
 
 ####################################################################################################
@@ -246,22 +274,12 @@ end
 CAPACITY = 4096
 OUTPUT = String.new(capacity: CAPACITY * 8, encoding: Encoding::BINARY)
 
+# TODO: optimize this later
 def handle(string)
-  # Print the contents of the string; we use an `OUTPUT`
   OUTPUT.clear
 
   string.force_encoding($encoding).each_char do |char|
-    OUTPUT << (
-      ESCAPES[char] ||=
-        if !char.valid_encoding?
-          $ENCODING_FAILED = true
-          $invalid_visual ? visualize_hex(char, start: BEGIN_ERR, stop: END_ERR) : visualize_hex(char)
-        elsif $escape_unicode #|| ($escape_print && char =~ /\p{Graph}/)
-          visualize('\u{%04X}' % char.codepoints.sum)
-        else
-          char
-        end
-    )
+    OUTPUT << CHARACTERS[char]
   end
 
   $stdout.write OUTPUT
