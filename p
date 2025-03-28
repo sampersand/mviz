@@ -118,6 +118,10 @@ defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 defined? $encoding                 or $encoding = Encoding.find('locale')
 defined? $c_escapes                or $c_escapes = true
 
+# If `--encoding-failure-err` was specified, then exit depending on whether an
+# encoding failure occurred
+$encoding_failure_error and at_exit { exit !$ENCODING_FAILED }
+
 
 ####################################################################################################
 #                                                                                                  #
@@ -201,7 +205,7 @@ def handle(string)
   # Print the contents of the string; we use an `OUTPUT`
   OUTPUT.clear
 
-  string.each_char do |char|
+  string.force_encoding($encoding).each_char do |char|
     OUTPUT << (
       ESCAPES[char] ||=
         if !char.valid_encoding?
@@ -235,54 +239,59 @@ def handle_argv_string(string)
     trailing_spaces = string.slice!(/ *\z/)
   end
 
-  handle string.force_encoding $encoding
+  handle string
 
   trailing_spaces and $stdout.write trailing_spaces
 end
 
 
-# TODO: allow for `p filename`
-if !$files
+## Interpret arguments as strings
+unless $files
   $*.each_with_index do |arg, idx|
     $number_lines and printf "%5d: ", idx + 1
     handle_argv_string arg
     $number_lines and puts
   end
-else
-  INPUT = String.new(capacity: CAPACITY, encoding: $encoding)
-  $*.unshift '/dev/stdin' if $*.empty?
-  while (arg = $*.shift)
-    open arg, 'rb', encoding: 'binary' do |file|
-      $number_lines and print "\n==[#{arg}]==\n" # TODO: clean this up
-      loop do
-        begin
-          file.sysread(CAPACITY, INPUT)
-        rescue EOFError
-          break
-        end
+  exit
+end
 
-        (INPUT.prepend $tmp; $tmp = nil) if $tmp
-        if !(q=INPUT.byteslice(-1..)).valid_encoding?
-          if !(q=INPUT.byteslice(-2..)).valid_encoding?
-            if !(q=INPUT.byteslice(-3..)).valid_encoding?
-              # Need to support versions without `.bytesplice`
-              $tmp = q; INPUT.force_encoding('binary').slice!(-3..); INPUT.force_encoding $encoding
-            else
-              $tmp = q; INPUT.force_encoding('binary').slice!(-2..); INPUT.force_encoding $encoding
-            end
-          else
-            $tmp = q; INPUT.force_encoding('binary').slice!(-1..); INPUT.force_encoding $encoding
-          end
-        end
+## Interpret arguments as files
+ARGF.binmode
+INPUT = String.new(capacity: CAPACITY, encoding: $encoding)
 
-        handle INPUT
+$number_lines and print "#{ARGF.filename}:" # TODO: clean this up
+
+loop do
+  begin
+    ARGF.readpartial(CAPACITY, INPUT)
+  rescue EOFError
+    break
+  rescue
+    abort $!.to_s
+  end
+
+  if INPUT.empty?
+    $tmp and (handle $tmp; $tmp = nil)
+    $number_lines and print "\n#{ARGF.filename}:" # TODO: clean this up
+    next
+  end
+
+  (INPUT.prepend $tmp; $tmp = nil) if $tmp
+  if !(q=INPUT.byteslice(-1..)).valid_encoding?
+    if !(q=INPUT.byteslice(-2..)).valid_encoding?
+      if !(q=INPUT.byteslice(-3..)).valid_encoding?
+        # Need to support versions without `.bytesplice`
+        $tmp = q; INPUT.force_encoding('binary').slice!(-3..)
+      else
+        $tmp = q; INPUT.force_encoding('binary').slice!(-2..)
       end
-
-      $tmp and handle $tmp
+    else
+      $tmp = q; INPUT.force_encoding('binary').slice!(-1..)
     end
   end
 
-  $no_newline and $stdout.syswrite "\n"
+  handle INPUT
 end
+$tmp and handle $tmp
 
-$encoding_failure_error and exit $ENCODING_FAILED
+$no_newline or $stdout.write "\n"
