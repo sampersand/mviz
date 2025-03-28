@@ -234,8 +234,7 @@ ESCAPES[' ']  = visualize(' ') if $escape_space
 # do it at the end here instead of converting every string in-place, because conversions to/from
 # UTF-16 aren't a terribly common use-case; Users have to explicitly supply `--encoding=UTF-16`.)
 unless $encoding.ascii_compatible?
-  # Target
-  ESCAPES.replace ESCAPES.map { |char, escape| [char.encode($encoding), escape] }.to_h
+  ESCAPES.transform_keys!(&:encode) # Can't use `encode!` because keys of hashes are frozen
 end
 
 ####################################################################################################
