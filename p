@@ -64,8 +64,8 @@ OptParse.new nil, 30 do |op|
 
   op.on '-v', '--visualize', 'Enable visual effects. (default: when output is a tty)' do $visual = true end
   op.on '-V', '--no-visualize', "Don't enable visual effects" do $visual = false end
-  op.on       '--[no-]visualize-invalid', 'Enable a separator colour for invalid bytes when in visual mode',
-                                          'Not all output encodings have invalid bytes, eg -b. (default)' do |iv| $invalid_visual = iv end
+  # op.on       '--[no-]visualize-invalid', 'Enable a separator colour for invalid bytes when in visual mode',
+  #                                         'Not all output encodings have invalid bytes, eg -b. (default)' do |iv| $invalid_visual = iv end
   op.on       '--c-escapes', 'Use C-style escapes (\n, \t, etc, and \xHH). (default)' do $c_escapes = true end
   op.on '-x', '--hex-escapes', "Escape in \\xHH format. (doesn't affect backslashes or unicode)" do $c_escapes = false end
   op.on '-P', '--pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do
@@ -115,7 +115,6 @@ defined? $escape_tab               or $escape_tab = true
 defined? $escape_newline           or $escape_newline = true
 defined? $number_lines             or $number_lines = $stdout.tty?
 defined? $escape_backslash         or $escape_backslash = !$visual
-defined? $invalid_visual           or $invalid_visual = true
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 defined? $encoding                 or $encoding = Encoding.find('locale')
 defined? $c_escapes                or $c_escapes = true
@@ -223,8 +222,7 @@ CHARACTERS[' ']  = visualize(' ') if $escape_space
 ## Handle characters without entries in CHARACTERS by adding their value to `CHARACTERS`:
 #
 # 1. If the character's not valid for $encoding (eg an invalid UTF-8 byte), then `$ENCODING_FAILED`
-#    is set (for later use for the exit status of `p`) and an "error" visualization is used (unless
-#    `--no-visualize-invalid` was given).
+#    is set (for later use for the exit status of `p`) and an "error" visualization is used.
 # 2. If the character is valid, but `--escape-unicode` was passed in, then the character is escaped
 #    with the `\u{...}` syntax (`...` being the unicode codepoint for the character). This might be
 #    separated further in the future to allow for more precise handling over _what_ becomes escaped.
@@ -236,7 +234,7 @@ CHARACTERS.default_proc = proc do |hash, char|
   hash[char] =
     if !char.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$encoding_failure_error`.
-      $invalid_visual ? visualize_hex(char, start: BEGIN_ERR, stop: END_ERR) : visualize_hex(char)
+      visualize_hex(char, start: BEGIN_ERR, stop: END_ERR)
     elsif $escape_unicode
       visualize '\u{%04X}' % char.codepoints.sum
     else
