@@ -78,6 +78,7 @@ OptParse.new do |op|
 
     $encoding = Encoding.find enc rescue op.abort
   end
+  alias $output_encoding $encoding
 
   op.on '-u', '-8', '--utf-8', 'Equivalent to --encoding=UTF-8. (default)' do $encoding = Encoding::UTF_8 end
   op.on '-b', '--binary', '--bytes', 'Equivalent to --encoding=binary. (All bytes are valid.)' do $encoding = Encoding::BINARY end
@@ -110,7 +111,6 @@ defined? $encoding_failure_error   or $encoding_failure_error = !$stdout.tty?
 defined? $escape_spaces            or $escape_spaces = !$files
 defined? $escape_tab               or $escape_tab = true
 defined? $escape_newline           or $escape_newline = true
-defined? $escape_print             or $escape_print = true
 defined? $number_lines             or $number_lines = $stdout.tty?
 defined? $escape_backslash         or $escape_backslash = !$visual
 defined? $invalid_visual           or $invalid_visual = true
@@ -127,7 +127,7 @@ defined? $c_escapes                or $c_escapes = true
 
 # Visualize a character in hex format
 def visualize_hex(char, **b)
-  visualize char.each_byte.map { |b| '\x%02X' % b }.join, **b
+  visualize(char.each_byte.map { |byte| '\x%02X' % byte }.join, **b)
 end
 
 # Add "visualize" escape sequences to a string; all escaped characters should be passed to this, as
@@ -135,7 +135,6 @@ end
 # - if `$delete` is specified, then an empty string is returned---escaped characters are deleted.
 # - if `$visual` is specified, then `start` and `stop` surround `string`
 # - else, `string` is returned.
-#
 def visualize(string, start: BEGIN_STANDOUT, stop: END_STANDOUT)
   return '' if $delete
 
@@ -153,9 +152,8 @@ ESCAPES = Hash.new
 ## Default escape sequences
 
 # Set the default escapes for all "C0" control characters, as well as `DEL`.
-[*0x00...0x20, 0x7F].each do |c|
-  c = c.chr $encoding
-  ESCAPES[c] = visualize_hex(c)
+[*0x00...0x20, 0x7F].map { |c| c.chr $output_encoding }.each do |char|
+  ESCAPES[char] = visualize_hex(char)
 end
 
 ## Normal print characters
@@ -207,41 +205,45 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-OUTPUT = String.new(capacity: 4096 * 8, encoding: Encoding::BINARY)
+CAPACITY = 4096
+OUTPUT = String.new(capacity: CAPACITY * 8, encoding: Encoding::BINARY)
 
-def handle(line)
-  line.each_char do |char|
+def handle(string)
+  OUTPUT.clear
+
+  string.each_char do |char|
     OUTPUT << ESCAPES[char]
   end
+
+  $stdout.write OUTPUT
 end
+
 
 # TODO: allow for `p filename`
 if !$files
   $*.each_with_index do |arg, idx|
-    $number_lines and printf "%5d: ", idx += 1
+    $number_lines and printf "%5d: ", idx + 1
     arg = (+arg)
 
     if $escape_surronding_spaces
       arg.force_encoding Encoding::BINARY
-      x = arg.slice!(/\A */) and OUTPUT.concat visualize(x)
+      x = arg.slice!(/\A */) and $stdout.write visualize x
       rest = arg.slice!(/ *\z/)
     end
 
     handle arg.force_encoding $encoding
-    rest and OUTPUT.concat visualize rest
-    OUTPUT.display
-    OUTPUT.clear
+    rest and $stdout.write visualize rest
     puts
   end
 else
-  INPUT = String.new(capacity: 4096, encoding: $encoding)
+  INPUT = String.new(capacity: CAPACITY, encoding: $encoding)
   $*.unshift '/dev/stdin' if $*.empty?
   while (arg = $*.shift)
     open arg, 'rb', encoding: 'binary' do |file|
       $number_lines and print "\n==[#{arg}]==\n" # TODO: clean this up
       loop do
         begin
-          file.sysread(4096, INPUT)
+          file.sysread(CAPACITY, INPUT)
         rescue EOFError
           break
         end
@@ -261,14 +263,9 @@ else
         end
 
         handle INPUT
-        $stdout.syswrite OUTPUT
-        OUTPUT.clear
       end
 
-      if $tmp
-        handle $tmp
-        $stdout.syswrite OUTPUT
-      end
+      $tmp and handle $tmp
     end
   end
 
