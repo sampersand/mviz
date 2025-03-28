@@ -256,20 +256,23 @@ unless $files
 end
 
 ## Interpret arguments as files
+# TODO: This can be made a bit faster using `syswrite`, but at the cost of
+# making this so much uglier
 ARGF.binmode
 INPUT = String.new(capacity: CAPACITY, encoding: $encoding)
 
+# Note that `ARGF.each_char` would do what we want, except it's (a) a bit slower than using
+# `readpartial` and (b) wouldn't allow us to easily know when files changed (for filename outputs).
+def not_done_reading_all_files?
+  ARGF.readpartial(CAPACITY, INPUT)
+rescue EOFError
+  false
+rescue
+  abort $!.to_s
+end
+
 $number_lines and print "#{ARGF.filename}:" # TODO: clean this up
-
-loop do
-  begin
-    ARGF.readpartial(CAPACITY, INPUT)
-  rescue EOFError
-    break
-  rescue
-    abort $!.to_s
-  end
-
+while not_done_reading_all_files?
   if INPUT.empty?
     $tmp and (handle $tmp; $tmp = nil)
     $number_lines and print "\n#{ARGF.filename}:" # TODO: clean this up
