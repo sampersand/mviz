@@ -166,30 +166,46 @@ end
 # sequences.
 ESCAPES = Hash.new
 
-## NOTE: The ranges here use hex escapes for the characters to make it more obvious what the bounds
-# are; th
+################################################################################
+#                               Set the Defaults                               #
+################################################################################
 
-## Escape the lower control characters (i.e. \x00..\x20 and \x7F) with their hex escapes. Note that
+## Escape the lower control characters (i.e. \x00..\x1F and \x7F) with their hex escapes. Note that
 # some of these escapes escapes may be overwritten below by user options (like `--c-escapes`).
-[*"\0"..."\x20", "\x7F"].each do |char|
+[*"\0".."\x1F", "\x7F"].each do |char|
   ESCAPES[char] = visualize_hex(char)
 end
 
+## Add in normal ASCII printable characters (i.e. \x20..\x7E).
+(' '..'~').each do |char|
+  ESCAPES[char] = char
+end
+
+## Escape the high-bit characters (i.e. \x80..\xFF) when we're outputting binary data, because the
+# high-bit characters are technically valid (ie `"\x80".force_encoding("binary").valid_encoding?` is
+# true), so our logic later on would print them out verbatim.
+if $encoding == Encoding::BINARY
+  ("\x80".."\xFF").each do |char|
+    ESCAPES[char] = visualize_hex(char)
+  end
+end
+
+################################################################################
+#                                 Apply Flags                                  #
+################################################################################
+
+## If the control pictures were requested, then print out visualizations of the control characters
+# instead of whatever else.
 if $pictures
   (0x00...0x20).each do |char|
     ESCAPES[char.chr] = visualize (0x2400 + char).chr(Encoding::UTF_8)
   end
 
-  ESCAPES[0x7f.chr] = visualize "\u{2421}"
+  ESCAPES["\x7F"] = visualize "\u{2421}"
 end
 
-## Normal print characters (space thru tilde)
-("\x20".."\x7F").each do |char|
-  ESCAPES[char] = char
-end
-
-# If the user specified "c-style escapes" (the default), then replace the escapes for a specific
-# subset of characters with their C-style escape equivalents.
+## If C-Style escapes were specified, then change a subset of the control characters to use the
+# alternative syntax instead of their hex escapes.
 if $c_escapes
   ESCAPES["\0"] = visualize '\0'
   ESCAPES["\a"] = visualize '\a'
@@ -202,27 +218,25 @@ if $c_escapes
   ESCAPES["\e"] = visualize '\e'
 end
 
-# If the user disabled escaping of newlines or tabs, then reset them to their "unescaped" state.
+## Individual character escapes
 ESCAPES["\n"] = "\n" unless $escape_newline
 ESCAPES["\t"] = "\t" unless $escape_tab
 ESCAPES['\\'] = visualize('\\\\') if $escape_backslash
 ESCAPES[' ']  = visualize(' ') if $escape_space
 
-if $encoding == Encoding::BINARY
-  # Escape the high-bit characters when we're in binary mode; We need to do this because the
-  # high-bit characters are technically valid (ie `"\x80".force_encoding("binary").)
-  ("\x80".."\xFF").map(&:chr).each do |char|
-    ESCAPES[char] = visualize_hex(char)
-  end
-elsif !$encoding.ascii_compatible?
-  # If not using an ascii-compatible encoding like UTF-16, then change all the keys to the
-  # compatible version. This is de-optimized, because UTF-16 conversions aren't common, so doing it
-  # at the end here is fine.
+################################################################################
+#                    Handle Non-ASCII Compatible Characters                    #
+################################################################################
+
+## If not using ASCII-compatible encodings (like UTF-16), then encode all the keys to the encoding.
+# This is required because hash lookups in ruby are based on "compatible" encodings, and all of the
+# values added to ESCAPES previously are all ASCII-based. (This section is de-optimized, i.e. we
+# do it at the end here instead of converting every string in-place, because conversions to/from
+# UTF-16 aren't a terribly common use-case; Users have to explicitly supply `--encoding=UTF-16`.)
+unless $encoding.ascii_compatible?
+  # Target
   ESCAPES.replace ESCAPES.map { |char, escape| [char.encode($encoding), escape] }.to_h
 end
-
-p ESCAPES
-exit
 
 ####################################################################################################
 #                                                                                                  #
