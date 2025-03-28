@@ -127,7 +127,7 @@ end
 # - if `$delete` is specified, then an empty string is returned---escaped characters are deleted.
 # - if `$visual` is specified, then `start` and `stop` surround `string`
 # - else, `string` is returned.
-def visualize(string, start: BEGIN_STANDOUT, stop: END_STANDOUT)
+def visualize(string, start=BEGIN_STANDOUT, stop=END_STANDOUT)
   case
   when $delete then ''
   when $visual then "#{start}#{string}#{stop}"
@@ -177,7 +177,7 @@ end
 # instead of whatever else.
 if $pictures
   (0x00...0x20).each do |char|
-    CHARACTERS[char.chr] = visualize (0x2400 + char).chr(Encoding::UTF_8)
+    CHARACTERS[char.chr] = visualize((0x2400 + char).chr(Encoding::UTF_8))
   end
 
   CHARACTERS["\x7F"] = visualize "\u{2421}"
@@ -223,7 +223,7 @@ CHARACTERS.default_proc = proc do |hash, char|
   hash[char] =
     if !char.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$encoding_failure_error`.
-      visualize hex_bytes(char), start: BEGIN_ERR, stop: END_ERR
+      visualize hex_bytes(char), BEGIN_ERR, END_ERR
     elsif $escape_unicode
       visualize '\u{%04X}' % char.codepoints.sum
     else
@@ -250,14 +250,15 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-CAPACITY = 4096
+CAPACITY = 4096 * 3
 OUTPUT = String.new(capacity: CAPACITY * 8, encoding: Encoding::BINARY)
 
 # TODO: optimize this later
 def handle(string)
   OUTPUT.clear
 
-  string.force_encoding($encoding).each_char do |char|
+  string.force_encoding $encoding
+  string.each_char do |char|
     OUTPUT << CHARACTERS[char]
   end
 
@@ -289,7 +290,7 @@ end
 
 ## Interpret arguments as strings
 unless $files
-  $*.each_with_index do |arg, idx|
+  ARGV.each_with_index do |arg, idx|
     $number_lines and printf "%5d: ", idx + 1
     handle_argv_string arg
     $number_lines and puts
@@ -309,6 +310,7 @@ INPUT = String.new(capacity: CAPACITY, encoding: $encoding)
 # Note that `ARGF.each_char` would do what we want, except it's (a) a bit slower than using
 # `readpartial` and (b) wouldn't allow us to easily know when files changed (for filename outputs).
 def not_done_reading_all_files?
+  # INPUT.replace (ARGF.gets || (return false))
   ARGF.readpartial(CAPACITY, INPUT)
 rescue EOFError
   false
@@ -324,7 +326,7 @@ while not_done_reading_all_files?
     next
   end
 
-  if false # TODO: clean this up to make sure that it works for all encodings
+  # if false # TODO: clean this up to make sure that it works for all encodings
   (INPUT.prepend $tmp; $tmp = nil) if $tmp
   if INPUT.bytesize >= 1 and !(q=INPUT.byteslice(-1..)).valid_encoding?
     if INPUT.bytesize >= 2 and !(q=INPUT.byteslice(-2..)).valid_encoding?
@@ -338,7 +340,7 @@ while not_done_reading_all_files?
       $tmp = q; INPUT.force_encoding('binary').slice!(-1..)
     end
   end
-  end
+  # end
 
   handle INPUT
 end
