@@ -53,7 +53,7 @@ OptParse.new do |op|
     $escape_unicode = eu
   end
 
-  op.on '-P', '--[no-]escape-print', 'Escape all non-print characters (including unicode ones) TODO' do |ep| $escape_print = ep end
+  # op.on '-P', '--[no-]escape-print', 'Escape all non-print characters (including unicode ones) TODO' do |ep| $escape_print = ep end
   # op.on '-a', '--escape-all', 'Escapes all characters' do $escape_space = $escape_backslash = $escape_tab = $escape_newline = $escape_unicode = true end
   # op.on '-w', '--no-escape-whitespace', 'Do not escape whitespace' do $escape_space = $escape_tab = $escape_newline = $escape_surronding_spaces = false end
 
@@ -188,17 +188,6 @@ if $encoding == Encoding::BINARY
   end
 end
 
-ESCAPES.default_proc = proc do |hash, char|
-  hash[char] = if !char.valid_encoding?
-    $ENCODING_FAILED = true
-    $invalid_visual ? visualize_hex(char, start: BEGIN_ERR, stop: END_ERR) : visualize_hex(char)
-  elsif $escape_unicode || ($escape_print && char =~ /\p{Graph}/)
-    visualize('\u{%04X}' % char.codepoints.sum)
-  else
-    char
-  end
-end
-
 ####################################################################################################
 #                                                                                                  #
 #                                         Handle Arguments                                         #
@@ -209,13 +198,46 @@ CAPACITY = 4096
 OUTPUT = String.new(capacity: CAPACITY * 8, encoding: Encoding::BINARY)
 
 def handle(string)
+  # Print the contents of the string; we use an `OUTPUT`
   OUTPUT.clear
 
   string.each_char do |char|
-    OUTPUT << ESCAPES[char]
+    OUTPUT << (
+      ESCAPES[char] ||=
+        if !char.valid_encoding?
+          $ENCODING_FAILED = true
+          $invalid_visual ? visualize_hex(char, start: BEGIN_ERR, stop: END_ERR) : visualize_hex(char)
+        elsif $escape_unicode #|| ($escape_print && char =~ /\p{Graph}/)
+          visualize('\u{%04X}' % char.codepoints.sum)
+        else
+          char
+        end
+    )
   end
 
   $stdout.write OUTPUT
+end
+
+def handle_argv_string(string)
+  # Unfortunately, `ARGV` strings are frozen, and we need to forcibly change the string's encoding
+  # within `handle` so can iterate over the contents of the string in the new encoding. As such,
+  # we need to duplicate the string here.
+  string = +string
+
+  # If we're escaping surrounding spaces, check for them.
+  if $escape_surronding_spaces
+    # TODO: If we ever end up not needing to modify `string` via `.force_encoding` down below (i.e.
+    # if there's a way to iterate over chars without changing encodings/duplicating the string
+    # beforehand), this should be changed to use `byteslice`.The method used here is more convenient,
+    # but is destructive.
+    string.force_encoding Encoding::BINARY
+    leading_spaces  = string.slice!(/\A */) and $stdout.write visualize leading_spaces
+    trailing_spaces = string.slice!(/ *\z/)
+  end
+
+  handle string.force_encoding $encoding
+
+  trailing_spaces and $stdout.write trailing_spaces
 end
 
 
@@ -223,17 +245,8 @@ end
 if !$files
   $*.each_with_index do |arg, idx|
     $number_lines and printf "%5d: ", idx + 1
-    arg = (+arg)
-
-    if $escape_surronding_spaces
-      arg.force_encoding Encoding::BINARY
-      x = arg.slice!(/\A */) and $stdout.write visualize x
-      rest = arg.slice!(/ *\z/)
-    end
-
-    handle arg.force_encoding $encoding
-    rest and $stdout.write visualize rest
-    puts
+    handle_argv_string arg
+    $number_lines and puts
   end
 else
   INPUT = String.new(capacity: CAPACITY, encoding: $encoding)
