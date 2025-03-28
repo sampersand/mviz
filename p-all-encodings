@@ -69,23 +69,20 @@ OptParse.new do |op|
   op.on       '--c-escapes', 'Use C-style escapes (\n, \t, etc, and \xHH). (default)' do $c_escapes = true end
   op.on '-x', '--hex-escapes', "Escape in \\xHH format. (doesn't affect backslashes or unicode)" do $c_escapes = false end
 
-  # Implementation note: Even though these usage messages reference "input encodings," the input is
-  # actually always read as binary data, and then attempted to be converted to whatever these
-  # encodings are
-  op.on "\nInput Encodings"
-  op.on '-b', '--binary', '--bytes', 'Handles input data as bytes; High-bit bytes are escaped' do $encoding = Encoding::BINARY end
-  op.on '-a', '--ascii', 'Like --binary, But high-bit bytes are invalid.' do $encoding = Encoding::ASCII end
-  op.on '-u', '-8', '--utf-8', 'Interprets input data as UTF-8 bytes; invalid bytes are escaped (default)',
-    '(See also the -U flag to escape them)' do $encoding = Encoding::UTF_8 end
-
-  op.on '-E', '--encoding=ENCODING', 'Specify the encoding; non-binary/ascii/utf-8 encodings may not work.' do |enc|
+  op.on "\nOutput Encodings (all inputs are assumed binary)"
+  op.on '-E', '--encoding=ENCODING', 'The output encoding; Specify `list` for the list.' do |enc|
     if enc == 'list'
-      puts "available encodings: #{(Encoding.name_list - %w[external internal]).join(', ')}"; exit
+      puts "available encodings: #{(Encoding.name_list - %w[external internal]).join(', ')}"
+      exit
     end
 
     $encoding = Encoding.find enc rescue op.abort
   end
   alias $output_encoding $encoding
+
+  op.on '-u', '-8', '--utf-8', 'Equivalent to --encoding=UTF-8. (default)' do $encoding = Encoding::UTF_8 end
+  op.on '-b', '--binary', '--bytes', 'Equivalent to --encoding=binary. (All bytes are valid.)' do $encoding = Encoding::BINARY end
+  op.on '-a', '--ascii', 'Equivalent to --encoding=ascii. (8th bit bytes are invalid.)' do $encoding = Encoding::ASCII end
   op.on '-L', '--locale', 'Equivalent to --encoding=locale, i.e. what LC_ALL/LC_CTYPE/LANG specify.' do $encoding = Encoding.find('locale') end
 
   op.on '--[no-]encoding-failure-err', 'Invalid bytes cause non-zero exit. (default: output isnt a tty)' do |efe| $encoding_failure_error = efe end
@@ -155,7 +152,6 @@ end
 ## Construct the `ESCAPES` hash, whose keys are characters, and values are the desired escape
 # sequences.
 ESCAPES = Hash.new
-# def ESCAPES.[]=(chr, visualized)
 
 ## Default escape sequences
 
@@ -284,11 +280,10 @@ while not_done_reading_all_files?
     next
   end
 
-  if false # TODO: clean this up to make sure that it works for all encodings
   (INPUT.prepend $tmp; $tmp = nil) if $tmp
-  if INPUT.bytesize >= 1 and !(q=INPUT.byteslice(-1..)).valid_encoding?
-    if INPUT.bytesize >= 2 and !(q=INPUT.byteslice(-2..)).valid_encoding?
-      if INPUT.bytesize >= 3 and !(q=INPUT.byteslice(-3..)).valid_encoding?
+  if !(q=INPUT.byteslice(-1..)).valid_encoding?
+    if !(q=INPUT.byteslice(-2..)).valid_encoding?
+      if !(q=INPUT.byteslice(-3..)).valid_encoding?
         # Need to support versions without `.bytesplice`
         $tmp = q; INPUT.force_encoding('binary').slice!(-3..)
       else
@@ -298,11 +293,9 @@ while not_done_reading_all_files?
       $tmp = q; INPUT.force_encoding('binary').slice!(-1..)
     end
   end
-  end
 
   handle INPUT
 end
 $tmp and handle $tmp
 
 $no_newline or $stdout.write "\n"
-
