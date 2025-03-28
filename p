@@ -13,6 +13,7 @@ Encoding.default_internal = Encoding::UTF_8
 #                                                                                                  #
 ####################################################################################################
 
+$stdout_tty = $stdout.tty?
 OptParse.new do |op|
   op.version = '1.1'
   op.banner = <<~BANNER
@@ -26,6 +27,7 @@ OptParse.new do |op|
   op.on '-h', '--help', 'Print this and then exit' do op.help_exit end
   op.on       '--version', 'Print the version' do puts op.ver; exit end
   op.on '-f', '--files', 'Interpret arguments as filenames to read, not strings' do $files = true end
+  op.on       '--[no-]assume-tty', 'Pretend stdout is tty for defaults' do |tty| $stdout_tty = tty end
 
   # This has to be cleaned up a bit.
   op.separator "\nHow to Output (todo: clean this section up)"
@@ -93,12 +95,12 @@ END_ERR        = ENV.fetch('P_END_ERR',        "\e[49m\e[39m")
 
 # Specify defaults
 defined? $files                    or $files = !$stdin.tty? && $*.empty?
-defined? $visual                   or $visual = $stdout.tty?
-defined? $encoding_failure_error   or $encoding_failure_error = !$stdout.tty?
+defined? $visual                   or $visual = $stdout_tty
+defined? $encoding_failure_error   or $encoding_failure_error = !$stdout_tty
 defined? $escape_spaces            or $escape_spaces = !$files
 defined? $escape_tab               or $escape_tab = true
 defined? $escape_newline           or $escape_newline = true
-defined? $number_lines             or $number_lines = $stdout.tty?
+defined? $number_lines             or $number_lines = $stdout_tty
 defined? $escape_backslash         or $escape_backslash = !$visual
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 defined? $encoding                 or $encoding = Encoding.find('locale')
