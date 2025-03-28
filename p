@@ -14,36 +14,33 @@ Encoding.default_internal = Encoding::UTF_8
 ####################################################################################################
 
 $isatty = $stdout.tty?
-OptParse.new do |op|
+OptParse.new nil, 30 do |op|
   op.version = '1.0'
   op.banner = <<~BANNER
     usage: #{op.program_name} [options] [string ...]
            #{op.program_name} -f/--files [options] [file ...]
     With no arguments, second form is assumed if stdin isnt a tty.
   BANNER
+  op.require_exact = true if defined? op.require_exact = true
 
   op.separator "\nGeneric Options"
-
-  op.on '-h', '--help', 'Print this and then exit' do puts op.help; exit end
+  op.on '-h', '--help', 'Print this and then exit' do op.help_exit end
   op.on       '--version', 'Print the version' do puts op.ver; exit end
   op.on '-f', '--files', 'Interpret arguments as filenames to be read instead of strings' do $files = true end
 
-  op.separator "\nHow to Output (todo: clean this section up)"
   # This has to be cleaned up a bit.
-  op.on '--[no-]number-lines', '--[no-]heading', 'Number args without -f; add headings with -f. (default: true if output is a tty)' do |x| $number_lines = x end
+  op.separator "\nHow to Output (todo: clean this section up)"
+  op.on '-H', '--[no-]number-lines', '--[no-]heading', 'Number args without -f; add headings with -f. (default: true if output is a tty)' do |x| $number_lines = x end
   op.on       '--trailing-newline', 'Print a final trailing newline; only useful with -f. (default)' do $no_newline = false end
   op.on '-n', '--no-trailing-newline', 'Suppress final trailing newline.' do $no_newline = true end
   # op.on '-N', '--[no-]number-lines', 'Number arguments; defaults to on when output is a TTY' do |nl| $number_lines = nl end
 
   op.separator "\nWhat to Escape."
-
   op.on       '--[no-]escape-newline', 'Escape newlines. (default)' do |x| $escape_newline = x end
   op.on '-l', 'Shorthand for --no-escape-newline. ("Line-oriented mode")' do $escape_newline = false end
   op.on       '--[no-]escape-tab', 'Escape tabs. (default)' do |x| $escape_tab = x end
   op.on '-t', 'Shorthand for --no-escape-tabs.' do $escape_tab = false end
-
   op.on '-s', '--[no-]escape-space', 'Escape spaces by visualizing them. Only useful in visual mode.' do |es| $escape_space = es end
-
   op.on '--[no-]escape-outer-space', 'Visualize leading and trailing whitespace. (default); not useful with -f' do |ess|
     $escape_surronding_spaces = ess
   end
@@ -79,29 +76,24 @@ OptParse.new do |op|
   # Implementation note: Even though these usage messages reference "input encodings," the input is
   # actually always read as binary data, and then attempted to be converted to whatever these
   # encodings are
-  op.on "\nInput Encodings"
-  op.on '-b', '--binary', '--bytes', 'Handles input data as bytes; High-bit bytes are escaped' do $encoding = Encoding::BINARY end
-  op.on '-a', '--ascii', 'Like --binary, But high-bit bytes are invalid.' do $encoding = Encoding::ASCII end
-  op.on '-u', '-8', '--utf-8', 'Interprets input data as UTF-8 bytes; invalid bytes are escaped (default)',
-    '(See also the -U flag to escape them)' do $encoding = Encoding::UTF_8 end
-
-  op.on '-E', '--encoding=ENCODING', 'Specify the encoding; non-binary/ascii/utf-8 encodings may not work.' do |enc|
+  op.separator "\nInput Encodings"
+  op.on '-E', '--encoding=ENCODING', 'Specify input encoding; use "list" for a list' do |enc|
     if enc == 'list'
-      puts "available encodings: #{(Encoding.name_list - %w[external internal]).join(', ')}"; exit
+      puts "available encodings: #{(Encoding.name_list - %w[external internal]).join(', ')}"
+      exit
     end
-
     $encoding = Encoding.find enc rescue op.abort
   end
-  alias $output_encoding $encoding
-  op.on '-L', '--locale', 'Equivalent to --encoding=locale, i.e. what LC_ALL/LC_CTYPE/LANG specify.' do $encoding = Encoding.find('locale') end
+
+  op.on '-b', '--binary', '--bytes', 'Alias for -Ebinary; High-bit bytes are escaped' do $encoding = Encoding::BINARY end
+  op.on '-a', '--ascii', 'Alias for -Eascii. Like --binary, but high-bit bytes are invalid.' do $encoding = Encoding::ASCII end
+  op.on '-u', '-8', '--utf-8', 'Alias for -Eutf-8. (See also the -U flag to escape utf-8)' do $encoding = Encoding::UTF_8 end
+  op.on '-L', '--locale', 'Alias for -Elocale, i.e. what LC_ALL/LC_CTYPE/LANG specify.' do $encoding = Encoding.find('locale') end
 
   op.on '--[no-]encoding-failure-err', 'Invalid bytes cause non-zero exit. (default: output isnt a tty)' do |efe| $encoding_failure_error = efe end
 
   op.on_tail "\nnote: IF any invalid bytes for the output encoding are read, the exit status is based on `--encoding-failure-err`"
 
-
-
-  op.require_exact = true if defined? op.require_exact = true
   op.on 'ENVIRONMENT: P_BEGIN_STANDOUT; P_END_STANDOUT; P_BEGIN_ERR; P_END_ERR'
 
   op.parse! rescue op.abort # <-- only cares about flags when POSIXLY_CORRECT is set.
