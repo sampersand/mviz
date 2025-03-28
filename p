@@ -68,6 +68,10 @@ OptParse.new do |op|
                                           'Not all output encodings have invalid bytes, eg -b. (default)' do |iv| $invalid_visual = iv end
   op.on       '--c-escapes', 'Use C-style escapes (\n, \t, etc, and \xHH). (default)' do $c_escapes = true end
   op.on '-x', '--hex-escapes', "Escape in \\xHH format. (doesn't affect backslashes or unicode)" do $c_escapes = false end
+  op.on '-P', '--pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do
+    $c_escapes = false unless defined? $c_escapes
+    $pictures = true
+  end
 
   # Implementation note: Even though these usage messages reference "input encodings," the input is
   # actually always read as binary data, and then attempted to be converted to whatever these
@@ -155,7 +159,8 @@ end
 ## Construct the `ESCAPES` hash, whose keys are characters, and values are the desired escape
 # sequences.
 ESCAPES = Hash.new
-# def ESCAPES.[]=(chr, visualized)
+
+## NOTE: All encodings that ruby supports are ascii-compatible, other than utf-{16,32}{be,le}
 
 ## Default escape sequences
 
@@ -164,8 +169,17 @@ ESCAPES = Hash.new
   ESCAPES[char] = visualize_hex(char)
 end
 
+if $pictures
+  (0x00...0x20).each do |char|
+    ESCAPES[char.chr($output_encoding)] = visualize (0x2400 + char).chr('utf-8')
+  end
+  ESCAPES[0x7f.chr($output_encoding)] = visualize "\u{2421}"
+end
+
+
 ## Normal print characters
-(0x20...0x7F).map{ |c| c.chr $encoding }.each do |char|
+(0x20...0x7F).map{ |c| c.chr #$encoding
+}.each do |char|
   ESCAPES[char] = char
 end
 
@@ -204,12 +218,20 @@ end
 CAPACITY = 4096
 OUTPUT = String.new(capacity: CAPACITY * 8, encoding: Encoding::BINARY)
 
+
+# p ESCAPES.keys
+# p ESCAPES["a"]
+# p ESCAPES["a".+@.force_encoding('utf-8')]
+# p ESCAPES["a".+@.encode('utf-16le')]
+# exit
 def handle(string)
   # Print the contents of the string; we use an `OUTPUT`
   OUTPUT.clear
 
   string.force_encoding($encoding).each_char do |char|
     OUTPUT << (
+          # p "char: #{char.bytes} #{ESCAPES[char].bytes} #{ESCAPES["a"].inspect}"
+
       ESCAPES[char] ||=
         if !char.valid_encoding?
           $ENCODING_FAILED = true
