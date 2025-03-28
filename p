@@ -34,6 +34,7 @@ OptParse.new do |op|
   op.on '-H', '--[no-]number-lines', '--[no-]heading', 'Number args without -f; add headings with -f. (default: true if output is a tty)' do |x| $number_lines = x end
   op.on       '--trailing-newline', 'Print a final trailing newline; only useful with -f. (default)' do $no_newline = false end
   op.on '-n', '--no-trailing-newline', 'Suppress final trailing newline.' do $no_newline = true end
+  op.on '-r', '--raw', 'Disable trailing newlines and headings' do $no_newline = true; $number_lines = false end
   # op.on '-N', '--[no-]number-lines', 'Number arguments; defaults to on when output is a TTY' do |nl| $number_lines = nl end
 
   op.separator "\nWhat to Escape"
@@ -87,7 +88,7 @@ OptParse.new do |op|
   # op.order! rescue op.abort <-- does care about order of flags
 end
 
-# Fetch standouts (regardless of whether they're being used)
+# Fetch standout constants (regardless of whether we're using them, as they're used as defaults)
 BEGIN_STANDOUT = ENV.fetch('P_BEGIN_STANDOUT', "\e[7m")
 END_STANDOUT   = ENV.fetch('P_END_STANDOUT',   "\e[27m")
 BEGIN_ERR      = ENV.fetch('P_BEGIN_ERR',      "\e[37m\e[41m")
@@ -116,9 +117,9 @@ $encoding_failure_error and at_exit { exit !$ENCODING_FAILED }
 #                                                                                                  #
 ####################################################################################################
 
-# Visualize a character in hex format
-def visualize_hex(char, **b)
-  visualize(char.each_byte.map { |byte| '\x%02X' % byte }.join, **b)
+# Converts a string's bytes to their `\xHH` escaped version, and joins them
+def hex_bytes(string)
+  string.each_byte.map { |byte| '\x%02X' % byte }.join
 end
 
 # Add "visualize" escape sequences to a string; all escaped characters should be passed to this, as
@@ -151,7 +152,7 @@ CHARACTERS = {}
 ## Escape the lower control characters (i.e. \x00..\x1F and \x7F) with their hex escapes. Note that
 # some of these escapes escapes may be overwritten below by user options (like `--c-escapes`).
 [*"\0".."\x1F", "\x7F"].each do |char|
-  CHARACTERS[char] = visualize_hex(char)
+  CHARACTERS[char] = visualize hex_bytes(char)
 end
 
 ## Add in normal ASCII printable characters (i.e. \x20..\x7E).
@@ -164,7 +165,7 @@ end
 # true), so our logic later on would print them out verbatim.
 if $encoding == Encoding::BINARY
   ("\x80".."\xFF").each do |char|
-    CHARACTERS[char] = visualize_hex(char)
+    CHARACTERS[char] = visualize hex_bytes(char)
   end
 end
 
@@ -222,7 +223,7 @@ CHARACTERS.default_proc = proc do |hash, char|
   hash[char] =
     if !char.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$encoding_failure_error`.
-      visualize_hex(char, start: BEGIN_ERR, stop: END_ERR)
+      visualize hex_bytes(char), start: BEGIN_ERR, stop: END_ERR
     elsif $escape_unicode
       visualize '\u{%04X}' % char.codepoints.sum
     else
@@ -319,6 +320,7 @@ while not_done_reading_all_files?
   if INPUT.empty?
     $tmp and (handle $tmp; $tmp = nil)
     $number_lines and print "\n#{ARGF.filename}:" # TODO: clean this up
+    $stdout.flush
     next
   end
 
