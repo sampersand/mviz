@@ -1,5 +1,5 @@
 #!/usr/bin/env -S ruby -Ebinary --disable=all
-# frozen-string-literal: true
+# -*- encoding: binary; frozen-string-literal: true -*-
 defined?(RubyVM::YJIT.enable) and RubyVM::YJIT.enable
 
 require 'optparse'
@@ -185,11 +185,10 @@ ESCAPES["\t"] = "\t" unless $escape_tab
 ESCAPES['\\'] = visualize('\\\\') if $escape_backslash
 ESCAPES[' ']  = visualize(' ') if $escape_space
 
-# Upper bits, for binary encodings
-if $encoding == Encoding::BINARY
-  (0x80..0xFF).map{ |c| c.chr $encoding }.each do |char|
-    ESCAPES[char] = visualize_hex(char)
-  end
+# Escape the high-bit characters when we're in binary mode; We need to do this because the high-bit
+# characters are technically valid (ie `"\x80".force_encoding("binary").)
+$encoding == Encoding::BINARY and (0x80..0xFF).map{ |c| c.chr $encoding }.each do |char|
+  ESCAPES[char] = visualize_hex(char)
 end
 
 ####################################################################################################
@@ -255,6 +254,9 @@ unless $files
   exit
 end
 
+# Print the prefix line out before we do binmode on ARGF
+$number_lines and not $*.empty? and print "#{ARGF.filename}:" # TODO: clean this up
+
 ## Interpret arguments as files
 # TODO: This can be made a bit faster using `syswrite`, but at the cost of
 # making this so much uglier
@@ -271,7 +273,6 @@ rescue
   abort $!.to_s
 end
 
-$number_lines and print "#{ARGF.filename}:" # TODO: clean this up
 while not_done_reading_all_files?
   if INPUT.empty?
     $tmp and (handle $tmp; $tmp = nil)
