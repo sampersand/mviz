@@ -24,17 +24,22 @@ OptParse.new do |op|
   op.require_exact = true if defined? op.require_exact = true
 
   op.separator "\nGeneric Options"
-  op.on '-h', '--help', 'Print this and then exit' do op.help_exit end
+  op.on '-?', '--help', 'Print this and then exit' do op.help_exit end
   op.on       '--version', 'Print the version' do puts op.ver; exit end
   op.on '-f', '--files', 'Interpret arguments as filenames to read, not strings' do $files = true end
   op.on       '--[no-]assume-tty', 'Pretend stdout is tty for defaults' do |tty| $stdout_tty = tty end
 
   # This has to be cleaned up a bit.
   op.separator "\nHow to Output (todo: clean this section up)"
-  op.on '-H', '--[no-]number-lines', '--[no-]heading', 'Number args without -f; add headings with -f. (default: true if output is a tty)' do |x| $number_lines = x end
-  op.on       '--trailing-newline', 'Print a final trailing newline; only useful with -f. (default)' do $no_newline = false end
-  op.on '-n', '--no-trailing-newline', 'Suppress final trailing newline.' do $no_newline = true end
-  op.on '-r', '--raw', 'Disable trailing newlines and headings' do $no_newline = true; $number_lines = false end
+  op.on '-h', '--heading', 'Number args without -f; add headings with -f. (default: true if output is a tty)' do $number_lines = true end
+  op.on '-H', '--no-heading', 'disable numbering of lines or headings' do $number_lines = false end
+  op.on '-_', '--trailing-newline', 'Print a final trailing newline; Only useful with -H is given too. (default)' do $trailing_newline = true end
+  op.on '-n', '--no-trailing-newline', 'Disables --number-lines and --trailing-newline' do $trailing_newline = false end
+
+  op.on '-N', '--no-headers' do $number_lines = false end
+  op.on '-n', '--no-headers-or-newlines' do $number_lines = $trailing_newline = false end
+  # op.on '-n', '--no-trailing-newline', 'Disables --number-lines and --trailing-newline' do $trailing_newline = $number_lines = false end
+
   # op.on '-N', '--[no-]number-lines', 'Number arguments; defaults to on when output is a TTY' do |nl| $number_lines = nl end
 
   op.separator "\nWhat to Escape"
@@ -106,6 +111,7 @@ defined? $escape_backslash         or $escape_backslash = !$visual
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 defined? $encoding                 or $encoding = Encoding.find('locale')
 defined? $c_escapes                or $c_escapes = true
+defined? $trailing_newline         or $trailing_newline = true
 
 # If `--encoding-failure-err` was specified, then exit depending on whether an
 # encoding failure occurred
@@ -260,7 +266,7 @@ def handle(string)
 
   string.force_encoding $encoding
   string.each_char do |char|
-    warn [char.encoding, CHARACTERS[char].encoding, char, char.bytes].inspect
+    # warn [char.encoding, CHARACTERS[char].encoding, char, char.bytes].inspect
     OUTPUT .concat CHARACTERS[char]
   end
 
@@ -295,8 +301,9 @@ unless $files
   ARGV.each_with_index do |arg, idx|
     $number_lines and printf "%5d: ", idx + 1
     handle_argv_string arg
-    $number_lines and puts
+    $trailing_newline or $number_lines and puts
   end
+  # $trailing_newline && !$number_lines and $stdout.write "\n".encode $encoding
   exit
 end
 
@@ -326,7 +333,11 @@ while not_done_reading_all_files?
 
   if INPUT.empty?
     $tmp and (handle $tmp; $tmp = nil)
-    $number_lines and print "\n#{ARGF.filename}:".encode $encoding # TODO: clean this up
+    if $number_lines
+      print "\n#{ARGF.filename}:".encode $encoding # TODO: clean this up
+    elsif $trailing_newline
+      print "\n".encode $encoding
+    end
     $stdout.flush
     next
   end
@@ -357,11 +368,11 @@ while not_done_reading_all_files?
     end
   end
 
-  warn ["sliced", INPUT.bytes, $tmp&.bytes].inspect
+  # warn ["sliced", INPUT.bytes, $tmp&.bytes].inspect
 
   handle INPUT
 end
 $tmp and handle $tmp
 
-$no_newline or $stdout.write "\n".encode $encoding
+$trailing_newline and $stdout.write "\n".encode $encoding
 
