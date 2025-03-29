@@ -177,8 +177,8 @@ end
 ## If the control pictures were requested, then print out visualizations of the control characters
 # instead of whatever else.
 if $pictures
-  (0x00...0x20).each do |char|
-    CHARACTERS[char.chr] = visualize((0x2400 + char).chr(Encoding::UTF_8))
+  (0x00...0x20).each do |byte|
+    CHARACTERS[byte.chr] = visualize((0x2400 + byte).chr(Encoding::UTF_8))
   end
 
   CHARACTERS["\x7F"] = visualize "\u{2421}"
