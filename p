@@ -24,23 +24,18 @@ OptParse.new do |op|
   op.require_exact = true if defined? op.require_exact = true
 
   op.separator "\nGeneric Options"
-  op.on '-?', '--help', 'Print this and then exit' do op.help_exit end
+  op.on '-h', '--help', 'Print this and then exit' do op.help_exit end
   op.on       '--version', 'Print the version' do puts op.ver; exit end
   op.on '-f', '--files', 'Interpret arguments as filenames to read, not strings' do $files = true end
   op.on       '--[no-]assume-tty', 'Pretend stdout is tty for defaults' do |tty| $stdout_tty = tty end
 
   # This has to be cleaned up a bit.
-  op.separator "\nHow to Output (todo: clean this section up)"
-  op.on '-h', '--heading', 'Number args without -f; add headings with -f. (default: true if output is a tty)' do $number_lines = true end
-  op.on '-H', '--no-heading', 'disable numbering of lines or headings' do $number_lines = false end
-  op.on '-_', '--trailing-newline', 'Print a final trailing newline; Only useful with -H is given too. (default)' do $trailing_newline = true end
-  op.on '-n', '--no-trailing-newline', 'Disables --number-lines and --trailing-newline' do $trailing_newline = false end
-
-  op.on '-N', '--no-headers' do $number_lines = false end
-  op.on '-n', '--no-headers-or-newlines' do $number_lines = $trailing_newline = false end
-  # op.on '-n', '--no-trailing-newline', 'Disables --number-lines and --trailing-newline' do $trailing_newline = $number_lines = false end
-
-  # op.on '-N', '--[no-]number-lines', 'Number arguments; defaults to on when output is a TTY' do |nl| $number_lines = nl end
+  op.separator "\nHow to separate fields"
+  op.on       '--headers', 'Add headers to the output (default: true if stdout is a tty)' do $headings = true end
+  op.on '-N', '--no-headers', 'Do not add headers to the output' do $headings = false end
+    # TODO: make custom separators like space between fields... but figure out a "Trailing sep"?
+  op.on       '--[no-]trailing-newlines', 'Print trailing newlines; only used with --no-headers. (default)' do |tnl| $trailing_newline = tnl end
+  op.on '-n', '--no-headers-or-newlines', 'Disables both headeres and trailing newliens' do $headings = $trailing_newline = false end
 
   op.separator "\nWhat to Escape"
   op.on       '--escape-newline', 'Escape newlines. (default)' do |x| $escape_newline = x end
@@ -106,7 +101,7 @@ defined? $encoding_failure_error   or $encoding_failure_error = !$stdout_tty
 defined? $escape_spaces            or $escape_spaces = !$files
 defined? $escape_tab               or $escape_tab = true
 defined? $escape_newline           or $escape_newline = true
-defined? $number_lines             or $number_lines = $stdout_tty
+defined? $headings             or $headings = $stdout_tty
 defined? $escape_backslash         or $escape_backslash = !$visual
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 defined? $encoding                 or $encoding = Encoding.find('locale')
@@ -299,16 +294,16 @@ end
 ## Interpret arguments as strings
 unless $files
   ARGV.each_with_index do |arg, idx|
-    $number_lines and printf "%5d: ", idx + 1
+    $headings and printf "%5d: ", idx + 1
     handle_argv_string arg
-    $trailing_newline or $number_lines and puts
+    $trailing_newline or $headings and puts
   end
-  # $trailing_newline && !$number_lines and $stdout.write "\n".encode $encoding
+  # $trailing_newline && !$headings and $stdout.write "\n".encode $encoding
   exit
 end
 
 # Print the prefix line out before we do binmode on ARGF
-$number_lines and not $*.empty? and print "#{ARGF.filename}:" # TODO: clean this up
+$headings and not $*.empty? and print "#{ARGF.filename}:" # TODO: clean this up
 
 ## Interpret arguments as files
 # TODO: This can be made a bit faster using `syswrite`, but at the cost of
@@ -333,7 +328,7 @@ while not_done_reading_all_files?
 
   if INPUT.empty?
     $tmp and (handle $tmp; $tmp = nil)
-    if $number_lines
+    if $headings
       print "\n#{ARGF.filename}:".encode $encoding # TODO: clean this up
     elsif $trailing_newline
       print "\n".encode $encoding
