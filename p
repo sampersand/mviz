@@ -227,7 +227,7 @@ CHARACTERS.default_proc = proc do |hash, char|
     elsif $escape_unicode
       visualize '\u{%04X}' % char.codepoints.sum
     else
-      char.force_encoding 'binary'
+      char
     end
 end
 
@@ -241,7 +241,7 @@ end
 # do it at the end here instead of converting every string in-place, because conversions to/from
 # UTF-16 aren't a terribly common use-case; Users have to explicitly supply `--encoding=UTF-16`.)
 unless $encoding.ascii_compatible?
-  CHARACTERS.transform_keys! { _1.encode $encoding } # Can't use `encode!` because keys of hashes are frozen
+  CHARACTERS.merge! CHARACTERS.to_h { [_1.encode($encoding), _2.encode($encoding)] } # Can't use `encode!` because keys of hashes are frozen
 end
 
 ####################################################################################################
@@ -260,7 +260,7 @@ def handle(string)
 
   string.force_encoding $encoding
   string.each_char do |char|
-    warn [CHARACTERS[char].encoding, char].inspect
+    warn [char.encoding, CHARACTERS[char].encoding, char, char.bytes].inspect
     OUTPUT .concat CHARACTERS[char]
   end
 
@@ -321,33 +321,47 @@ rescue
 end
 
 while not_done_reading_all_files?
+  # $stdout.write INPUT
+  # next
+
   if INPUT.empty?
     $tmp and (handle $tmp; $tmp = nil)
-    $number_lines and print "\n#{ARGF.filename}:" # TODO: clean this up
+    $number_lines and print "\n#{ARGF.filename}:".encode $encoding # TODO: clean this up
     $stdout.flush
     next
   end
 
   # if false # TODO: clean this up to make sure that it works for all encodings
   if true
-  (INPUT.prepend $tmp; $tmp = nil) if $tmp
-  if INPUT.bytesize >= 1 and !(q=INPUT.byteslice(-1..)).valid_encoding?
-    if INPUT.bytesize >= 2 and !(q=INPUT.byteslice(-2..)).valid_encoding?
-      if INPUT.bytesize >= 3 and !(q=INPUT.byteslice(-3..)).valid_encoding?
-        # Need to support versions without `.bytesplice`
-        $tmp = q; INPUT.force_encoding('binary').slice!(-3..)
+     if $tmp
+      warn ["before", INPUT.bytes, $tmp.bytes].inspect
+      INPUT.prepend $tmp
+      $tmp = nil
+      warn ["after", INPUT.bytes].inspect
+    end
+
+    if INPUT.bytesize >= 1 and !(q=INPUT.byteslice(-1..)).valid_encoding?
+      if INPUT.bytesize >= 2 and !(q=INPUT.byteslice(-2..)).valid_encoding?
+        if INPUT.bytesize >= 3 and !(q=INPUT.byteslice(-3..)).valid_encoding?
+          # Need to support versions without `.bytesplice`
+          $tmp = q; INPUT.force_encoding('binary').slice!(-3..)
+          warn 1
+        else
+          $tmp = q; INPUT.force_encoding('binary').slice!(-2..)
+          warn 2
+        end
       else
-        $tmp = q; INPUT.force_encoding('binary').slice!(-2..)
+        $tmp = q; INPUT.force_encoding('binary').slice!(-1..)
+          warn 3
       end
-    else
-      $tmp = q; INPUT.force_encoding('binary').slice!(-1..)
     end
   end
-  end
+
+  warn ["sliced", INPUT.bytes, $tmp&.bytes].inspect
 
   handle INPUT
 end
 $tmp and handle $tmp
 
-$no_newline or $stdout.write "\n"
+$no_newline or $stdout.write "\n".encode $encoding
 
