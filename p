@@ -15,6 +15,7 @@ Encoding.default_internal = Encoding::UTF_8
 
 $stdout_tty = $stdout.tty?
 OptParse.new do |op|
+  $op = op
   op.version = '1.2'
   op.banner = <<~BANNER
     usage: #{op.program_name} [options] [string ...]
@@ -29,11 +30,10 @@ OptParse.new do |op|
   op.on '-f', '--files', 'Interpret arguments as filenames to read, not strings' do $files = true end
   op.on       '--[no-]assume-tty', 'Pretend stdout is tty for defaults' do |tty| $stdout_tty = tty end
 
-  # This has to be cleaned up a bit.
+  # TODO: make custom separators like space between fields... but figure out a "Trailing sep"?
   op.separator "\nHow to separate fields"
   op.on       '--headers', 'Add headers to the output (default if stdout is a tty)' do $headings = true end
   op.on '-N', '--no-headers', 'Do not add headers to the output' do $headings = false end
-    # TODO: make custom separators like space between fields... but figure out a "Trailing sep"?
   op.on       '--[no-]trailing-newlines', 'Print trailing newlines; only used with --no-headers. (default)' do |tnl| $trailing_newline = tnl end
   op.on '-n', '--no-headers-or-newlines', 'Disables both headeres and trailing newliens' do $headings = $trailing_newline = false end
 
@@ -51,9 +51,9 @@ OptParse.new do |op|
   op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_unicode = eu end
 
   op.separator "\nHow to Escape"
-  op.on '-d', '--delete', 'Delete escaped characters instead of printing' do $delete = true end
-  op.on '-v', '--visualize', "Enable visual effects. (default when stdout is a tty)" do $visual = true end
-  op.on '-V', '--no-visualize', "Don't enable visual effects" do $visual = false end
+  op.on '-d', '--delete', 'Delete escaped characters instead of printing their escapes' do $delete = true end
+  op.on '-v', '--visualize', 'Enable visual effects. (default when stdout is a tty)' do $visual = true end
+  op.on '-V', '--no-visualize', 'Do not enable visual effects' do $visual = false end
   op.on       '--c-escapes', 'Use C-style escapes (\n, \t, etc, and \xHH). (default)' do $c_escapes = true end
   op.on '-x', '--no-c-escapes', 'Alias for --no-c-escapes; only use \xHH for escapes.' do $c_escapes = false end
   op.on '-P', '--control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do
@@ -299,8 +299,17 @@ unless $files
   exit
 end
 
+def ARGF.filename
+  super || exit
+rescue
+  warn $!.to_s
+  retry
+end
+
 # Print the prefix line out before we do binmode on ARGF
-$headings and not $*.empty? and print "#{ARGF.filename}:" # TODO: clean this up
+if $headings and not $*.empty?
+  print "#{ARGF.filename}:" # TODO: clean this up
+end
 
 ## Interpret arguments as files
 # TODO: This can be made a bit faster using `syswrite`, but at the cost of
@@ -325,11 +334,10 @@ while not_done_reading_all_files?
 
   if INPUT.empty?
     $tmp and (handle $tmp; $tmp = nil)
-    if $headings
-      print "\n#{ARGF.filename}:".encode $encoding # TODO: clean this up
-    elsif $trailing_newline
-      print "\n".encode $encoding
-    end
+
+    # TODO: clean this up
+    print "\n".encode $encoding if $headings || $trailing_newline
+    print "#{ARGF.filename}:".encode $encoding if $headings
     $stdout.flush
     next
   end
