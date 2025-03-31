@@ -51,6 +51,7 @@ OptParse.new do |op|
   op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_unicode = eu end
 
   op.separator "\nHow to Escape"
+  op.on '-.', '--dot', 'Escape with dots, instead of other characters' do $dot = true end
   op.on '-d', '--delete', 'Delete escaped characters instead of printing their escapes' do $delete = true end
   op.on '-v', '--visualize', 'Enable visual effects. (default when stdout is a tty)' do $visual = true end
   op.on '-V', '--no-visualize', 'Do not enable visual effects' do $visual = false end
@@ -126,6 +127,7 @@ end
 # - if `$visual` is specified, then `start` and `stop` surround `string`
 # - else, `string` is returned.
 def visualize(string, start=BEGIN_STANDOUT, stop=END_STANDOUT)
+  string = '.' if $dot
   case
   when $delete then ''
   when $visual then "#{start}#{string}#{stop}"
