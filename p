@@ -310,10 +310,10 @@ end
 
 ARGF.set_encoding $encoding
 ARGF.each_char do |char|
-  # if ARGF.file.tell == 1
-  #   $trailing_newline || $headings and $not_first ? print("\n") : $not_first = true
-  #   $headings and print ARGF.filename, ":"
-  # end
+  #  if ARGF.file.tell == 1
+  #    $trailing_newline || $headings and $not_first ? print("\n") : $not_first = true
+  #    $headings and print ARGF.filename, ":"
+  #  end
   $stdout.write CHARACTERS[char]
 end
 # TODO: check `char` after to see if we need to print a newline
