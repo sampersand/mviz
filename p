@@ -64,17 +64,23 @@ OptParse.new do |op|
   # op.on '-B', '--[no-]escape-backslash', 'Escape backslashes (default when in visual)' do |eb| $escape_backslash = eb end
 
   op.separator "\nHow to Escape"
-  op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_unicode = eu end
-  op.on '-.', '--dot', 'Escape with dots, instead of other characters' do $dot = true end
-  op.on '-d', '--delete', 'Delete escaped characters instead of printing their escapes' do $delete = true end
   op.on '-v', '--visualize', 'Enable visual effects. (default when stdout is a tty)' do $visual = true end
   op.on '-V', '--no-visualize', 'Do not enable visual effects' do $visual = false end
-  op.on       '--c-escapes', 'Use C-style escapes (\n, \t, etc, and \xHH). (default)' do $c_escapes = true end
-  op.on '-x', '--no-c-escapes', 'Alias for --no-c-escapes; only use \xHH for escapes.' do $c_escapes = false end
+
+  op.on '--escape-with=WHAT', 'How to escape (valid options: dot, delete, bytes, unicode, unicode-all)',
+    %w[dot delete unicode unicode-all] do |how| $escape_how = how.to_sym end
+  op.on '-.', '--dot', 'Escape with dots, instead of other characters' do $escape_how = :dot end
+  op.on '-d', '--delete', 'Delete escaped characters instead of printing their escapes' do $escape_how = :delete end
+  op.on '-x', '--no-c-escapes', 'Alias for --no-c-escapes; only use \xHH for escapes.' do $escape_how = :bytes end
+  op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_how = :unicode end
+
+  # Options for a specific subset
+  op.on '-c', '--c-escapes', 'Use C-style escapes (\n, \t, etc, and \xHH). (default)' do $c_escapes = true end
   op.on '-P', '--control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do
     $c_escapes = false unless defined? $c_escapes
     $pictures = true
   end
+
 
   # Implementation note: Even though these usage messages reference "input encodings," the input is
   # actually always read as binary data, and then attempted to be converted to whatever these
@@ -132,6 +138,10 @@ $encoding_failure_error and at_exit { exit !$ENCODING_FAILED }
 
 # Converts a string's bytes to their `\xHH` escaped version, and joins them
 def hex_bytes(string)
+  if $escape_how == :'unicode-all'
+    (return '\u{%04X}' % string.codepoints.sum) rescue nil
+  end
+
   string.each_byte.map { |byte| '\x%02X' % byte }.join
 end
 
@@ -141,9 +151,9 @@ end
 # - if `$visual` is specified, then `start` and `stop` surround `string`
 # - else, `string` is returned.
 def visualize(string, start=BEGIN_STANDOUT, stop=END_STANDOUT)
-  string = '.' if $dot
+  string = '.' if $escape_how == :dot
   case
-  when $delete then ''
+  when $escape_how == :delete then ''
   when $visual then "#{start}#{string}#{stop}"
   else              string
   end
