@@ -304,7 +304,7 @@ end
 at_exit do
   if $!.is_a?(Errno::ENOENT)
     $op.warn $!.to_s.sub(/ @ rb\w+/, '')
-    exit! 2
+    # exit! 2
   end
 end
 
