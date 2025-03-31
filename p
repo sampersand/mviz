@@ -25,7 +25,8 @@ OptParse.new do |op|
   op.require_exact = true if defined? op.require_exact = true
 
   op.accept :chars do |c|
-    %|"#{c.gsub('"', '\"')}"|.undump
+    c.undump
+    # %|"#{c.gsub('"', '\"')}"|.undump
   end
 
   op.separator "\nGeneric Options"
@@ -52,6 +53,7 @@ OptParse.new do |op|
   op.on '-w', "Same as --unescape='\\n\\t ' (newline, tab, space)" do $unescape_chars.concat "\n\t " end
   op.on '-B', "Same as --escape='\\\\' (backslash)" do $unescape_chars.concat '\\' end
   op.on '-s', "Same as --escape=' ' (space)" do $escape_chars.concat "\s" end
+  op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_how = :unicode end
   # space)" do $escape_chars.concat "\s" end
 
   # op.on       '--escape-tab', 'Escape tabs. (default)' do |x| $escape_tab = x end
@@ -67,19 +69,16 @@ OptParse.new do |op|
   op.on '-v', '--visualize', 'Enable visual effects. (default when stdout is a tty)' do $visual = true end
   op.on '-V', '--no-visualize', 'Do not enable visual effects' do $visual = false end
 
-  op.on '--escape-with=WHAT', 'How to escape (valid options: dot, delete, bytes, unicode, unicode-all)',
-    %w[dot delete unicode unicode-all] do |how| $escape_how = how.to_sym end
-  op.on '-.', '--dot', 'Escape with dots, instead of other characters' do $escape_how = :dot end
-  op.on '-d', '--delete', 'Delete escaped characters instead of printing their escapes' do $escape_how = :delete end
-  op.on '-x', '--no-c-escapes', 'Alias for --no-c-escapes; only use \xHH for escapes.' do $escape_how = :bytes end
-  op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_how = :unicode end
+  op.on '--escape-with=WHAT', 'How to escape (valid options: dot, delete, bytes, codepoints)',
+    %w[dot delete bytes codepoints] do |how| $escape_how = how.to_sym end
+  op.on '-.', 'Alias for --escape-with=dot; Escape with dots, instead of other characters' do $escape_how = :dot end
+  op.on '-d', 'Alias for --escape-with=delete; Delete escaped characters instead of printing their escapes' do $escape_how = :delete end
+  op.on '-x', 'Alias for --escape-with=bytes; Use \xHH for escapes. (default)' do $escape_how = :bytes end
+  op.on '-c', 'Alias for --escape-with=codepoints; Use \u{...} for escapes.' do $escape_how = :codepoints end
 
   # Options for a specific subset
-  op.on '-c', '--c-escapes', 'Use C-style escapes (\n, \t, etc, and \xHH). (default)' do $c_escapes = true end
-  op.on '-P', '--control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do
-    $c_escapes = false unless defined? $c_escapes
-    $pictures = true
-  end
+  op.on '-C', '--C-escapes', 'Use C-style escapes (\n, \t, etc). (default)' do $c_escapes = true end
+  op.on '-P', '--control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do $pictures = true end
 
 
   # Implementation note: Even though these usage messages reference "input encodings," the input is
@@ -122,7 +121,7 @@ defined? $escape_newline           or $escape_newline = true
 defined? $headings                 or $headings = $stdout_tty
 defined? $escape_backslash         or $escape_backslash = !$visual
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
-defined? $c_escapes                or $c_escapes = true
+defined? $c_escapes                or $c_escapes = $escape_how == :bytes
 defined? $trailing_newline         or $trailing_newline = true
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 
@@ -138,7 +137,7 @@ $encoding_failure_error and at_exit { exit !$ENCODING_FAILED }
 
 # Converts a string's bytes to their `\xHH` escaped version, and joins them
 def hex_bytes(string)
-  if $escape_how == :'unicode-all'
+  if $escape_how == :codepoints
     (return '\u{%04X}' % string.codepoints.sum) rescue nil
   end
 
@@ -205,6 +204,7 @@ if $pictures
   end
 
   CHARACTERS["\x7F"] = visualize "\u{2421}"
+  CHARACTERS[" "] = visualize "\u{2420}"
 end
 
 ## If C-Style escapes were specified, then change a subset of the control characters to use the
