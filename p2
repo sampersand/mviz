@@ -247,6 +247,43 @@ end
 #                                         Handle Arguments                                         #
 #                                                                                                  #
 ####################################################################################################
+BEGIN{ $*.replace %w[LICENSE] }
+$mode = nil
+def each_argument(&block)
+  $*.each_with_index do |argument, idx|
+    if $mode != :argument
+      begin
+        file = open(argument, 'rb', encoding: $encoding)
+      rescue
+        unless $mode.nil?
+          $op.warn
+          next
+        end
+      else
+        begin
+          yield file
+        ensure
+          file.close
+        end
+      end
+    end
+
+    if $headings
+      printf "%5d: ", idx + 1
+    end
+
+    yield (+argument).force_encoding($encoding)
+  end
+end
+
+$*.each do |argument|
+  each_char_in argument do |char|
+    print char
+  end
+end
+
+exit
+
 
 CAPACITY = ENV['P_CAP'].to_i.nonzero? || 4096 * 3
 OUTPUT = String.new(capacity: CAPACITY * 8, encoding: Encoding::BINARY)
@@ -267,7 +304,7 @@ end
 
 ## Interpret arguments as strings
 unless $files
-  ARGV.each_with_index do |string, idx|
+  ARGV.each_with_index do |arg, idx|
     # Print out the prefix if a heading was requested
     if $headings
       printf "%5d: ", idx + 1
