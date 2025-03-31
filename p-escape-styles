@@ -16,7 +16,7 @@ require 'optparse'
 $stdout_tty = $stdout.tty?
 OptParse.new do |op|
   $op = op
-  op.version = '1.2'
+  op.version = '0.6'
   op.banner = <<~BANNER
     usage: #{op.program_name} [options] [string ...]
            #{op.program_name} -f/--files [options] [file ...]
@@ -51,14 +51,16 @@ OptParse.new do |op|
   op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_unicode = eu end
 
   op.separator "\nHow to Escape"
-  op.on '-d', '--delete', 'Delete escaped characters instead of printing their escapes' do $delete = true end
   op.on '-v', '--visualize', 'Enable visual effects. (default when stdout is a tty)' do $visual = true end
   op.on '-V', '--no-visualize', 'Do not enable visual effects' do $visual = false end
-  op.on       '--c-escapes', 'Use C-style escapes (\n, \t, etc, and \xHH). (default)' do $c_escapes = true end
-  op.on '-x', '--no-c-escapes', 'Alias for --no-c-escapes; only use \xHH for escapes.' do $c_escapes = false end
-  op.on '-P', '--control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do
-    $c_escapes = false unless defined? $c_escapes
-    $pictures = true
+  op.on '--escape-style=STYLE', 'Sets the escape style. Possible styles:', 'c (default), hex, delete, pictures, dot',
+    %w[c hex delete pictures dot] do |style| $escape_style = style.to_sym end
+  op.on '-.', 'Shorthand for --escape-style=dot; Escape with dots' do $escape_style = :dot end
+  op.on '-d', 'Shorthand for --escape-style=delete; Delete escaped chars' do $escape_style = :delete end
+  op.on '-c', 'Shorthand for --escape-style=c; Use C-style escapes (\n, \t, etc, and \xHH). (default)' do $escape_style = :c end
+  op.on '-x', 'Shorthand for --escape-style=hex; Only use \xHH escapes' do $escape_style = :hex end
+  op.on '-P', 'Shorthand for --escape-style=pictures; Use "control pictures" (U+240x..U+242x) for some escapes' do
+    $escape_style = :pictures
   end
 
   # Implementation note: Even though these usage messages reference "input encodings," the input is
@@ -87,7 +89,7 @@ end
 
 # Fetch standout constants (regardless of whether we're using them, as they're used as defaults)
 BEGIN_STANDOUT = ENV.fetch('P_BEGIN_STANDOUT', "\e[7m")
-END_STANDOUT   = ENV.fetch('P_END_STANDOUT',   "\e[27m")
+END_STANDOUT   = ENV.fetch('P_END_STANDOUT',   "\e[27m") # TODO: "\e[0m" to stop all standouts?
 BEGIN_ERR      = ENV.fetch('P_BEGIN_ERR',      "\e[37m\e[41m")
 END_ERR        = ENV.fetch('P_END_ERR',        "\e[49m\e[39m")
 
@@ -98,10 +100,10 @@ defined? $encoding_failure_error   or $encoding_failure_error = !$stdout_tty
 defined? $escape_spaces            or $escape_spaces = !$files
 defined? $escape_tab               or $escape_tab = true
 defined? $escape_newline           or $escape_newline = true
-defined? $headings                 or $headings = $stdout_tty
+defined? $headings                 or $headings = $stdout_tty && !$*.empty?
 defined? $escape_backslash         or $escape_backslash = !$visual
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
-defined? $c_escapes                or $c_escapes = true
+defined? $escape_style             or $escape_style = :c
 defined? $trailing_newline         or $trailing_newline = true
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 
@@ -126,8 +128,9 @@ end
 # - if `$visual` is specified, then `start` and `stop` surround `string`
 # - else, `string` is returned.
 def visualize(string, start=BEGIN_STANDOUT, stop=END_STANDOUT)
+  string = '.' if $escape_style == :dot
   case
-  when $delete then ''
+  when ($escape_style == :delete) then ''
   when $visual then "#{start}#{string}#{stop}"
   else              string
   end
@@ -173,7 +176,7 @@ end
 
 ## If the control pictures were requested, then print out visualizations of the control characters
 # instead of whatever else.
-if $pictures
+if $escape_style == :xpictures
   (0x00...0x20).each do |byte|
     CHARACTERS[byte.chr] = visualize((0x2400 + byte).chr(Encoding::UTF_8))
   end
@@ -183,7 +186,7 @@ end
 
 ## If C-Style escapes were specified, then change a subset of the control characters to use the
 # alternative syntax instead of their hex escapes.
-if $c_escapes
+if $escape_style == :c
   CHARACTERS["\0"] = visualize '\0'
   CHARACTERS["\a"] = visualize '\a'
   CHARACTERS["\b"] = visualize '\b'
@@ -247,47 +250,6 @@ end
 #                                         Handle Arguments                                         #
 #                                                                                                  #
 ####################################################################################################
-BEGIN{ $*.replace %w[LICENSE] }
-$mode = nil
-
-def each_char_in(argument, mode = $mode)
-  file = open(argument, 'rb', encoding: $encoding)
-rescue Errno::ENOENT
-def each_argument(&block)
-  $*.each_with_index do |argument, idx|
-    if $mode != :argument
-      begin
-        file = open(argument, 'rb', encoding: $encoding)
-      rescue
-        unless $mode.nil?
-          $op.warn
-          next
-        end
-      else
-        begin
-          yield file
-        ensure
-          file.close
-        end
-      end
-    end
-
-    if $headings
-      printf "%5d: ", idx + 1
-    end
-
-    yield (+argument).force_encoding($encoding)
-  end
-end
-
-$*.each do |argument|
-  each_char_in argument do |char|
-    print char
-  end
-end
-
-exit
-
 
 CAPACITY = ENV['P_CAP'].to_i.nonzero? || 4096 * 3
 OUTPUT = String.new(capacity: CAPACITY * 8, encoding: Encoding::BINARY)
@@ -308,7 +270,7 @@ end
 
 ## Interpret arguments as strings
 unless $files
-  ARGV.each_with_index do |arg, idx|
+  ARGV.each_with_index do |string, idx|
     # Print out the prefix if a heading was requested
     if $headings
       printf "%5d: ", idx + 1
@@ -345,15 +307,18 @@ end
 at_exit do
   if $!.is_a?(Errno::ENOENT)
     $op.warn $!.to_s.sub(/ @ rb\w+/, '')
-    exit! 2
+    # exit! 2
   end
 end
 
+empty = $*.empty?
 ARGF.set_encoding $encoding
+last_filename = nil
 ARGF.each_char do |char|
-  if ARGF.file.tell == 1
+  if !empty and not (fn = ARGF.filename).equal? last_filename
     $trailing_newline || $headings and $not_first ? print("\n") : $not_first = true
     $headings and print ARGF.filename, ":"
+    last_filename = fn
   end
   $stdout.write CHARACTERS[char]
 end

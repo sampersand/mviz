@@ -247,47 +247,6 @@ end
 #                                         Handle Arguments                                         #
 #                                                                                                  #
 ####################################################################################################
-BEGIN{ $*.replace %w[LICENSE] }
-$mode = nil
-
-def each_char_in(argument, mode = $mode)
-  file = open(argument, 'rb', encoding: $encoding)
-rescue Errno::ENOENT
-def each_argument(&block)
-  $*.each_with_index do |argument, idx|
-    if $mode != :argument
-      begin
-        file = open(argument, 'rb', encoding: $encoding)
-      rescue
-        unless $mode.nil?
-          $op.warn
-          next
-        end
-      else
-        begin
-          yield file
-        ensure
-          file.close
-        end
-      end
-    end
-
-    if $headings
-      printf "%5d: ", idx + 1
-    end
-
-    yield (+argument).force_encoding($encoding)
-  end
-end
-
-$*.each do |argument|
-  each_char_in argument do |char|
-    print char
-  end
-end
-
-exit
-
 
 CAPACITY = ENV['P_CAP'].to_i.nonzero? || 4096 * 3
 OUTPUT = String.new(capacity: CAPACITY * 8, encoding: Encoding::BINARY)
@@ -308,7 +267,7 @@ end
 
 ## Interpret arguments as strings
 unless $files
-  ARGV.each_with_index do |arg, idx|
+  ARGV.each_with_index do |string, idx|
     # Print out the prefix if a heading was requested
     if $headings
       printf "%5d: ", idx + 1
@@ -345,16 +304,16 @@ end
 at_exit do
   if $!.is_a?(Errno::ENOENT)
     $op.warn $!.to_s.sub(/ @ rb\w+/, '')
-    exit! 2
+    # exit! 2
   end
 end
 
 ARGF.set_encoding $encoding
 ARGF.each_char do |char|
-  if ARGF.file.tell == 1
-    $trailing_newline || $headings and $not_first ? print("\n") : $not_first = true
-    $headings and print ARGF.filename, ":"
-  end
+  #  if ARGF.file.tell == 1
+  #    $trailing_newline || $headings and $not_first ? print("\n") : $not_first = true
+  #    $headings and print ARGF.filename, ":"
+  #  end
   $stdout.write CHARACTERS[char]
 end
 # TODO: check `char` after to see if we need to print a newline
