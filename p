@@ -24,6 +24,10 @@ OptParse.new do |op|
   BANNER
   op.require_exact = true if defined? op.require_exact = true
 
+  op.accept :chars do |c|
+    %|"#{c.gsub('"', '\"')}"|.undump
+  end
+
   op.separator "\nGeneric Options"
   op.on '-h', '--help', 'Print this message and exit' do puts op.help; exit end
   op.on       '--version', 'Print the version and exit' do puts op.ver; exit end
@@ -38,19 +42,29 @@ OptParse.new do |op|
   op.on '-n', '--no-heading-or-newline', 'Disables both headeres and trailing newliens' do $headings = $trailing_newline = false end
 
   op.separator "\nWhat to Escape"
-  op.on       '--escape-newline', 'Escape newlines. (default)' do |x| $escape_newline = x end
-  op.on '-l', '--no-escape-newline', 'Shorthand for --no-escape-newline. ("Line-oriented mode")' do $escape_newline = false end
-  op.on       '--escape-tab', 'Escape tabs. (default)' do |x| $escape_tab = x end
-  op.on '-t', '--no-escape-tab', 'Shorthand for --no-escape-tabs.' do $escape_tab = false end
-  op.on '-s', '--[no-]escape-space', 'Escape spaces; Only useful in visual mode.' do |es| $escape_space = es end
-  op.on '-w', '--no-escape-whitespace', 'Do not escape whitespace (space, tab, newline)' do
-    $escape_tab = $escape_space = $escape_newline = false
-  end
-  op.on       '--[no-]escape-outer-space', 'Visualize leading and trailing spaces. (default)', 'Only useful in visual mode' do |ess| $escape_surronding_spaces = ess end
-  op.on '-B', '--[no-]escape-backslash', 'Escape backslashes (default when in visual)' do |eb| $escape_backslash = eb end
-  op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_unicode = eu end
+  $unescape_chars = +""; $escape_chars = +""
+  op.on '-u', '--unescape=CHARS', :chars, 'Do not escape CHARS' do |c| $unescape_chars.concat c end
+  op.on '--unescape-all', 'Do not escape any characters' do $unescape_all = true end
+  op.on '-e', '--escape=CHARS', :chars, 'Explicitly escape CHARS' do |c| $escape_chars.concat c end
+  op.on '--escape-all', 'Explicitly escape all (non-ASCII, non-visible) characters' do $escape_all = true end
+
+  op.on '-l', "Same as --unescape='\\n'. (\"Line-oriented mode\")" do $unescape_chars.concat "\n" end
+  op.on '-w', "Same as --unescape='\\n\\t ' (newline, tab, space)" do $unescape_chars.concat "\n\t " end
+  op.on '-B', "Same as --escape='\\\\' (backslash)" do $unescape_chars.concat '\\' end
+  op.on '-s', "Same as --escape=' ' (space)" do $escape_chars.concat "\s" end
+  # space)" do $escape_chars.concat "\s" end
+
+  # op.on       '--escape-tab', 'Escape tabs. (default)' do |x| $escape_tab = x end
+  # op.on '-t', '--no-escape-tab', 'Shorthand for --no-escape-tabs.' do $escape_tab = false end
+  # op.on '-s', '--[no-]escape-space', 'Escape spaces; Only useful in visual mode.' do |es| $escape_space = es end
+  # op.on '-w', '--no-escape-whitespace', 'Do not escape whitespace (space, tab, newline)' do
+  #   $escape_tab = $escape_space = $escape_newline = false
+  # end
+  # op.on       '--[no-]escape-outer-space', 'Visualize leading and trailing spaces. (default)', 'Only useful in visual mode' do |ess| $escape_surronding_spaces = ess end
+  # op.on '-B', '--[no-]escape-backslash', 'Escape backslashes (default when in visual)' do |eb| $escape_backslash = eb end
 
   op.separator "\nHow to Escape"
+  op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_unicode = eu end
   op.on '-.', '--dot', 'Escape with dots, instead of other characters' do $dot = true end
   op.on '-d', '--delete', 'Delete escaped characters instead of printing their escapes' do $delete = true end
   op.on '-v', '--visualize', 'Enable visual effects. (default when stdout is a tty)' do $visual = true end
@@ -229,6 +243,19 @@ CHARACTERS.default_proc = proc do |hash, char|
     else
       char
     end
+end
+
+################################################################################
+#                               Other Characters                               #
+################################################################################
+$unescape_all and CHARACTERS.replace(Hash.new{|x,y| x[y] = y})
+
+$escape_chars.each_char do |char|
+  CHARACTERS[char] = visualize hex_bytes char
+end
+
+$unescape_chars.each_char do |char|
+  CHARACTERS[char] = char
 end
 
 ################################################################################
