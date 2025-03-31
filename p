@@ -5,7 +5,7 @@ defined?(RubyVM::YJIT.enable) and RubyVM::YJIT.enable
 require 'optparse'
 
 ## Default escape sequences
-Encoding.default_internal = Encoding::UTF_8
+# Encoding.default_internal = Encoding::UTF_8
 
 ####################################################################################################
 #                                                                                                  #
@@ -32,10 +32,10 @@ OptParse.new do |op|
 
   # TODO: make custom separators like space between fields... but figure out a "Trailing sep"?
   op.separator "\nHow to separate fields"
-  op.on       '--headers', 'Add headers to the output (default if stdout is a tty)' do $headings = true end
-  op.on '-N', '--no-headers', 'Do not add headers to the output' do $headings = false end
-  op.on       '--[no-]trailing-newlines', 'Print trailing newlines; only used with --no-headers. (default)' do |tnl| $trailing_newline = tnl end
-  op.on '-n', '--no-headers-or-newlines', 'Disables both headeres and trailing newliens' do $headings = $trailing_newline = false end
+  op.on       '--heading', 'Add headers to the output (default if stdout is a tty)' do $headings = true end
+  op.on '-N', '--no-heading', 'Do not add headers to the output' do $headings = false end
+  op.on       '--[no-]trailing-newline', 'Print trailing newlines; only used with --no-headers. (default)' do |tnl| $trailing_newline = tnl end
+  op.on '-n', '--no-heading-or-newline', 'Disables both headeres and trailing newliens' do $headings = $trailing_newline = false end
 
   op.separator "\nWhat to Escape"
   op.on       '--escape-newline', 'Escape newlines. (default)' do |x| $escape_newline = x end
@@ -265,40 +265,62 @@ def handle(string)
   $stdout.write OUTPUT
 end
 
-def handle_argv_string(string)
-  # Unfortunately, `ARGV` strings are frozen, and we need to forcibly change the string's encoding
-  # within `handle` so can iterate over the contents of the string in the new encoding. As such,
-  # we need to duplicate the string here.
-  string = +string
-
-  # If we're escaping surrounding spaces, check for them.
-  if $escape_surronding_spaces
-    # TODO: If we ever end up not needing to modify `string` via `.force_encoding` down below (i.e.
-    # if there's a way to iterate over chars without changing encodings/duplicating the string
-    # beforehand), this should be changed to use `byteslice`.The method used here is more convenient,
-    # but is destructive.
-    string.force_encoding Encoding::BINARY
-    leading_spaces  = string.slice!(/\A */) and $stdout.write visualize leading_spaces
-    trailing_spaces = string.slice!(/ *\z/)
-  end
-
-  handle string
-
-  trailing_spaces and $stdout.write visualize trailing_spaces
-end
-
-
 ## Interpret arguments as strings
 unless $files
   ARGV.each_with_index do |arg, idx|
-    $headings and printf "%5d: ", idx + 1
-    handle_argv_string arg
+    # Print out the prefix if a heading was requested
+    if $headings
+      printf "%5d: ", idx + 1
+    end
+
+    # Unfortunately, `ARGV` strings are frozen, and we need to forcibly change the string's encoding
+    # within `handle` so can iterate over the contents of the string in the new encoding. As such,
+    # we need to duplicate the string here.
+    string = +string
+
+    # If we're escaping surrounding spaces, check for them.
+    if $escape_surronding_spaces
+      # TODO: If we ever end up not needing to modify `string` via `.force_encoding` down below (i.e.
+      # if there's a way to iterate over chars without changing encodings/duplicating the string
+      # beforehand), this should be changed to use `byteslice`.The method used here is more convenient,
+      # but is destructive. ALSO. It doesn't work wtih non-utf8 characters
+      string.force_encoding Encoding::BINARY
+      leading_spaces  = string.slice!(/\A */) and $stdout.write visualize leading_spaces
+      trailing_spaces = string.slice!(/ *\z/)
+    end
+
+    # handle the input string
+    handle string
+
+    # If any trailing spaces were made, print them out
+    trailing_spaces and $stdout.write visualize trailing_spaces
+
     $trailing_newline or $headings and puts
   end
   # $trailing_newline && !$headings and $stdout.write "\n".encode $encoding
   exit
 end
 
+at_exit do
+  if $!.is_a?(Errno::ENOENT)
+    $op.warn $!.to_s.sub(/ @ rb\w+/, '')
+    exit! 2
+  end
+end
+
+ARGF.set_encoding $encoding
+ARGF.each_char do |char|
+  if ARGF.file.tell == 1
+    $trailing_newline || $headings and $not_first ? print("\n") : $not_first = true
+    $headings and print ARGF.filename, ":"
+  end
+  $stdout.write CHARACTERS[char]
+end
+# TODO: check `char` after to see if we need to print a newline
+$trailing_newline and $stdout.write "\n".encode $encoding
+
+
+__END__
 def ARGF.filename
   super || exit
 rescue
