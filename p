@@ -32,7 +32,7 @@ OptParse.new do |op|
   op.on '-h', '--help', 'Print this message and exit' do puts op.help; exit end
   op.on       '--version', 'Print the version and exit' do puts op.ver; exit end
   op.on '-f', '--files', 'Interpret arguments as filenames to read, not strings' do $files = true end
-  op.on       '--[no-]assume-tty', 'Pretend stdout is tty for defaults' do |tty| $stdout_tty = tty end
+  op.on '-t', '--[no-]assume-tty', 'Pretend stdout is tty for defaults' do |tty| $stdout_tty = tty end
 
   # TODO: make custom separators like space between fields... but figure out a "Trailing sep"?
   op.separator "\nHow to separate fields"
@@ -54,21 +54,14 @@ OptParse.new do |op|
     $escape_backslash = eb end # Need this because it has adefault 
   op.on '-s', "Same as --escape=' ' (space)" do $escape_chars.concat "\s" end
   op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_unicode = eu end
-
-  # op.on       '--escape-tab', 'Escape tabs. (default)' do |x| $escape_tab = x end
-  # op.on '-t', '--no-escape-tab', 'Shorthand for --no-escape-tabs.' do $escape_tab = false end
-  # op.on '-s', '--[no-]escape-space', 'Escape spaces; Only useful in visual mode.' do |es| $escape_space = es end
-  # op.on '-w', '--no-escape-whitespace', 'Do not escape whitespace (space, tab, newline)' do
-  #   $escape_tab = $escape_space = $escape_newline = false
-  # end
   op.on       '--[no-]escape-outer-space', 'Visualize leading and trailing spaces. (default)', 'Only useful in visual mode' do |ess| $escape_surronding_spaces = ess end
 
-  op.separator "\nHow to Escape (-., -d, -x, and -c are mutually exclusive)"
+  op.separator "\nHow to Escape (-d, -., -x, and -c are mutually exclusive)"
   op.on '-v', '--visual', 'Enable visual effects. (default when stdout is a tty)' do $visual = true end
   op.on '-V', '--no-visual', 'Do not enable visual effects' do $visual = false end
 
-  op.on '-.', '--dot', 'Escape characters by printing a period' do $escape_how = :dot end
   op.on '-d', '--delete', 'Escape characters by deleting them instead of printing' do $escape_how = :delete end
+  op.on '-.', '--dot', 'Escape characters by printing a period' do $escape_how = :dot end
   op.on '-x', '--hex', 'Escape characters by printing their hex escapes, \xHH (default)' do $escape_how = :bytes end
   op.on '-c', '--codepoints', 'Escape characters by printing their \u{...} escape', '(Only usable if the --encoding is UTF-8; See also -U).' do $escape_how = :codepoints end
 
@@ -78,8 +71,7 @@ OptParse.new do |op|
   # Implementation note: Even though these usage messages reference "input encodings," the input is
   # actually always read as binary data, and then attempted to be converted to whatever these
   # encodings are
-  op.separator "\nInput Encodings"
-  op.separator "The default is normally --utf-8, but if the env var POSIXLY_CORRECT is set, --locale is."
+  op.separator "\nInput Encodings (default normally is --utf-8; If env var POSIXLY_CORRECT is set, it is --locale)"
   op.on '-E', '--encoding=ENCODING', "Specify the input data's encoding. Case insensitive" do |enc|
     $encoding = Encoding.find enc rescue op.abort
   end
@@ -91,7 +83,7 @@ OptParse.new do |op|
   op.on '-a', '--ascii', 'Same as -Eascii. Like -b, but high-bit bytes are invalid.' do $encoding = Encoding::ASCII end
   op.on '-8', '--utf-8', 'Same as -Eutf-8. (See also the -U flag to escape UTF-8)' do $encoding = Encoding::UTF_8 end
   op.on '-L', '--locale', 'Same as -Elocale, i.e. what LC_ALL/LC_CTYPE/LANG specify.' do $encoding = Encoding.find('locale') end
-  op.on '--[no-]encoding-failure-status', 'Invalid bytes cause non-zero exit status. (deafult: when a tty)' do |efe| $encoding_failure_error = efe end
+  op.on '--[no-]encoding-failure-status', 'Invalid bytes cause non-zero exit status. (default)' do |efe| $encoding_failure_error = efe end
 
   op.on_tail "\nnote: IF any invalid bytes for the output encoding are read, the exit status is based on `--encoding-failure-err`"
 
@@ -109,7 +101,7 @@ END_ERR        = ENV.fetch('P_END_ERR',        "\e[49m\e[39m")
 # Specify defaults
 defined? $files                    or $files = !$stdin.tty? && $*.empty?
 defined? $visual                   or $visual = $stdout_tty
-defined? $encoding_failure_error   or $encoding_failure_error = !$stdout_tty
+defined? $encoding_failure_error   or $encoding_failure_error = true
 defined? $escape_spaces            or $escape_spaces = !$files
 defined? $escape_tab               or $escape_tab = true
 defined? $escape_newline           or $escape_newline = true
