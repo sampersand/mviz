@@ -46,7 +46,7 @@ OptParse.new do |op|
   op.on '-u', '--unescape=CHARS', :chars, 'Do not escape CHARS' do |c| $unescape_chars.concat c end
   op.on '--unescape-all', 'Do not escape any characters' do $unescape_all = true end
   op.on '-e', '--escape=CHARS', :chars, 'Explicitly escape CHARS' do |c| $escape_chars.concat c end
-  op.on '--escape-all', 'Explicitly escape all (non-ASCII, non-visible) characters' do $escape_all = true end
+  op.on '--escape-all', 'Explicitly escape all (non-ASCII, non-visible) characters' do $op.abort 'todo: not working'; $escape_all = true end
 
   op.on '-l', "Same as --unescape='\\n'. (\"Line-oriented mode\")" do $unescape_chars.concat "\n" end
   op.on '-w', "Same as --unescape='\\n\\t ' (newline, tab, space)" do $unescape_chars.concat "\n\t " end
@@ -84,7 +84,6 @@ OptParse.new do |op|
   op.on '-8', '--utf-8', 'Same as -Eutf-8. (See also the -U flag to escape UTF-8)' do $encoding = Encoding::UTF_8 end
   op.on '-L', '--locale', 'Same as -Elocale, i.e. what LC_ALL/LC_CTYPE/LANG specify.' do $encoding = Encoding.find('locale') end
   op.on '--[no-]encoding-failure-status', 'Invalid bytes cause non-zero exit status. (default)' do |efe| $encoding_failure_error = efe end
-
   op.on_tail "\nnote: IF any invalid bytes for the output encoding are read, the exit status is based on `--encoding-failure-err`"
 
   op.on 'ENVIRONMENT: P_BEGIN_STANDOUT; P_END_STANDOUT; P_BEGIN_ERR; P_END_ERR'
