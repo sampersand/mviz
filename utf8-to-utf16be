@@ -1,0 +1,9 @@
+#!ruby
+$stdout.set_encoding 'UTF-16BE'
+$stdin.set_encoding 'UTF-8'
+
+if $*.empty?
+  print while gets
+else
+  puts $*
+end

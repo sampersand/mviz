@@ -338,7 +338,13 @@ at_exit do
   end
 end
 
-ARGF.set_encoding $encoding
+begin
+  ARGF.set_encoding $encoding
+rescue ArgumentError
+  ARGF.binmode
+  ARGF.set_encoding $encoding
+end
+
 ARGF.each_char do |char|
   #  if ARGF.file.tell == 1
   #    $trailing_newline || $headings and $not_first ? print("\n") : $not_first = true
