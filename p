@@ -14,9 +14,10 @@ require 'optparse'
 ####################################################################################################
 
 $stdout_tty = $stdout.tty?
+
 OptParse.new do |op|
   $op = op
-  op.version = '1.2'
+  op.version = '0.65'
   op.banner = <<~BANNER
     usage: #{op.program_name} [options] [string ...]
            #{op.program_name} -f/--files [options] [file ...]
@@ -28,19 +29,57 @@ OptParse.new do |op|
     %|"#{c.gsub('"', '\"')}"|.undump
   end
 
+  ##################################################################################################
+  #                                        Generic Options                                         #
+  ##################################################################################################
   op.separator "\nGeneric Options"
-  op.on '-h', '--help', 'Print this message and exit' do puts op.help; exit end
-  op.on       '--version', 'Print the version and exit' do puts op.ver; exit end
-  op.on '-f', '--files', 'Interpret arguments as filenames to read, not strings' do $files = true end
-  op.on '-t', '--[no-]assume-tty', 'Pretend stdout is tty for defaults' do |tty| $stdout_tty = tty end
 
-  # TODO: make custom separators like space between fields... but figure out a "Trailing sep"?
-  op.separator "\nHow to separate fields"
-  op.on       '--heading', 'Add headers to the output (default if stdout is a tty)' do $headings = true end
-  op.on '-N', '--no-heading', 'Do not add headers to the output' do $headings = false end
-  op.on       '--[no-]trailing-newline', 'Print trailing newlines; Only used if --no-headers. (default)' do |tnl| $trailing_newline = tnl end
-  op.on '-n', '--no-heading-or-newline', 'Disables both headeres and trailing newliens' do $headings = $trailing_newline = false end
+  op.on '-h', '--help', 'Print this message and exit' do
+    puts op.help # Newer versions of OptParse have `op.help_exit`, but we are targeting older ones.
+    exit
+  end
 
+  op.on '--version', 'Print the version and exit' do
+    puts op.ver
+    exit
+  end
+
+  op.on '-f', '--files', 'Interpret arguments as filenames to read, not strings' do
+    # Note there's no `-[no-]` prefix, because we expect this to be an explicit toggle on each time
+    # it's used (i.e. you shouldn't `alias p='p -f'`.)
+    $files = true
+  end
+
+  # This maybe removed in a future release, as it doesn't control a whole lot.
+  op.on '-t', '--[no-]assume-tty', 'Assume stdout is tty for defaults' do |tty|
+    $stdout_tty = tty
+  end
+
+  ##################################################################################################
+  #                                       Separating Outputs                                       #
+  ##################################################################################################
+  op.separator "\nSeparating Outputs"
+
+  op.on '--heading', 'Add headers, i.e. arg number/file name. (default if tty)' do
+    $headings = true
+  end
+
+  op.on '-N', '--no-heading', 'Do not add headers to the output' do
+    $headings = false
+  end
+
+  op.on '--[no-]trailing-newline', 'Print trailing newlines after each argument. (default)',
+                                   'Only useful if --no-headers is given.' do |tnl|
+    $trailing_newline = tnl
+  end
+
+  op.on '-n', '--no-heading-or-newline', 'Disables both headers and trailing newlines' do
+    $headings = $trailing_newline = false
+  end
+
+  ##################################################################################################
+  #                                         What To Escape                                         #
+  ##################################################################################################
   op.separator "\nWhat to Escape"
   $unescape_chars = +""; $escape_chars = +""
   op.on '-u', '--unescape=CHARS', :chars, 'Do not escape CHARS' do |c| $unescape_chars.concat c end
@@ -56,51 +95,114 @@ OptParse.new do |op|
   op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_unicode = eu end
   op.on       '--[no-]escape-outer-space', 'Visualize leading and trailing spaces. (default)', 'Only useful in visual mode' do |ess| $escape_surronding_spaces = ess end
 
+  ##################################################################################################
+  #                                         How to Escape                                          #
+  ##################################################################################################
   op.separator "\nHow to Escape (-d, -., -x, and -c are mutually exclusive)"
-  op.on '-v', '--visual', 'Enable visual effects. (default when stdout is a tty)' do $visual = true end
-  op.on '-V', '--no-visual', 'Do not enable visual effects' do $visual = false end
 
-  op.on '-d', '--delete', 'Escape characters by deleting them instead of printing' do $escape_how = :delete end
-  op.on '-.', '--dot', 'Escape characters by printing a period' do $escape_how = :dot end
-  op.on '-x', '--hex', 'Escape characters by printing their hex escapes, \xHH (default)' do $escape_how = :bytes end
-  op.on '-C', '--codepoints', 'Escape characters by printing their \u{...} escape', '(Only usable if the --encoding is UTF-8; See also -U).' do $escape_how = :codepoints end
+  op.on '-v', '--visual', 'Enable visual effects. (default if tty)' do
+    $visual = true
+  end
 
-  op.on '-c', '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc). (default if no -d.xc given)' do |ce| $c_escapes = ce end
-  op.on '-P', '--[no-]control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do |cp | $pictures = cp end
+  op.on '-V', '--no-visual', 'Do not enable visual effects' do
+    $visual = false
+  end
+
+  op.on '-d', '--delete', 'Escape characters by deleting them instead of printing' do
+    $escape_how = :delete
+  end
+
+  op.on '-.', '--dot', 'Escape characters by printing a period' do
+    $escape_how = :dot
+  end
+
+  op.on '-x', '--hex', 'Escape characters by printing their hex escapes, \xHH (default)' do
+    $escape_how = :bytes
+  end
+
+  op.on '-C', '--codepoints', 'Escape characters by printing their \u{...} escape',
+                              '(Only usable if the --encoding is UTF-8; See also -U).' do
+    $escape_how = :codepoints
+  end
+
+  op.on '-c', '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc). (default if no -d.xc given)' do |ce|
+    $c_escapes = ce
+  end
+
+  op.on '-P', '--[no-]control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do |cp|
+    $pictures = cp
+  end
+
+  ##################################################################################################
+  #                                        Input Encodings                                         #
+  ##################################################################################################
 
   # Implementation note: Even though these usage messages reference "input encodings," the input is
   # actually always read as binary data, and then attempted to be converted to whatever these
   # encodings are
   op.separator "\nInput Encodings (default normally is --utf-8; If env var POSIXLY_CORRECT is set, it is --locale)"
+
   op.on '-E', '--encoding=ENCODING', "Specify the input data's encoding. Case insensitive" do |enc|
     $encoding = Encoding.find enc rescue op.abort
   end
-  op.on       '--list-encodings', 'List all possible encodings' do
+
+  op.on '--list-encodings', 'List all possible encodings and exit' do
+    # Don't list external/internal encodings, as they're not really relevant.
     puts "available encodings: #{(Encoding.name_list - %w[external internal]).join(', ')}"
     exit
   end
-  op.on '-b', '--binary', '--bytes', 'Same as -Ebinary; High-bit bytes are escaped.' do $encoding = Encoding::BINARY end
-  op.on '-a', '--ascii', 'Same as -Eascii. Like -b, but high-bit bytes are invalid.' do $encoding = Encoding::ASCII end
-  op.on '-8', '--utf-8', 'Same as -Eutf-8. (See also the -U flag to escape UTF-8)' do $encoding = Encoding::UTF_8 end
-  op.on '-L', '--locale', 'Same as -Elocale, i.e. what LC_ALL/LC_CTYPE/LANG specify.' do $encoding = Encoding.find('locale') end
-  op.on '--[no-]encoding-failure-status', 'Invalid bytes cause non-zero exit status. (default)' do |efe| $encoding_failure_error = efe end
+
+  op.on '-b', '--binary', '--bytes', 'Same as -Ebinary; High-bit bytes are escaped.' do
+    $encoding = Encoding::BINARY
+  end
+
+  op.on '-a', '--ascii', 'Same as -Eascii. Like -b, but high-bit bytes are invalid.' do
+    $encoding = Encoding::ASCII
+  end
+
+  op.on '-8', '--utf-8', 'Same as -Eutf-8. (See also the -U flag to escape UTF-8)' do
+    $encoding = Encoding::UTF_8
+  end
+
+  op.on '-L', '--locale', 'Same as -Elocale, i.e. what LC_ALL/LC_CTYPE/LANG specify.' do
+    $encoding = Encoding.find('locale')
+  end
+
+  op.on '--[no-]invalid-bytes-failure', 'Invalid bytes cause non-zero exit status. (default)' do |ibf|
+    $invalid_bytes_failure = ibf
+  end
+
   op.on_tail "\nnote: IF any invalid bytes for the output encoding are read, the exit status is based on `--encoding-failure-err`"
 
-  op.on 'ENVIRONMENT: P_BEGIN_STANDOUT; P_END_STANDOUT; P_BEGIN_ERR; P_END_ERR'
+  ##################################################################################################
+  #                                        Environment Vars                                        #
+  ##################################################################################################
+  op.separator "\nEnvironment Variables"
+  op.on <<-EOS # Note: `-EOS` not `~EOS` to keep leading spaces
+    P_BEGIN_VISUAL     Beginning escape sequence for --visual
+    P_END_VISUAL       Ending escape sequence for --visual
+    P_BEGIN_ERR        Beginning escape sequence for invalid bytes with --visual
+    P_END_ERR          Ending escape sequence for invalid bytes with --visual
+    POSIXLY_CORRECT    If present, changes default encoding to the locale's (cf locale(1).),
+                       and also disables parsing switches after arguments (e.g. `p foo -x` will
+                       print out `foo` and `-x`, and won't interpret `-x` as a switch.)
+  EOS
 
-  op.parse! rescue op.abort # <-- only cares about flag order when POSIXLY_CORRECT is set.
+  # Parse the options; Note that `op.parse!` handles `POSIXLY_CORRECT` internally to determine if
+  # flags should be allowed to come after arguments.
+  op.parse! rescue op.abort
 end
 
 # Fetch standout constants (regardless of whether we're using them, as they're used as defaults)
-BEGIN_STANDOUT = ENV.fetch('P_BEGIN_STANDOUT', "\e[7m")
-END_STANDOUT   = ENV.fetch('P_END_STANDOUT',   "\e[27m")
-BEGIN_ERR      = ENV.fetch('P_BEGIN_ERR',      "\e[37m\e[41m")
-END_ERR        = ENV.fetch('P_END_ERR',        "\e[49m\e[39m")
+BEGIN_VISUAL = ENV.fetch('P_BEGIN_VISUAL', "\e[7m")
+END_VISUAL   = ENV.fetch('P_END_VISUAL',   "\e[27m")
+BEGIN_ERR    = ENV.fetch('P_BEGIN_ERR',    "\e[37m\e[41m")
+END_ERR      = ENV.fetch('P_END_ERR',      "\e[49m\e[39m")
 
 # Specify defaults
 defined? $files                    or $files = !$stdin.tty? && $*.empty?
 defined? $visual                   or $visual = $stdout_tty
-defined? $encoding_failure_error   or $encoding_failure_error = true
+defined? $invalid_bytes_failure   or $invalid_bytes_failure = true
 defined? $escape_spaces            or $escape_spaces = !$files
 defined? $escape_tab               or $escape_tab = true
 defined? $escape_newline           or $escape_newline = true
@@ -118,7 +220,7 @@ end
 
 # If `--encoding-failure-err` was specified, then exit depending on whether an
 # encoding failure occurred
-$encoding_failure_error and at_exit { exit !$ENCODING_FAILED }
+$invalid_bytes_failure and at_exit { exit !$ENCODING_FAILED }
 
 ####################################################################################################
 #                                                                                                  #
@@ -140,7 +242,7 @@ end
 # - if `$delete` is specified, then an empty string is returned---escaped characters are deleted.
 # - if `$visual` is specified, then `start` and `stop` surround `string`
 # - else, `string` is returned.
-def visualize(string, start=BEGIN_STANDOUT, stop=END_STANDOUT)
+def visualize(string, start=BEGIN_VISUAL, stop=END_VISUAL)
   string = '.' if $escape_how == :dot
   case
   when $escape_how == :delete then ''
@@ -237,7 +339,7 @@ CHARACTERS[' ']  = visualize(' ') if $escape_space
 CHARACTERS.default_proc = proc do |hash, char|
   hash[char] =
     if !char.valid_encoding?
-      $ENCODING_FAILED = true # for the exit status with `$encoding_failure_error`.
+      $ENCODING_FAILED = true # for the exit status with `$invalid_bytes_failure`.
       visualize hex_bytes(char), BEGIN_ERR, END_ERR
     elsif $escape_unicode
       visualize '\u{%04X}' % char.codepoints.sum
