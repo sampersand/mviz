@@ -25,8 +25,7 @@ OptParse.new do |op|
   op.require_exact = true if defined? op.require_exact = true
 
   op.accept :chars do |c|
-    c.undump
-    # %|"#{c.gsub('"', '\"')}"|.undump
+    %|"#{c.gsub('"', '\"')}"|.undump
   end
 
   op.separator "\nGeneric Options"
@@ -39,7 +38,7 @@ OptParse.new do |op|
   op.separator "\nHow to separate fields"
   op.on       '--heading', 'Add headers to the output (default if stdout is a tty)' do $headings = true end
   op.on '-N', '--no-heading', 'Do not add headers to the output' do $headings = false end
-  op.on       '--[no-]trailing-newline', 'Print trailing newlines; only used with --no-headers. (default)' do |tnl| $trailing_newline = tnl end
+  op.on       '--[no-]trailing-newline', 'Print trailing newlines; Only used if --no-headers. (default)' do |tnl| $trailing_newline = tnl end
   op.on '-n', '--no-heading-or-newline', 'Disables both headeres and trailing newliens' do $headings = $trailing_newline = false end
 
   op.separator "\nWhat to Escape"
@@ -51,10 +50,10 @@ OptParse.new do |op|
 
   op.on '-l', "Same as --unescape='\\n'. (\"Line-oriented mode\")" do $unescape_chars.concat "\n" end
   op.on '-w', "Same as --unescape='\\n\\t ' (newline, tab, space)" do $unescape_chars.concat "\n\t " end
-  op.on '-B', "Same as --escape='\\\\' (backslash)" do $unescape_chars.concat '\\' end
+  op.on '-B', '--[no-]escape-backslash', "Same as --escape='\\\\' (backslash) (default if not in visual mode)" do |eb|
+    $escape_backslash = eb end # Need this because it has adefault 
   op.on '-s', "Same as --escape=' ' (space)" do $escape_chars.concat "\s" end
   op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_unicode = eu end
-  # space)" do $escape_chars.concat "\s" end
 
   # op.on       '--escape-tab', 'Escape tabs. (default)' do |x| $escape_tab = x end
   # op.on '-t', '--no-escape-tab', 'Shorthand for --no-escape-tabs.' do $escape_tab = false end
@@ -62,29 +61,25 @@ OptParse.new do |op|
   # op.on '-w', '--no-escape-whitespace', 'Do not escape whitespace (space, tab, newline)' do
   #   $escape_tab = $escape_space = $escape_newline = false
   # end
-  # op.on       '--[no-]escape-outer-space', 'Visualize leading and trailing spaces. (default)', 'Only useful in visual mode' do |ess| $escape_surronding_spaces = ess end
-  # op.on '-B', '--[no-]escape-backslash', 'Escape backslashes (default when in visual)' do |eb| $escape_backslash = eb end
+  op.on       '--[no-]escape-outer-space', 'Visualize leading and trailing spaces. (default)', 'Only useful in visual mode' do |ess| $escape_surronding_spaces = ess end
 
-  op.separator "\nHow to Escape"
-  op.on '-v', '--visualize', 'Enable visual effects. (default when stdout is a tty)' do $visual = true end
-  op.on '-V', '--no-visualize', 'Do not enable visual effects' do $visual = false end
+  op.separator "\nHow to Escape (-., -d, -x, and -c are mutually exclusive)"
+  op.on '-v', '--visual', 'Enable visual effects. (default when stdout is a tty)' do $visual = true end
+  op.on '-V', '--no-visual', 'Do not enable visual effects' do $visual = false end
 
-  op.on '--escape-with=WHAT', 'How to escape (valid options: dot, delete, bytes, codepoints)',
-    %w[dot delete bytes codepoints] do |how| $escape_how = how.to_sym end
-  op.on '-.', 'Alias for --escape-with=dot; Escape with dots, instead of other characters' do $escape_how = :dot end
-  op.on '-d', 'Alias for --escape-with=delete; Delete escaped characters instead of printing their escapes' do $escape_how = :delete end
-  op.on '-x', 'Alias for --escape-with=bytes; Use \xHH for escapes. (default)' do $escape_how = :bytes end
-  op.on '-c', 'Alias for --escape-with=codepoints; Use \u{...} for escapes.' do $escape_how = :codepoints end
+  op.on '-.', '--dot', 'Escape characters by printing a period' do $escape_how = :dot end
+  op.on '-d', '--delete', 'Escape characters by deleting them instead of printing' do $escape_how = :delete end
+  op.on '-x', '--hex', 'Escape characters by printing their hex escapes, \xHH (default)' do $escape_how = :bytes end
+  op.on '-c', '--codepoints', 'Escape characters by printing their \u{...} escape', '(Only usable if the --encoding is UTF-8; See also -U).' do $escape_how = :codepoints end
 
-  # Options for a specific subset
-  op.on '-C', '--C-escapes', 'Use C-style escapes (\n, \t, etc). (default)' do $c_escapes = true end
-  op.on '-P', '--control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do $pictures = true end
-
+  op.on '-C', '--[no-]C-escapes', 'Use C-style escapes (\n, \t, etc). (default if -x)' do |ce| $c_escapes = ce end
+  op.on '-P', '--[no-]control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do |cp | $pictures = cp end
 
   # Implementation note: Even though these usage messages reference "input encodings," the input is
   # actually always read as binary data, and then attempted to be converted to whatever these
   # encodings are
   op.separator "\nInput Encodings"
+  op.separator "The default is normally --utf-8, but if the env var POSIXLY_CORRECT is set, --locale is."
   op.on '-E', '--encoding=ENCODING', "Specify the input data's encoding. Case insensitive" do |enc|
     $encoding = Encoding.find enc rescue op.abort
   end
@@ -92,10 +87,10 @@ OptParse.new do |op|
     puts "available encodings: #{(Encoding.name_list - %w[external internal]).join(', ')}"
     exit
   end
-  op.on '-b', '--binary', '--bytes', 'Alias for -Ebinary; High-bit bytes are escaped.' do $encoding = Encoding::BINARY end
-  op.on '-a', '--ascii', 'Alias for -Eascii. Like -b, but high-bit bytes are invalid.' do $encoding = Encoding::ASCII end
-  op.on '-8', '--utf-8', 'Alias for -Eutf-8. (See also the -U flag to escape UTF-8)' do $encoding = Encoding::UTF_8 end
-  op.on '-L', '--locale', 'Alias for -Elocale, i.e. what LC_ALL/LC_CTYPE/LANG specify.' do $encoding = Encoding.find('locale') end
+  op.on '-b', '--binary', '--bytes', 'Same as -Ebinary; High-bit bytes are escaped.' do $encoding = Encoding::BINARY end
+  op.on '-a', '--ascii', 'Same as -Eascii. Like -b, but high-bit bytes are invalid.' do $encoding = Encoding::ASCII end
+  op.on '-8', '--utf-8', 'Same as -Eutf-8. (See also the -U flag to escape UTF-8)' do $encoding = Encoding::UTF_8 end
+  op.on '-L', '--locale', 'Same as -Elocale, i.e. what LC_ALL/LC_CTYPE/LANG specify.' do $encoding = Encoding.find('locale') end
   op.on '--[no-]encoding-failure-status', 'Invalid bytes cause non-zero exit status. (deafult: when a tty)' do |efe| $encoding_failure_error = efe end
 
   op.on_tail "\nnote: IF any invalid bytes for the output encoding are read, the exit status is based on `--encoding-failure-err`"
