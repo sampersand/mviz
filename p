@@ -63,9 +63,9 @@ OptParse.new do |op|
   op.on '-d', '--delete', 'Escape characters by deleting them instead of printing' do $escape_how = :delete end
   op.on '-.', '--dot', 'Escape characters by printing a period' do $escape_how = :dot end
   op.on '-x', '--hex', 'Escape characters by printing their hex escapes, \xHH (default)' do $escape_how = :bytes end
-  op.on '-c', '--codepoints', 'Escape characters by printing their \u{...} escape', '(Only usable if the --encoding is UTF-8; See also -U).' do $escape_how = :codepoints end
+  op.on '-C', '--codepoints', 'Escape characters by printing their \u{...} escape', '(Only usable if the --encoding is UTF-8; See also -U).' do $escape_how = :codepoints end
 
-  op.on '-C', '--[no-]C-escapes', 'Use C-style escapes (\n, \t, etc). (default if -x)' do |ce| $c_escapes = ce end
+  op.on '-c', '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc). (default if no -d.xc given)' do |ce| $c_escapes = ce end
   op.on '-P', '--[no-]control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do |cp | $pictures = cp end
 
   # Implementation note: Even though these usage messages reference "input encodings," the input is
@@ -107,8 +107,8 @@ defined? $escape_newline           or $escape_newline = true
 defined? $headings                 or $headings = $stdout_tty
 defined? $escape_backslash         or $escape_backslash = !$visual
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
+defined? $c_escapes                or $c_escapes = !defined?($escape_how) # Make sure to put this before `escape_how`'s default'
 defined? $escape_how               or $escape_how = :bytes
-defined? $c_escapes                or $c_escapes = $escape_how == :bytes
 defined? $trailing_newline         or $trailing_newline = true
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 
