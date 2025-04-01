@@ -449,6 +449,47 @@ at_exit do
   end
 end
 
+# Sadly, we can't use `ARGF` for numerous reasons:
+# 1. `ARGF#each_char` will completely skip empty files, and won't call its block. So there's no easy
+#    way for us to print out headers for empty files. (We _could_ keep our own `ARGV` list, but that
+#    would be incredibly hacky.) And, we have to check file names _each time_ we get a new char.
+# 2. `ARGF#readpartial` gives empty strings when a new file is read, which lets us more easily print
+#    out headers. However, it doesn't give us an empty string for the first line (which is solvable,
+#    but annoying). However, the main problem is that you might read the first half of a multibyte
+#    sequence, which then wouldn't be escaped. Since we support utf-8, utf-16, and utf-32, it's not
+#    terribly easy (from my experiments with) to make a generalized way to detect half-finished seq-
+#    uence.
+# 3. `ARGF` in general prints out very ugly error messages for missing/unopenable files, and it's a
+#    pain to easily capture them, especially since we want to dump all files, even if there's a
+#    problem with one of them.
+# 4. `ARGF#filename` is not a usable way to see if new files are given: Using `old == ARGF.filename`
+#    in a loop doesn't work in the case of two identical files being dumped (eg `p ab.txt ab.txt`).
+#    But, `old.equal? ARGF.filename` also doesn't work because a brand new `"-"` is returned for
+#    each `.filename` call when `ARGV` started out empty (i.e. `p` with no arguments).
+#
+# Unfortunately, manually iterating over `ARGV` also has its issues:
+# 1. You need to manually check for `ARGV.empty?` and then default it to `/dev/stdin` if no files
+#    were given. However, neither `/dev/stdin` nor `/dev/fd/1` are technically portable, and
+#    what I can tell Ruby does not automatically recognize them and use the appropriate filenos.
+# 2. We have to manually check for `-` ourselves and redirect it to `/dev/stdin`, which is janky.
+# 3. It's much more verbose
+# ARGV.push '-' if ARGV.empty?
+
+# ARGV.each do |filename|
+#   filename = '/dev/stdin' if filename == '-'
+#   file = filename == '-' ? $stdin : File.open()
+
+
+
+# if $*.empty?
+# until $*.empty?
+#   filename = $*.shift
+#   open filename, 'rb', encoding: $encoding do |f|
+#     p f.encoding
+#   end
+#   exit
+# end
+
 begin
   ARGF.set_encoding $encoding
 rescue ArgumentError
@@ -456,7 +497,12 @@ rescue ArgumentError
   ARGF.set_encoding $encoding
 end
 
+length = nil
 ARGF.each_char do |char|
+  if length != $*.length
+    p $<.filename
+    length = $*.length
+  end
   #  if ARGF.file.tell == 1
   #    $trailing_newline || $headings and $not_first ? print("\n") : $not_first = true
   #    $headings and print ARGF.filename, ":"
