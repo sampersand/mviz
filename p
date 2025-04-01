@@ -2,21 +2,17 @@
 # -*- encoding: binary; frozen-string-literal: true -*-
 defined?(RubyVM::YJIT.enable) and RubyVM::YJIT.enable
 
-require 'optparse'
-
-## Default escape sequences
-# Encoding.default_internal = Encoding::UTF_8
 
 ####################################################################################################
 #                                                                                                  #
 #                                         Parse Arguments                                          #
 #                                                                                                  #
 ####################################################################################################
-
-$stdout_tty = $stdout.tty?
+require 'optparse'
 
 OptParse.new do |op|
-  $op = op
+  $op = op # for `$op.abort` and `$op.warn`
+
   op.version = '0.65'
   op.banner = <<~BANNER
     usage: #{op.program_name} [options] [string ...]
@@ -85,7 +81,7 @@ OptParse.new do |op|
   op.on '-u', '--unescape=CHARS', :chars, 'Do not escape CHARS' do |c| $unescape_chars.concat c end
   op.on '--unescape-all', 'Do not escape any characters' do $unescape_all = true end
   op.on '-e', '--escape=CHARS', :chars, 'Explicitly escape CHARS' do |c| $escape_chars.concat c end
-  op.on '--escape-all', 'Explicitly escape all (non-ASCII, non-visible) characters' do $op.abort 'todo: not working'; $escape_all = true end
+  op.on '--escape-all', 'Explicitly escape all (non-ASCII, non-visible) characters' do op.abort 'todo: not working'; $escape_all = true end
 
   op.on '-l', "Same as --unescape='\\n'. (\"Line-oriented mode\")" do $unescape_chars.concat "\n" end
   op.on '-w', "Same as --unescape='\\n\\t ' (newline, tab, space)" do $unescape_chars.concat "\n\t " end
@@ -120,9 +116,10 @@ OptParse.new do |op|
     $escape_how = :bytes
   end
 
-  op.on '-C', '--codepoints', 'Escape characters by printing their \u{...} escape',
-                              '(Only usable if the --encoding is UTF-8; See also -U).' do
+  op.on '-C', '--codepoints', 'Escape characters by printing their \u{...} escape. Sets -8,',
+                              'implicitly and cannot be used with other encodings. See also -U' do
     $escape_how = :codepoints
+    $encoding = Encoding::UTF_8
   end
 
   op.on '-c', '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc). (default if no -d.xc given)' do |ce|
@@ -188,10 +185,20 @@ OptParse.new do |op|
                        print out `foo` and `-x`, and won't interpret `-x` as a switch.)
   EOS
 
+  ##################################################################################################
+  #                                         Parse Options                                          #
+  ##################################################################################################
+
   # Parse the options; Note that `op.parse!` handles `POSIXLY_CORRECT` internally to determine if
   # flags should be allowed to come after arguments.
   op.parse! rescue op.abort
 end
+
+####################################################################################################
+#                                                                                                  #
+#                                      Defaults for Arguments                                      #
+#                                                                                                  #
+####################################################################################################
 
 # Fetch standout constants (regardless of whether we're using them, as they're used as defaults)
 BEGIN_VISUAL = ENV.fetch('P_BEGIN_VISUAL', "\e[7m")
@@ -200,9 +207,10 @@ BEGIN_ERR    = ENV.fetch('P_BEGIN_ERR',    "\e[37m\e[41m")
 END_ERR      = ENV.fetch('P_END_ERR',      "\e[49m\e[39m")
 
 # Specify defaults
+defined? $stdout_tty               or $stdout_tty = $stdout.tty?
 defined? $files                    or $files = !$stdin.tty? && $*.empty?
 defined? $visual                   or $visual = $stdout_tty
-defined? $invalid_bytes_failure   or $invalid_bytes_failure = true
+defined? $invalid_bytes_failure    or $invalid_bytes_failure = true
 defined? $escape_spaces            or $escape_spaces = !$files
 defined? $escape_tab               or $escape_tab = true
 defined? $escape_newline           or $escape_newline = true
@@ -214,7 +222,8 @@ defined? $escape_how               or $escape_how = :bytes
 defined? $trailing_newline         or $trailing_newline = true
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 
-if $escape_how == :codepoints and $encoding != Encoding::UTF_8
+## Validate options
+if $escape_how == :codepoints && $encoding != Encoding::UTF_8
   $op.abort "cannot use -c with non-UTF-8 encodings (encoding is #$encoding)"
 end
 
@@ -417,8 +426,8 @@ unless $files
       # beforehand), this should be changed to use `byteslice`.The method used here is more convenient,
       # but is destructive. ALSO. It doesn't work wtih non-utf8 characters
       string.force_encoding Encoding::BINARY
-      leading_spaces  = string.slice!(/\A */) and $stdout.write visualize leading_spaces
-      trailing_spaces = string.slice!(/ *\z/)
+      leading_spaces  = string.slice!(/\A +/) and $stdout.write visualize leading_spaces
+      trailing_spaces = string.slice!(/ +\z/)
     end
 
     # handle the input string
