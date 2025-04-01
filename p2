@@ -24,6 +24,11 @@ OptParse.new do |op|
   BANNER
   op.require_exact = true if defined? op.require_exact = true
 
+  op.accept :chars do |c|
+    c.undump
+    # %|"#{c.gsub('"', '\"')}"|.undump
+  end
+
   op.separator "\nGeneric Options"
   op.on '-h', '--help', 'Print this message and exit' do puts op.help; exit end
   op.on       '--version', 'Print the version and exit' do puts op.ver; exit end
@@ -38,28 +43,43 @@ OptParse.new do |op|
   op.on '-n', '--no-heading-or-newline', 'Disables both headeres and trailing newliens' do $headings = $trailing_newline = false end
 
   op.separator "\nWhat to Escape"
-  op.on       '--escape-newline', 'Escape newlines. (default)' do |x| $escape_newline = x end
-  op.on '-l', '--no-escape-newline', 'Shorthand for --no-escape-newline. ("Line-oriented mode")' do $escape_newline = false end
-  op.on       '--escape-tab', 'Escape tabs. (default)' do |x| $escape_tab = x end
-  op.on '-t', '--no-escape-tab', 'Shorthand for --no-escape-tabs.' do $escape_tab = false end
-  op.on '-s', '--[no-]escape-space', 'Escape spaces; Only useful in visual mode.' do |es| $escape_space = es end
-  op.on '-w', '--no-escape-whitespace', 'Do not escape whitespace (space, tab, newline)' do
-    $escape_tab = $escape_space = $escape_newline = false
-  end
-  op.on       '--[no-]escape-outer-space', 'Visualize leading and trailing spaces. (default)', 'Only useful in visual mode' do |ess| $escape_surronding_spaces = ess end
-  op.on '-B', '--[no-]escape-backslash', 'Escape backslashes (default when in visual)' do |eb| $escape_backslash = eb end
-  op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_unicode = eu end
+  $unescape_chars = +""; $escape_chars = +""
+  op.on '-u', '--unescape=CHARS', :chars, 'Do not escape CHARS' do |c| $unescape_chars.concat c end
+  op.on '--unescape-all', 'Do not escape any characters' do $unescape_all = true end
+  op.on '-e', '--escape=CHARS', :chars, 'Explicitly escape CHARS' do |c| $escape_chars.concat c end
+  op.on '--escape-all', 'Explicitly escape all (non-ASCII, non-visible) characters' do $escape_all = true end
+
+  op.on '-l', "Same as --unescape='\\n'. (\"Line-oriented mode\")" do $unescape_chars.concat "\n" end
+  op.on '-w', "Same as --unescape='\\n\\t ' (newline, tab, space)" do $unescape_chars.concat "\n\t " end
+  op.on '-B', "Same as --escape='\\\\' (backslash)" do $unescape_chars.concat '\\' end
+  op.on '-s', "Same as --escape=' ' (space)" do $escape_chars.concat "\s" end
+  op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_how = :unicode end
+  # space)" do $escape_chars.concat "\s" end
+
+  # op.on       '--escape-tab', 'Escape tabs. (default)' do |x| $escape_tab = x end
+  # op.on '-t', '--no-escape-tab', 'Shorthand for --no-escape-tabs.' do $escape_tab = false end
+  # op.on '-s', '--[no-]escape-space', 'Escape spaces; Only useful in visual mode.' do |es| $escape_space = es end
+  # op.on '-w', '--no-escape-whitespace', 'Do not escape whitespace (space, tab, newline)' do
+  #   $escape_tab = $escape_space = $escape_newline = false
+  # end
+  # op.on       '--[no-]escape-outer-space', 'Visualize leading and trailing spaces. (default)', 'Only useful in visual mode' do |ess| $escape_surronding_spaces = ess end
+  # op.on '-B', '--[no-]escape-backslash', 'Escape backslashes (default when in visual)' do |eb| $escape_backslash = eb end
 
   op.separator "\nHow to Escape"
-  op.on '-d', '--delete', 'Delete escaped characters instead of printing their escapes' do $delete = true end
   op.on '-v', '--visualize', 'Enable visual effects. (default when stdout is a tty)' do $visual = true end
   op.on '-V', '--no-visualize', 'Do not enable visual effects' do $visual = false end
-  op.on       '--c-escapes', 'Use C-style escapes (\n, \t, etc, and \xHH). (default)' do $c_escapes = true end
-  op.on '-x', '--no-c-escapes', 'Alias for --no-c-escapes; only use \xHH for escapes.' do $c_escapes = false end
-  op.on '-P', '--control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do
-    $c_escapes = false unless defined? $c_escapes
-    $pictures = true
-  end
+
+  op.on '--escape-with=WHAT', 'How to escape (valid options: dot, delete, bytes, codepoints)',
+    %w[dot delete bytes codepoints] do |how| $escape_how = how.to_sym end
+  op.on '-.', 'Alias for --escape-with=dot; Escape with dots, instead of other characters' do $escape_how = :dot end
+  op.on '-d', 'Alias for --escape-with=delete; Delete escaped characters instead of printing their escapes' do $escape_how = :delete end
+  op.on '-x', 'Alias for --escape-with=bytes; Use \xHH for escapes. (default)' do $escape_how = :bytes end
+  op.on '-c', 'Alias for --escape-with=codepoints; Use \u{...} for escapes.' do $escape_how = :codepoints end
+
+  # Options for a specific subset
+  op.on '-C', '--C-escapes', 'Use C-style escapes (\n, \t, etc). (default)' do $c_escapes = true end
+  op.on '-P', '--control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do $pictures = true end
+
 
   # Implementation note: Even though these usage messages reference "input encodings," the input is
   # actually always read as binary data, and then attempted to be converted to whatever these
@@ -101,7 +121,7 @@ defined? $escape_newline           or $escape_newline = true
 defined? $headings                 or $headings = $stdout_tty
 defined? $escape_backslash         or $escape_backslash = !$visual
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
-defined? $c_escapes                or $c_escapes = true
+defined? $c_escapes                or $c_escapes = $escape_how == :bytes
 defined? $trailing_newline         or $trailing_newline = true
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 
@@ -115,8 +135,43 @@ $encoding_failure_error and at_exit { exit !$ENCODING_FAILED }
 #                                                                                                  #
 ####################################################################################################
 
+def visualize(string, start=BEGIN_STANDOUT, stop=END_STANDOUT)
+  if $visualize
+    "#{start}#{string}#{stop}"
+  else
+    string
+  end
+end
+
+def escape(character)
+  case $escape_how
+  when :delete then ''
+  when :dot then visualize '.'
+  when :bytes then visualize character.each_byte.map { |byte| '\x%02X' % byte }.join
+  when :unicode then visualize '\u{%04x}' % character
+  else raise "error: unknown escape_how: #{$escape_how.inspect}"
+  end
+end
+
+
+  op.on '--escape-with=WHAT', 'How to escape (valid options: dot, delete, bytes, codepoints)',
+    %w[dot delete bytes codepoints] do |how| $escape_how = how.to_sym end
+  op.on '-.', 'Alias for --escape-with=dot; Escape with dots, instead of other characters' do $escape_how = :dot end
+  op.on '-d', 'Alias for --escape-with=delete; Delete escaped characters instead of printing their escapes' do $escape_how = :delete end
+  op.on '-x', 'Alias for --escape-with=bytes; Use \xHH for escapes. (default)' do $escape_how = :bytes end
+  op.on '-c', 'Alias for --escape-with=codepoints; Use \u{...} for escapes.' do $escape_how = :codepoints end
+
+  # Options for a specific subset
+  op.on '-C', '--C-escapes', 'Use C-style escapes (\n, \t, etc). (default)' do $c_escapes = true end
+  op.on '-P', '--control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do $pictures = true end
+
+__END__
 # Converts a string's bytes to their `\xHH` escaped version, and joins them
 def hex_bytes(string)
+  if $escape_how == :codepoints
+    (return '\u{%04X}' % string.codepoints.sum) rescue nil
+  end
+
   string.each_byte.map { |byte| '\x%02X' % byte }.join
 end
 
@@ -126,8 +181,9 @@ end
 # - if `$visual` is specified, then `start` and `stop` surround `string`
 # - else, `string` is returned.
 def visualize(string, start=BEGIN_STANDOUT, stop=END_STANDOUT)
+  string = '.' if $escape_how == :dot
   case
-  when $delete then ''
+  when $escape_how == :delete then ''
   when $visual then "#{start}#{string}#{stop}"
   else              string
   end
@@ -179,6 +235,7 @@ if $pictures
   end
 
   CHARACTERS["\x7F"] = visualize "\u{2421}"
+  CHARACTERS[" "] = visualize "\u{2420}"
 end
 
 ## If C-Style escapes were specified, then change a subset of the control characters to use the
@@ -230,6 +287,19 @@ CHARACTERS.default_proc = proc do |hash, char|
 end
 
 ################################################################################
+#                               Other Characters                               #
+################################################################################
+$unescape_all and CHARACTERS.replace(Hash.new{|x,y| x[y] = y})
+
+$escape_chars.each_char do |char|
+  CHARACTERS[char] = visualize hex_bytes char
+end
+
+$unescape_chars.each_char do |char|
+  CHARACTERS[char] = char
+end
+
+################################################################################
 #                    Handle Non-ASCII Compatible Characters                    #
 ################################################################################
 
@@ -247,47 +317,6 @@ end
 #                                         Handle Arguments                                         #
 #                                                                                                  #
 ####################################################################################################
-BEGIN{ $*.replace %w[LICENSE] }
-$mode = nil
-
-def each_char_in(argument, mode = $mode)
-  file = open(argument, 'rb', encoding: $encoding)
-rescue Errno::ENOENT
-def each_argument(&block)
-  $*.each_with_index do |argument, idx|
-    if $mode != :argument
-      begin
-        file = open(argument, 'rb', encoding: $encoding)
-      rescue
-        unless $mode.nil?
-          $op.warn
-          next
-        end
-      else
-        begin
-          yield file
-        ensure
-          file.close
-        end
-      end
-    end
-
-    if $headings
-      printf "%5d: ", idx + 1
-    end
-
-    yield (+argument).force_encoding($encoding)
-  end
-end
-
-$*.each do |argument|
-  each_char_in argument do |char|
-    print char
-  end
-end
-
-exit
-
 
 CAPACITY = ENV['P_CAP'].to_i.nonzero? || 4096 * 3
 OUTPUT = String.new(capacity: CAPACITY * 8, encoding: Encoding::BINARY)
@@ -308,7 +337,7 @@ end
 
 ## Interpret arguments as strings
 unless $files
-  ARGV.each_with_index do |arg, idx|
+  ARGV.each_with_index do |string, idx|
     # Print out the prefix if a heading was requested
     if $headings
       printf "%5d: ", idx + 1
@@ -345,16 +374,16 @@ end
 at_exit do
   if $!.is_a?(Errno::ENOENT)
     $op.warn $!.to_s.sub(/ @ rb\w+/, '')
-    exit! 2
+    # exit! 2
   end
 end
 
 ARGF.set_encoding $encoding
 ARGF.each_char do |char|
-  if ARGF.file.tell == 1
-    $trailing_newline || $headings and $not_first ? print("\n") : $not_first = true
-    $headings and print ARGF.filename, ":"
-  end
+  #  if ARGF.file.tell == 1
+  #    $trailing_newline || $headings and $not_first ? print("\n") : $not_first = true
+  #    $headings and print ARGF.filename, ":"
+  #  end
   $stdout.write CHARACTERS[char]
 end
 # TODO: check `char` after to see if we need to print a newline

@@ -53,7 +53,7 @@ OptParse.new do |op|
   op.on '-w', "Same as --unescape='\\n\\t ' (newline, tab, space)" do $unescape_chars.concat "\n\t " end
   op.on '-B', "Same as --escape='\\\\' (backslash)" do $unescape_chars.concat '\\' end
   op.on '-s', "Same as --escape=' ' (space)" do $escape_chars.concat "\s" end
-  op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_how = :unicode end
+  op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_unicode = eu end
   # space)" do $escape_chars.concat "\s" end
 
   # op.on       '--escape-tab', 'Escape tabs. (default)' do |x| $escape_tab = x end
@@ -121,9 +121,14 @@ defined? $escape_newline           or $escape_newline = true
 defined? $headings                 or $headings = $stdout_tty
 defined? $escape_backslash         or $escape_backslash = !$visual
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
+defined? $escape_how               or $escape_how = :bytes
 defined? $c_escapes                or $c_escapes = $escape_how == :bytes
 defined? $trailing_newline         or $trailing_newline = true
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
+
+if $escape_how == :codepoints and $encoding != Encoding::UTF_8
+  $op.abort "cannot use -c with non-UTF-8 encodings (encoding is #$encoding)"
+end
 
 # If `--encoding-failure-err` was specified, then exit depending on whether an
 # encoding failure occurred
