@@ -56,7 +56,7 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator "\nSeparating Outputs"
 
-  op.on '--heading', 'Add headers, i.e. arg number/file name. (default if tty)' do
+  op.on '-H', '--heading', 'Add headings, i.e. arg number/file name. (default if tty)' do
     $headings = true
   end
 
@@ -83,7 +83,10 @@ OptParse.new do |op|
   op.on '-e', '--escape=CHARS', :chars, 'Explicitly escape CHARS' do |c| $escape_chars.concat c end
   op.on '--escape-all', 'Explicitly escape all (non-ASCII, non-visible) characters' do op.abort 'todo: not working'; $escape_all = true end
 
-  op.on '-l', "Same as --unescape='\\n'. (\"Line-oriented mode\")" do $unescape_chars.concat "\n" end
+  op.on '-l', "Same as --unescape='\\n'. (\"Line-oriented mode\")" do
+    # $unescape_chars.concat "\n";
+    $escape_newline=false
+  end
   op.on '-w', "Same as --unescape='\\n\\t ' (newline, tab, space)" do $unescape_chars.concat "\n\t " end
   op.on '-B', '--[no-]escape-backslash', "Same as --escape='\\\\' (backslash) (default if not in visual mode)" do |eb|
     $escape_backslash = eb end # Need this because it has adefault 
@@ -348,9 +351,9 @@ CHARACTERS[' ']  = visualize(' ') if $escape_space
 # Note that the escapes are cached for further re-use. While theoretically over time memory
 # consumption may grow, in reality there's not enough unique characters for this to be a problem.
 CHARACTERS.default_proc = proc do |hash, char|
-  p hash.key? char
-  p hash.keys.last.encoding
-  p char.encoding
+  # p hash.key? char
+  # p hash.keys.last.encoding
+  # p char.encoding
   hash[char] =
     if !char.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$invalid_bytes_failure`.
@@ -361,6 +364,7 @@ CHARACTERS.default_proc = proc do |hash, char|
       char
     end
 end
+# p CHARACTERS["\xA3"]
 
 ################################################################################
 #                               Other Characters                               #
@@ -368,13 +372,11 @@ end
 $unescape_all and CHARACTERS.replace(Hash.new{|x,y| x[y] = y})
 
 $escape_chars.each_char do |char|
-  CHARACTERS[char] = visualize p escape_bytes char
+  CHARACTERS[char] = visualize escape_bytes char
 end
 
-p CHARACTERS["\xA3"]
-
 $unescape_chars.each_char do |char|
-  CHARACTERS[char] = char
+  CHARACTERS[char.encode($encoding)] = char
 end
 
 ################################################################################
@@ -481,11 +483,16 @@ ARGV.push '-' if ARGV.empty?
 
 $trailing_newline ||= $headings # If headings are set, trailing newline is always set
 
+# $stdin.binmode.set_encoding $encoding
+$stdout.set_encoding $encoding
+
 ARGV.each do |filename|
   filename = '/dev/stdin' if filename == '-'
   file = File.open(filename, 'rb', encoding: $encoding)
 
-  $headings and print filename, ": "
+  if $headings
+    print filename, ': '
+  end
 
   # if $escape_surronding_spaces
   #   print visualize ' ' while (c = file.getc) == ' '
@@ -496,13 +503,13 @@ ARGV.each do |filename|
     print CHARACTERS[char]
   end
 
-  # Print a trailing newline if: (1) it was requested (or headings were set)
-  # (1) At least one character was read (2) the last character
-  if char == "\n" && CHARACTERS["\n"] == "\n"
+  if char == "\n".encode($encoding) && CHARACTERS[char] == char
     next
   elsif !$trailing_newline
     next
-  elsif char != nil || $headings
+  elsif char == nil && !$headings
+    next
+  else
     print "\n"
   end
 rescue

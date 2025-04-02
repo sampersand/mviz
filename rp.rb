@@ -1,4 +1,11 @@
 $*.replace %w[tmp2.ignore]
+$encoding = Encoding::UTF_16BE
+
+CHARACTERS = {}
+
+CHARACTERS["\n".encode($encoding)] = "\n"
+p CHARACTERS["\n".encode($encoding)]
+exit
 
 class Exception
   def self.~

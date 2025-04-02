@@ -1,8 +1,7 @@
 #!ruby
 
-$stdin.binmode
-$stdin.set_encoding 'UTF-16BE'
-$stdout.set_encoding 'UTF-8'
+ $stdin.binmode.set_encoding 'UTF-16BE'
+$stdout.binmode.set_encoding 'UTF-8'
 
 if $*.empty?
   print while gets
