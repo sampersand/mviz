@@ -225,6 +225,10 @@ defined? $escape_how               or $escape_how = :bytes
 defined? $trailing_newline         or $trailing_newline = true
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 
+## Force `$trailing_newline` to be set if `$headers` are set, as otherwise there wouldn't be a
+# newline between each header, which is weird.
+$trailing_newline ||= $headers
+
 ## Validate options
 if $escape_how == :codepoints && $encoding != Encoding::UTF_8
   $op.abort "cannot use -c with non-UTF-8 encodings (encoding is #$encoding)"
@@ -482,13 +486,9 @@ end
 # 3. It's much more verbose
 
 ## If no arguments are given, default to `-`
-ARGV.push '-' if ARGV.empty?
+ARGV.replace %w[-] if ARGV.empty?
 
-$trailing_newline ||= $headers # If headers are set, trailing newline is always set
-
-# $stdin.binmode.set_encoding $encoding
-# $stdout.set_encoding $encoding
-
+## Iterate over each file in `ARGV`, and print their contents.
 ARGV.each do |filename|
   ## Open the file that was requested. As a special case, if the value `-` is given, it reads from
   # stdin. (We can't use `/dev/stdin` because it's not portable to Windows, so we have to use
@@ -506,9 +506,6 @@ ARGV.each do |filename|
   ## Print out each character in the file, or their escapes. We capture the last printed character,
   # so that we can match it in the following block. (We don't want to print newlines if the last
   # character in a file was a newline.)
-  #
-  # The `spaces` concept is to keep track of consecutive spaces, so that we can print them all out
-  # at the end if `$escape_surronding_spaces` is set.
   last = nil
   file.each_char do |char|
     print last = CHARACTERS[char]
@@ -526,11 +523,23 @@ ARGV.each do |filename|
   if $trailing_newline && last != "\n" && (last != nil || $headers)
     puts
   end
-rescue
-  $op.warn
-  @error = true
+rescue => err
+  ## Whenever an error occurs, we want to handle it, but not bail out: We want to print every file
+  # we're given (like `cat`), reporting errors along the way, and then exiting with a non-zero exit
+  # status if there's a problem.
+  $op.warn err  # Warn of the problem
+  @file_error = true # For use when we're exiting
 ensure
-  (file&.close rescue nil) unless filename == '-'
+  ## Regardless of whether an exception occurred, attempt to close the file after each execution.
+  # However,# do not close `$stdin` (which occurs when `-` is passed in as a filename), as we might
+  # be reading from it later on. Additionally any problems closing the file are silently swallowed,
+  # as we only care about problems opening/reading files, not closing them.
+  unless file.nil? || file.equal?($stdin) # file can be `nil` if opening it failed
+    file.close rescue nil
+  end
 end
 
-exit 1 if @error
+## If there was a problem reading a file, exit with a non-zero exit status. Note that we do this
+# instead of `exit !@file_error`, as the `--invalid-bytes-failure` flag sets an `at_exit` earlier in
+# this file which checks for the exiting exception, which `exit false` would still raise.
+exit 1 if @file_error
