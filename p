@@ -412,15 +412,15 @@ OUTPUT = String.new(capacity: CAPACITY * 8, encoding: Encoding::BINARY)
 $stdout.binmode
 # TODO: optimize this later
 def handle(string)
-  OUTPUT.clear
+  # OUTPUT.clear
 
   string.force_encoding $encoding
   string.each_char do |char|
     # warn [char.encoding, CHARACTERS[char].encoding, char, char.bytes].inspect
-    OUTPUT.concat CHARACTERS[char]
+    print CHARACTERS[char]
   end
 
-  $stdout.write OUTPUT
+  # $stdout.write OUTPUT
 end
 
 ## Interpret arguments as strings
@@ -428,7 +428,7 @@ unless $files
   ARGV.each_with_index do |string, idx|
     # Print out the prefix if a header was requested
     if $headers
-      printf "%5d: ", idx + 1
+      printf '%5d: ', idx + 1
     end
 
     # Unfortunately, `ARGV` strings are frozen, and we need to forcibly change the string's encoding
