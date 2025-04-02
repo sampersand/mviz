@@ -56,12 +56,12 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator "\nSeparating Outputs"
 
-  op.on '-H', '--heading', 'Add headings, i.e. arg number/file name. (default if tty)' do
-    $headings = true
+  op.on '-H', '--headers', 'Add headers, i.e. arg number/file name. (default if tty)' do
+    $headers = true
   end
 
-  op.on '-N', '--no-heading', 'Do not add headers to the output' do
-    $headings = false
+  op.on '-N', '--no-headers', 'Do not add headers to the output' do
+    $headers = false
   end
 
   op.on '--[no-]trailing-newline', 'Print trailing newlines after each argument. (default)',
@@ -69,8 +69,8 @@ OptParse.new do |op|
     $trailing_newline = tnl
   end
 
-  op.on '-n', '--no-heading-or-newline', 'Disables both headers and trailing newlines' do
-    $headings = $trailing_newline = false
+  op.on '-n', '--no-headers-or-newline', 'Disables both headers and trailing newlines' do
+    $headers = $trailing_newline = false
   end
 
   ##################################################################################################
@@ -217,7 +217,7 @@ defined? $invalid_bytes_failure    or $invalid_bytes_failure = true
 defined? $escape_spaces            or $escape_spaces = !$files
 defined? $escape_tab               or $escape_tab = true
 defined? $escape_newline           or $escape_newline = true
-defined? $headings                 or $headings = $stdout_tty && !$*.empty?
+defined? $headers                 or $headers = $stdout_tty && !$*.empty?
 defined? $escape_backslash         or $escape_backslash = !$visual
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 defined? $c_escapes                or $c_escapes = !defined?($escape_how) # Make sure to put this before `escape_how`'s default'
@@ -230,9 +230,11 @@ if $escape_how == :codepoints && $encoding != Encoding::UTF_8
   $op.abort "cannot use -c with non-UTF-8 encodings (encoding is #$encoding)"
 end
 
-# If `--encoding-failure-err` was specified, then exit depending on whether an
-# encoding failure occurred
-$invalid_bytes_failure and at_exit { exit !$ENCODING_FAILED }
+## Add the functionality in for `--invalid-bytes-failure`: If the program is normally exiting (i.e.
+# it's not exiting due to an exception), and there was an encoding failure, then exit with status 1.
+$invalid_bytes_failure and at_exit do
+  exit 1 if !$! && $ENCODING_FAILED
+end
 
 ####################################################################################################
 #                                                                                                  #
@@ -411,7 +413,7 @@ def handle(string)
   string.force_encoding $encoding
   string.each_char do |char|
     # warn [char.encoding, CHARACTERS[char].encoding, char, char.bytes].inspect
-    OUTPUT .concat CHARACTERS[char]
+    OUTPUT.concat CHARACTERS[char]
   end
 
   $stdout.write OUTPUT
@@ -420,8 +422,8 @@ end
 ## Interpret arguments as strings
 unless $files
   ARGV.each_with_index do |string, idx|
-    # Print out the prefix if a heading was requested
-    if $headings
+    # Print out the prefix if a header was requested
+    if $headers
       printf "%5d: ", idx + 1
     end
 
@@ -447,9 +449,10 @@ unless $files
     # If any trailing spaces were made, print them out
     trailing_spaces and $stdout.write visualize trailing_spaces
 
-    $trailing_newline or $headings and puts
+    $trailing_newline or $headers and puts
   end
-  # $trailing_newline && !$headings and $stdout.write "\n".encode $encoding
+
+  # $trailing_newline && !$headers and $stdout.write "\n".encode $encoding
   exit
 end
 
@@ -481,169 +484,72 @@ end
 ## If no arguments are given, default to `-`
 ARGV.push '-' if ARGV.empty?
 
-$trailing_newline ||= $headings # If headings are set, trailing newline is always set
+$trailing_newline ||= $headers # If headers are set, trailing newline is always set
 
 # $stdin.binmode.set_encoding $encoding
 # $stdout.set_encoding $encoding
 
 ARGV.each do |filename|
-  filename = '/dev/stdin' if filename == '-'
-  file = File.open(filename, 'rb', encoding: $encoding)
+  ## Open the file that was requested. As a special case, if the value `-` is given, it reads from
+  # stdin. (We can't use `/dev/stdin` because it's not portable to Windows, so we have to use
+  # `$stdin` directly.)
+  file =
+    if filename == '-'
+      $stdin.binmode.set_encoding $encoding
+    else
+      File.open(filename, 'rb', encoding: $encoding)
+    end
 
-  if $headings
-    print filename, ': '
+  ## Print out the filename, a colon, and a space if headers were requested.
+  print filename, ': ' if $headers
+
+  if $escape_surronding_spaces
+    print visualize ' ' while (c = file.getc) == ' '
+    file.ungetc c if c
   end
 
-  # if $escape_surronding_spaces
-  #   print visualize ' ' while (c = file.getc) == ' '
-  #   file.ungetc c if c
-  # end
-
-  # Print out each character in the file; use a `for` loop so we can see if the file ended in `\n`.
-  chr = nil
+  ## Print out each character in the file, or their escapes. We capture the last printed character,
+  # so that we can match it in the following block. (We don't want to print newlines if the last
+  # character in a file was a newline.)
+  #
+  # The `spaces` concept is to keep track of consecutive spaces, so that we can print them all out
+  # at the end if `$escape_surronding_spaces` is set.
+  last, spaces = nil, +''
   file.each_char do |char|
-    print chr = CHARACTERS[char]
+    if $escape_surronding_spaces && char == ' '
+      spaces.concat char
+      next
+    end
+
+    unless spaces.empty?
+      print spaces
+      spaces.clear
+    end
+
+    print last = CHARACTERS[char]
+  end
+  unless spaces.empty?
+    last = ' '
+    print visualize spaces
   end
 
-  # Print a newline after each file, unless one of the following conditions is fulfilled:
-  # 1. The trailing newline was explicitly suppressed
-  # 2. The last character was an unescaped `\n`
-  # 3. Nothing was printed, and headers aren't being output
-  if !$trailing_newline
-    next
-  elsif chr == "\n".encode($encoding)
-    next
-  elsif chr == nil && !$headings
-    next
-  else
-    print "\n"
+  ## Print a newline if the following are satisfied:
+  # 1. It was requested. (This is the default, but can be suppressed by `--no-trailing-newline`, or
+  #    `-n`. Note that if headers are enabled, trailing newlines are always enabled regardless.)
+  # 2. At least one character was printed, or headers were enabled; If no characters are printed,
+  #    we normally don't want to add a newline, when headers are being output we want each filename
+  #    to be on their own lines.
+  # 3. The last character to be printed was not a newline; This is normally the case, but if the
+  #    newline was unescaped (eg `-l`), then the last character may be a newline. This condition is
+  #    to prevent a blank line in the output. (Kinda like how `puts "a\n"` only prints one newline.)
+  if $trailing_newline && last != "\n" && (last != nil || $headers)
+    puts
   end
 rescue
   $op.warn
   @error = true
 ensure
-  file&.close rescue nil
+  (file&.close rescue nil) unless filename == '-'
 end
 
-exit! 1 if @error
-
-__END__
-exit
-
-at_exit do
-  if $!.is_a?(Errno::ENOENT)
-    $op.warn $!.to_s.sub(/ @ rb\w+/, '')
-    # exit! 2
-  end
-end
-
-# if $*.empty?
-# until $*.empty?
-#   filename = $*.shift
-#   open filename, 'rb', encoding: $encoding do |f|
-#     p f.encoding
-#   end
-#   exit
-# end
-
-begin
-  ARGF.set_encoding $encoding
-rescue ArgumentError
-  ARGF.binmode
-  ARGF.set_encoding $encoding
-end
-
-length = nil
-ARGF.each_char do |char|
-  if length != $*.length
-    p $<.filename
-    length = $*.length
-  end
-  #  if ARGF.file.tell == 1
-  #    $trailing_newline || $headings and $not_first ? print("\n") : $not_first = true
-  #    $headings and print ARGF.filename, ":"
-  #  end
-  $stdout.write CHARACTERS[char]
-end
-# TODO: check `char` after to see if we need to print a newline
-$trailing_newline and $stdout.write "\n".encode $encoding
-
-
-__END__
-def ARGF.filename
-  super || exit
-rescue
-  warn $!.to_s
-  retry
-end
-
-# Print the prefix line out before we do binmode on ARGF
-if $headings and not $*.empty?
-  print "#{ARGF.filename}:" # TODO: clean this up
-end
-
-## Interpret arguments as files
-# TODO: This can be made a bit faster using `syswrite`, but at the cost of
-# making this so much uglier
-ARGF.binmode
-INPUT = String.new(capacity: CAPACITY, encoding: $encoding)
-
-# Note that `ARGF.each_char` would do what we want, except it's (a) a bit slower than using
-# `readpartial` and (b) wouldn't allow us to easily know when files changed (for filename outputs).
-def not_done_reading_all_files?
-  # INPUT.replace (ARGF.gets || (return false))
-  ARGF.readpartial(CAPACITY, INPUT)
-rescue EOFError
-  false
-rescue
-  abort $!.to_s
-end
-
-while not_done_reading_all_files?
-  # $stdout.write INPUT
-  # next
-
-  if INPUT.empty?
-    $tmp and (handle $tmp; $tmp = nil)
-
-    # TODO: clean this up
-    print "\n".encode $encoding if $headings || $trailing_newline
-    print "#{ARGF.filename}:".encode $encoding if $headings
-    $stdout.flush
-    next
-  end
-
-  # if false # TODO: clean this up to make sure that it works for all encodings
-  if true
-     if $tmp
-      warn ["before", INPUT.bytes, $tmp.bytes].inspect
-      INPUT.prepend $tmp
-      $tmp = nil
-      warn ["after", INPUT.bytes].inspect
-    end
-
-    if INPUT.bytesize >= 1 and !(q=INPUT.byteslice(-1..)).valid_encoding?
-      if INPUT.bytesize >= 2 and !(q=INPUT.byteslice(-2..)).valid_encoding?
-        if INPUT.bytesize >= 3 and !(q=INPUT.byteslice(-3..)).valid_encoding?
-          # Need to support versions without `.bytesplice`
-          $tmp = q; INPUT.force_encoding('binary').slice!(-3..)
-          warn 1
-        else
-          $tmp = q; INPUT.force_encoding('binary').slice!(-2..)
-          warn 2
-        end
-      else
-        $tmp = q; INPUT.force_encoding('binary').slice!(-1..)
-          warn 3
-      end
-    end
-  end
-
-  # warn ["sliced", INPUT.bytes, $tmp&.bytes].inspect
-
-  handle INPUT
-end
-$tmp and handle $tmp
-
-$trailing_newline and $stdout.write "\n".encode $encoding
-
+exit 1 if @error
