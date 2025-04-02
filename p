@@ -214,7 +214,7 @@ defined? $invalid_bytes_failure    or $invalid_bytes_failure = true
 defined? $escape_spaces            or $escape_spaces = !$files
 defined? $escape_tab               or $escape_tab = true
 defined? $escape_newline           or $escape_newline = true
-defined? $headings                 or $headings = $stdout_tty
+defined? $headings                 or $headings = $stdout_tty && !$*.empty?
 defined? $escape_backslash         or $escape_backslash = !$visual
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 defined? $c_escapes                or $c_escapes = !defined?($escape_how) # Make sure to put this before `escape_how`'s default'
@@ -239,11 +239,13 @@ $invalid_bytes_failure and at_exit { exit !$ENCODING_FAILED }
 
 # Converts a string's bytes to their `\xHH` escaped version, and joins them
 def hex_bytes(string)
-  if $escape_how == :codepoints
-    (return '\u{%04X}' % string.codepoints.sum) rescue nil
-  end
-
   string.each_byte.map { |byte| '\x%02X' % byte }.join
+end
+
+if $escape_how == :codepoints
+  def escape_bytes(string) '\u{%04X}' % string.ord end
+else
+  alias escape_bytes hex_bytes
 end
 
 # Add "visualize" escape sequences to a string; all escaped characters should be passed to this, as
@@ -277,7 +279,7 @@ CHARACTERS = {}
 ## Escape the lower control characters (i.e. \x00..\x1F and \x7F) with their hex escapes. Note that
 # some of these escapes escapes may be overwritten below by user options (like `--c-escapes`).
 [*"\0".."\x1F", "\x7F"].each do |char|
-  CHARACTERS[char] = visualize hex_bytes(char)
+  CHARACTERS[char] = visualize escape_bytes(char)
 end
 
 ## Add in normal ASCII printable characters (i.e. \x20..\x7E).
@@ -290,7 +292,7 @@ end
 # true), so our logic later on would print them out verbatim.
 if $encoding == Encoding::BINARY
   ("\x80".."\xFF").each do |char|
-    CHARACTERS[char] = visualize hex_bytes(char)
+    CHARACTERS[char] = visualize escape_bytes(char)
   end
 end
 
@@ -346,6 +348,9 @@ CHARACTERS[' ']  = visualize(' ') if $escape_space
 # Note that the escapes are cached for further re-use. While theoretically over time memory
 # consumption may grow, in reality there's not enough unique characters for this to be a problem.
 CHARACTERS.default_proc = proc do |hash, char|
+  p hash.key? char
+  p hash.keys.last.encoding
+  p char.encoding
   hash[char] =
     if !char.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$invalid_bytes_failure`.
@@ -363,8 +368,10 @@ end
 $unescape_all and CHARACTERS.replace(Hash.new{|x,y| x[y] = y})
 
 $escape_chars.each_char do |char|
-  CHARACTERS[char] = visualize hex_bytes char
+  CHARACTERS[char] = visualize p escape_bytes char
 end
+
+p CHARACTERS["\xA3"]
 
 $unescape_chars.each_char do |char|
   CHARACTERS[char] = char
@@ -380,7 +387,9 @@ end
 # do it at the end here instead of converting every string in-place, because conversions to/from
 # UTF-16 aren't a terribly common use-case; Users have to explicitly supply `--encoding=UTF-16`.)
 unless $encoding.ascii_compatible?
-  CHARACTERS.merge! CHARACTERS.to_h { [_1.encode($encoding), _2.encode($encoding)] } # Can't use `encode!` because keys of hashes are frozen
+  tmp = CHARACTERS.to_h { [_1.encode($encoding), _2.encode($encoding)] } # Can't use `encode!` because keys of hashes are frozen
+  CHARACTERS.clear
+  CHARACTERS.merge! tmp
 end
 
 ####################################################################################################
@@ -442,13 +451,6 @@ unless $files
   exit
 end
 
-at_exit do
-  if $!.is_a?(Errno::ENOENT)
-    $op.warn $!.to_s.sub(/ @ rb\w+/, '')
-    # exit! 2
-  end
-end
-
 # Sadly, we can't use `ARGF` for numerous reasons:
 # 1. `ARGF#each_char` will completely skip empty files, and won't call its block. So there's no easy
 #    way for us to print out headers for empty files. (We _could_ keep our own `ARGV` list, but that
@@ -473,13 +475,54 @@ end
 #    what I can tell Ruby does not automatically recognize them and use the appropriate filenos.
 # 2. We have to manually check for `-` ourselves and redirect it to `/dev/stdin`, which is janky.
 # 3. It's much more verbose
-# ARGV.push '-' if ARGV.empty?
 
-# ARGV.each do |filename|
-#   filename = '/dev/stdin' if filename == '-'
-#   file = filename == '-' ? $stdin : File.open()
+## If no arguments are given, default to `-`
+ARGV.push '-' if ARGV.empty?
 
+$trailing_newline ||= $headings # If headings are set, trailing newline is always set
 
+ARGV.each do |filename|
+  filename = '/dev/stdin' if filename == '-'
+  file = File.open(filename, 'rb', encoding: $encoding)
+
+  $headings and print filename, ": "
+
+  # if $escape_surronding_spaces
+  #   print visualize ' ' while (c = file.getc) == ' '
+  #   file.ungetc c if c
+  # end
+
+  for char in file.each_char
+    print CHARACTERS[char]
+  end
+
+  # Print a trailing newline if: (1) it was requested (or headings were set)
+  # (1) At least one character was read (2) the last character
+  if char == "\n" && CHARACTERS["\n"] == "\n"
+    next
+  elsif !$trailing_newline
+    next
+  elsif char != nil || $headings
+    print "\n"
+  end
+rescue
+  $op.warn
+  @error = true
+ensure
+  file&.close rescue nil
+end
+
+exit! 1 if @error
+
+__END__
+exit
+
+at_exit do
+  if $!.is_a?(Errno::ENOENT)
+    $op.warn $!.to_s.sub(/ @ rb\w+/, '')
+    # exit! 2
+  end
+end
 
 # if $*.empty?
 # until $*.empty?
