@@ -92,7 +92,7 @@ OptParse.new do |op|
     $escape_backslash = eb end # Need this because it has adefault 
   op.on '-s', "Same as --escape=' ' (space)" do $escape_chars.concat "\s" end
   op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_unicode = eu end
-  op.on       '--[no-]escape-outer-space', 'Visualize leading and trailing spaces. (default)', 'Only useful in visual mode' do |ess| $escape_surronding_spaces = ess end
+  op.on       '--[no-]escape-outer-space', 'Visualize leading and trailing spaces. (default)', 'Only useful in visual mode; does not work with --files' do |ess| $escape_surronding_spaces = ess end
 
   ##################################################################################################
   #                                         How to Escape                                          #
@@ -503,34 +503,15 @@ ARGV.each do |filename|
   ## Print out the filename, a colon, and a space if headers were requested.
   print filename, ': ' if $headers
 
-  if $escape_surronding_spaces
-    print visualize ' ' while (c = file.getc) == ' '
-    file.ungetc c if c
-  end
-
   ## Print out each character in the file, or their escapes. We capture the last printed character,
   # so that we can match it in the following block. (We don't want to print newlines if the last
   # character in a file was a newline.)
   #
   # The `spaces` concept is to keep track of consecutive spaces, so that we can print them all out
   # at the end if `$escape_surronding_spaces` is set.
-  last, spaces = nil, +''
+  last = nil
   file.each_char do |char|
-    if $escape_surronding_spaces && char == ' '
-      spaces.concat char
-      next
-    end
-
-    unless spaces.empty?
-      print spaces
-      spaces.clear
-    end
-
     print last = CHARACTERS[char]
-  end
-  unless spaces.empty?
-    last = ' '
-    print visualize spaces
   end
 
   ## Print a newline if the following are satisfied:
