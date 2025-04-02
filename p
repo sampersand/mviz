@@ -484,7 +484,7 @@ ARGV.push '-' if ARGV.empty?
 $trailing_newline ||= $headings # If headings are set, trailing newline is always set
 
 # $stdin.binmode.set_encoding $encoding
-$stdout.set_encoding $encoding
+# $stdout.set_encoding $encoding
 
 ARGV.each do |filename|
   filename = '/dev/stdin' if filename == '-'
@@ -499,15 +499,21 @@ ARGV.each do |filename|
   #   file.ungetc c if c
   # end
 
-  for char in file.each_char
-    print CHARACTERS[char]
+  # Print out each character in the file; use a `for` loop so we can see if the file ended in `\n`.
+  chr = nil
+  file.each_char do |char|
+    print chr = CHARACTERS[char]
   end
 
-  if char == "\n".encode($encoding) && CHARACTERS[char] == char
+  # Print a newline after each file, unless one of the following conditions is fulfilled:
+  # 1. The trailing newline was explicitly suppressed
+  # 2. The last character was an unescaped `\n`
+  # 3. Nothing was printed, and headers aren't being output
+  if !$trailing_newline
     next
-  elsif !$trailing_newline
+  elsif chr == "\n".encode($encoding)
     next
-  elsif char == nil && !$headings
+  elsif chr == nil && !$headings
     next
   else
     print "\n"
