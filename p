@@ -20,7 +20,7 @@ OptParse.new do |op|
     When no arguments, and stdin isn't a tty, the second form is assumed.
   BANNER
   # TODO: why youno work sometimes, eg `p --escape-ties`
-  op.require_exact = true if defined? op.require_exact = true
+  # op.require_exact = true if defined? op.require_exact = true
 
   op.accept :chars do |c|
     # chars = +''
@@ -59,7 +59,7 @@ OptParse.new do |op|
   end
 
   # This maybe removed in a future release, as it doesn't control a whole lot.
-  op.on '-t', '--[no-]assume-tty', 'Assume stdout is tty for defaults' do |tty|
+  op.on '--[no-]assume-tty', 'Assume stdout is tty for defaults' do |tty|
     $stdout_tty = tty
   end
 
@@ -88,32 +88,29 @@ OptParse.new do |op|
   ##################################################################################################
   #                                         What To Escape                                         #
   ##################################################################################################
-  op.separator "\nWhat to Escape. (if --escape and --unescape both match, --escape wins)"
+  op.separator "\nWhat to Escape. (You can specify multiple options; they are additive.)"
   $unescape_regex = []
   $escape_regex = []
-  $escape_ties = true
-  op.require_exact = false
-  op.on '--[no-]escape-ties' do |es|
-                                 $escape_ties = es end
 
-  # op.on '--[no-]escape-ties', 'IF set (default), and a value would match both --escape and --unescape,',
-  #                             '; --escape wins; otherwise, --unescape wins' do |es|
-  #                                $escape_ties = es end
+  op.on '-t', '--[no-]escape-ties', 'If set, then chars which match both -e and -u will be escaped.',
+                                    'If unset (default), then they will not be escaped' do |es|
+    $escape_ties = es
+  end
 
-  op.on '-e', '--escape-regex=REGEX', Regexp, 'Explicitly escape characters which match REGEX' do |rxp|
+  op.on '-e', '--escape=REGEX', Regexp, 'Also escape characters which match REGEX' do |rxp|
     $escape_regex.push rxp
   end
 
-  op.on '--escape-chars=CHARS', 'Explicitly escape CHARS' do |chars|
-    $escape_regex.push chars
+  op.on '--escape-chars=CHARS', 'Also escape any characters in CHARS' do |chars|
+    $escape_regex.concat chars.split('')
   end
 
-  op.on '-u', '--unescape-regex=REGEX', Regexp, 'Do not escape characters which match REGEX' do |rxp|
+  op.on '-u', '--unescape=REGEX', Regexp, 'Do not escape characters which match REGEX' do |rxp|
     $unescape_regex.push rxp
   end
 
-  op.on '--unescape-chars=CHARS', 'Do not escape CHARS' do |chars|
-    $unescape_regex.push chars
+  op.on '--unescape-chars=CHARS', 'Do not escape any characters in CHARS' do |chars|
+    $unescape_regex.concat chars.split('')
   end
 
   op.on '-l', "Same as --unescape='\\n'. (\"Line-oriented mode\")" do
@@ -121,12 +118,12 @@ OptParse.new do |op|
   end
 
   op.on '-w', "Same as --unescape='\\n\\t ' (newline, tab, space)" do
-    $unescape_regex.push("\n", "\t", " ")
+    $unescape_regex.push "\n", "\t", " "
   end
 
   op.on '-B', '--[no-]escape-backslash', "Same as --escape='\\\\' (backslash) (default if not in visual mode)" do |eb|
     $escape_backslash = eb end # Need this because it has adefault 
-  op.on '-s', "Same as --escape=' ' (space)" do $escape_regex.push   "\s" end
+  op.on '-s', "Same as --escape=' ' (space)" do $escape_regex.push   "\s"; $escape_spaces = true end
   op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_unicode = eu end
     # TODO: if this name is updated, update comments
   op.on       '--[no-]escape-outer-space', 'Visualize leading and trailing spaces. (default)', 'Only useful in visual mode; does not work with --files' do |ess| $escape_surronding_spaces = ess end
@@ -169,6 +166,10 @@ OptParse.new do |op|
   op.on '-p', '--[no-]control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do |cp|
     $pictures = cp
     $c_escapes = false unless defined? $c_escapes
+  end
+
+  op.on '--[no-]space-picture', 'Enable control pictures for space specifically' do |sp|
+    $space_picture = sp
   end
 
   ##################################################################################################
@@ -261,6 +262,7 @@ defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 defined? $c_escapes                or $c_escapes = !defined?($escape_how) # Make sure to put this before `escape_how`'s default'
 defined? $escape_how               or $escape_how = :bytes
 defined? $trailing_newline         or $trailing_newline = true
+defined? $escape_ties              or $escape_ties = true
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 
 ## Union all the regexes we've been given
@@ -381,7 +383,7 @@ end
 # CHARACTERS["\n"] = "\n" unless $escape_newline
 CHARACTERS["\t"] = "\t" unless $escape_tab
 CHARACTERS['\\'] = visualize('\\\\') if $escape_backslash
-CHARACTERS[' ']  = visualize(' ') if $escape_space
+CHARACTERS[' ']  = visualize($space_picture ? '␣' : ' ') if $escape_spaces
 
 ################################################################################
 #                               Escapes and unescapes            #
