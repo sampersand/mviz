@@ -56,21 +56,21 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator "\nSeparating Outputs"
 
-  op.on '-H', '--headers', 'Add headers, i.e. arg number/file name. (default if tty)' do
-    $headers = true
+  op.on '-H', '--prefixes', 'Add prefixes, i.e. arg number/file name. (default if tty)' do
+    $prefixes = true
   end
 
-  op.on '-N', '--no-headers', 'Do not add headers to the output' do
-    $headers = false
+  op.on '-N', '--no-prefixes', 'Do not add prefixes to the output' do
+    $prefixes = false
   end
 
   op.on '--[no-]trailing-newline', 'Print trailing newlines after each argument. (default)',
-                                   'Only useful if --no-headers is given.' do |tnl|
+                                   'Only useful if --no-prefixes is given.' do |tnl|
     $trailing_newline = tnl
   end
 
-  op.on '-n', '--no-headers-or-newline', 'Disables both headers and trailing newlines' do
-    $headers = $trailing_newline = false
+  op.on '-n', '--no-prefixes-or-newline', 'Disables both prefixes and trailing newlines' do
+    $prefixes = $trailing_newline = false
   end
 
   ##################################################################################################
@@ -218,7 +218,7 @@ defined? $invalid_bytes_failure    or $invalid_bytes_failure = true
 defined? $escape_spaces            or $escape_spaces = !$files
 defined? $escape_tab               or $escape_tab = true
 defined? $escape_newline           or $escape_newline = true
-defined? $headers                  or $headers = $stdout_tty && !$*.empty?
+defined? $prefixes                 or $prefixes = $stdout_tty && !$*.empty?
 defined? $escape_backslash         or $escape_backslash = !$visual
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 defined? $c_escapes                or $c_escapes = !defined?($escape_how) # Make sure to put this before `escape_how`'s default'
@@ -226,9 +226,9 @@ defined? $escape_how               or $escape_how = :bytes
 defined? $trailing_newline         or $trailing_newline = true
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 
-## Force `$trailing_newline` to be set if `$headers` are set, as otherwise there wouldn't be a
+## Force `$trailing_newline` to be set if `$prefixes` are set, as otherwise there wouldn't be a
 # newline between each header, which is weird.
-$trailing_newline ||= $headers
+$trailing_newline ||= $prefixes
 
 ## Validate options
 if $escape_how == :codepoints && $encoding != Encoding::UTF_8
@@ -428,23 +428,21 @@ def print_escapes(has_each_char, suffix = nil)
 
   ## Print a newline if the following are satisfied:
   # 1. It was requested. (This is the default, but can be suppressed by `--no-trailing-newline`, or
-  #    `-n`. Note that if headers are enabled, trailing newlines are always enabled regardless.)
-  # 2. At least one character was printed, or headers were enabled; If no characters are printed,
-  #    we normally don't want to add a newline, when headers are being output we want each filename
+  #    `-n`. Note that if prefixes are enabled, trailing newlines are always enabled regardless.)
+  # 2. At least one character was printed, or prefixes were enabled; If no characters are printed,
+  #    we normally don't want to add a newline, when prefixes are being output we want each filename
   #    to be on their own lines.
   # 3. The last character to be printed was not a newline; This is normally the case, but if the
   #    newline was unescaped (eg `-l`), then the last character may be a newline. This condition is
   #    to prevent a blank line in the output. (Kinda like how `puts "a\n"` only prints one newline.)
-  puts if $trailing_newline && last != "\n" && (last != nil || $headers)
+  puts if $trailing_newline && last != "\n" && (last != nil || $prefixes)
 end
 
 ## Interpret arguments as strings
 unless $files
   ARGV.each_with_index do |string, idx|
     # Print out the prefix if a header was requested
-    if $headers
-      printf '%5d: ', idx + 1
-    end
+    printf '%5d: ', idx + 1 if $prefixes
 
     # Unfortunately, `ARGV` strings are frozen, and we need to forcibly change the string's encoding
     # within `handle` so can iterate over the contents of the string in the new encoding. As such,
@@ -471,10 +469,10 @@ end
 
 # Sadly, we can't use `ARGF` for numerous reasons:
 # 1. `ARGF#each_char` will completely skip empty files, and won't call its block. So there's no easy
-#    way for us to print out headers for empty files. (We _could_ keep our own `ARGV` list, but that
+#    way for us to print prefixes for empty files. (We _could_ keep our own `ARGV` list, but that
 #    would be incredibly hacky.) And, we have to check file names _each time_ we get a new char.
 # 2. `ARGF#readpartial` gives empty strings when a new file is read, which lets us more easily print
-#    out headers. However, it doesn't give us an empty string for the first line (which is solvable,
+#    out prefixes. However, it doesn't give an empty string for the first line (which is solvable,
 #    but annoying). However, the main problem is that you might read the first half of a multibyte
 #    sequence, which then wouldn't be escaped. Since we support utf-8, utf-16, and utf-32, it's not
 #    terribly easy (from my experiments with) to make a generalized way to detect half-finished seq-
@@ -509,8 +507,8 @@ ARGV.each do |filename|
       File.open(filename, 'rb', encoding: $encoding)
     end
 
-  ## Print out the filename, a colon, and a space if headers were requested.
-  print filename, ': ' if $headers
+  ## Print out the filename, a colon, and a space if prefixes were requested.
+  print filename, ': ' if $prefixes
 
   ## Print the escapes for the file
   print_escapes file
