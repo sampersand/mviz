@@ -22,6 +22,17 @@ OptParse.new do |op|
   op.require_exact = true if defined? op.require_exact = true
 
   op.accept :chars do |c|
+    # chars = +''
+    # iter = c.each_char
+    # chars.concat iter.next if iter.peek == '-'
+
+    # Enumerator.produce { iter.next }.each do |char|
+    # end
+
+    # chars
+
+    # case c
+
     %|"#{c.gsub('"', '\"')}"|.undump
   end
 
@@ -56,7 +67,7 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator "\nSeparating Outputs"
 
-  op.on '-H', '--prefixes', 'Add prefixes, i.e. arg number/file name. (default if tty)' do
+  op.on '-P', '--prefixes', 'Add prefixes, i.e. arg number/file name. (default if tty)' do
     $prefixes = true
   end
 
@@ -80,7 +91,7 @@ OptParse.new do |op|
   $unescape_chars = +""; $escape_chars = +""
   op.on '-u', '--unescape=CHARS', :chars, 'Do not escape CHARS' do |c| $unescape_chars.concat c end
   op.on '--unescape-all', 'Do not escape any characters' do $unescape_all = true end
-  op.on '-e', '--escape=CHARS', :chars, 'Explicitly escape CHARS' do |c| $escape_chars.concat c end
+  op.on '-e', '--escape CHARS', :chars, 'Explicitly escape CHARS' do |c| $escape_chars.concat c end
   op.on '--escape-all', 'Explicitly escape all (non-ASCII, non-visible) characters' do op.abort 'todo: not working'; $escape_all = true end
 
   op.on '-l', "Same as --unescape='\\n'. (\"Line-oriented mode\")" do
@@ -120,7 +131,7 @@ OptParse.new do |op|
     $escape_how = :bytes
   end
 
-  op.on '-C', '--codepoints', 'Escape characters by printing their \u{...} escape. Sets -8,',
+  op.on '-C', '--codepoints', 'Escape characters by printing the \u{...} escape. Sets --utf-8',
                               'implicitly and cannot be used with other encodings. See also -U' do
     $escape_how = :codepoints
     $encoding = Encoding::UTF_8
@@ -130,8 +141,9 @@ OptParse.new do |op|
     $c_escapes = ce
   end
 
-  op.on '-P', '--[no-]control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do |cp|
+  op.on '-p', '--[no-]control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do |cp|
     $pictures = cp
+    $c_escapes = false unless defined? $c_escapes
   end
 
   ##################################################################################################
@@ -319,7 +331,7 @@ if $pictures
   end
 
   CHARACTERS["\x7F"] = visualize "\u{2421}"
-  CHARACTERS[" "] = visualize "\u{2420}"
+  CHARACTERS[" "] = visualize "\u{2423}"
 end
 
 ## If C-Style escapes were specified, then change a subset of the control characters to use the
