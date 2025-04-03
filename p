@@ -88,20 +88,24 @@ OptParse.new do |op|
   #                                         What To Escape                                         #
   ##################################################################################################
   op.separator "\nWhat to Escape"
-  $unescape_chars = +""; $escape_chars = +""
-  op.on '-u', '--unescape=CHARS', :chars, 'Do not escape CHARS' do |c| $unescape_chars.concat c end
-  op.on '--unescape-all', 'Do not escape any characters' do $unescape_all = true end
-  op.on '-e', '--escape CHARS', :chars, 'Explicitly escape CHARS' do |c| $escape_chars.concat c end
-  op.on '--escape-all', 'Explicitly escape all (non-ASCII, non-visible) characters' do op.abort 'todo: not working'; $escape_all = true end
+  $unescape_regex = []
+  $escape_regex = []
+  op.on '-u', '--unescape=REGEX', Regexp, 'Do not escape characters which match Regex' do |c|
+    $unescape_regex.push c
+  end
+
+  op.on '-e', '--escape=REGEX', Regexp, 'Explicitly escape CHARS' do |c|
+    $escape_regex.push c
+  end
 
   op.on '-l', "Same as --unescape='\\n'. (\"Line-oriented mode\")" do
-    # $unescape_chars.concat "\n";
+    # $unescape_regex.concat "\n";
     $escape_newline=false
   end
-  op.on '-w', "Same as --unescape='\\n\\t ' (newline, tab, space)" do $unescape_chars.concat "\n\t " end
+  op.on '-w', "Same as --unescape='\\n\\t ' (newline, tab, space)" do $unescape_regex.concat "\n\t " end
   op.on '-B', '--[no-]escape-backslash', "Same as --escape='\\\\' (backslash) (default if not in visual mode)" do |eb|
     $escape_backslash = eb end # Need this because it has adefault 
-  op.on '-s', "Same as --escape=' ' (space)" do $escape_chars.concat "\s" end
+  op.on '-s', "Same as --escape=' ' (space)" do $escape_regex.concat "\s" end
   op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_unicode = eu end
     # TODO: if this name is updated, update comments
   op.on       '--[no-]escape-outer-space', 'Visualize leading and trailing spaces. (default)', 'Only useful in visual mode; does not work with --files' do |ess| $escape_surronding_spaces = ess end
@@ -238,6 +242,10 @@ defined? $escape_how               or $escape_how = :bytes
 defined? $trailing_newline         or $trailing_newline = true
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 
+## Union all the regexes we've been given
+$unescape_regex = Regexp.union($unescape_regex)
+$escape_regex   = Regexp.union($escape_regex)
+
 ## Force `$trailing_newline` to be set if `$prefixes` are set, as otherwise there wouldn't be a
 # newline between each header, which is weird.
 $trailing_newline ||= $prefixes
@@ -355,6 +363,13 @@ CHARACTERS['\\'] = visualize('\\\\') if $escape_backslash
 CHARACTERS[' ']  = visualize(' ') if $escape_space
 
 ################################################################################
+#                               Escapes and unescapes            #
+################################################################################
+CHARACTERS.reject! do |key, value|
+  key.match?(if key == value then $escape_regex else $unescape_regex end)
+end
+
+################################################################################
 #                             Any Other Characters                             #
 ################################################################################
 
@@ -371,32 +386,17 @@ CHARACTERS[' ']  = visualize(' ') if $escape_space
 # Note that the escapes are cached for further re-use. While theoretically over time memory
 # consumption may grow, in reality there's not enough unique characters for this to be a problem.
 CHARACTERS.default_proc = proc do |hash, char|
-  # p hash.key? char
-  # p hash.keys.last.encoding
-  # p char.encoding
   hash[char] =
     if !char.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$invalid_bytes_failure`.
       visualize hex_bytes(char), BEGIN_ERR, END_ERR
+    elsif $escape_regex.match?(char)
+      visualize escape_bytes(char)
     elsif $escape_unicode
       visualize '\u{%04X}' % char.codepoints.sum
     else
       char
     end
-end
-# p CHARACTERS["\xA3"]
-
-################################################################################
-#                               Other Characters                               #
-################################################################################
-$unescape_all and CHARACTERS.replace(Hash.new{|x,y| x[y] = y})
-
-$escape_chars.each_char do |char|
-  CHARACTERS[char] = visualize escape_bytes char
-end
-
-$unescape_chars.each_char do |char|
-  CHARACTERS[char.encode($encoding)] = char
 end
 
 ################################################################################
