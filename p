@@ -19,6 +19,7 @@ OptParse.new do |op|
            #{op.program_name} -f/--files [options] [file ...]
     When no arguments, and stdin isn't a tty, the second form is assumed.
   BANNER
+  # TODO: why youno work sometimes, eg `p --escape-ties`
   op.require_exact = true if defined? op.require_exact = true
 
   op.accept :chars do |c|
@@ -87,25 +88,45 @@ OptParse.new do |op|
   ##################################################################################################
   #                                         What To Escape                                         #
   ##################################################################################################
-  op.separator "\nWhat to Escape"
+  op.separator "\nWhat to Escape. (if --escape and --unescape both match, --escape wins)"
   $unescape_regex = []
   $escape_regex = []
-  op.on '-u', '--unescape=REGEX', Regexp, 'Do not escape characters which match Regex' do |c|
-    $unescape_regex.push c
+  $escape_ties = true
+  op.require_exact = false
+  op.on '--[no-]escape-ties' do |es|
+                                 $escape_ties = es end
+
+  # op.on '--[no-]escape-ties', 'IF set (default), and a value would match both --escape and --unescape,',
+  #                             '; --escape wins; otherwise, --unescape wins' do |es|
+  #                                $escape_ties = es end
+
+  op.on '-e', '--escape-regex=REGEX', Regexp, 'Explicitly escape characters which match REGEX' do |rxp|
+    $escape_regex.push rxp
   end
 
-  op.on '-e', '--escape=REGEX', Regexp, 'Explicitly escape CHARS' do |c|
-    $escape_regex.push c
+  op.on '--escape-chars=CHARS', 'Explicitly escape CHARS' do |chars|
+    $escape_regex.push chars
+  end
+
+  op.on '-u', '--unescape-regex=REGEX', Regexp, 'Do not escape characters which match REGEX' do |rxp|
+    $unescape_regex.push rxp
+  end
+
+  op.on '--unescape-chars=CHARS', 'Do not escape CHARS' do |chars|
+    $unescape_regex.push chars
   end
 
   op.on '-l', "Same as --unescape='\\n'. (\"Line-oriented mode\")" do
-    # $unescape_regex.concat "\n";
-    $escape_newline=false
+    $unescape_regex.push "\n"
   end
-  op.on '-w', "Same as --unescape='\\n\\t ' (newline, tab, space)" do $unescape_regex.concat "\n\t " end
+
+  op.on '-w', "Same as --unescape='\\n\\t ' (newline, tab, space)" do
+    $unescape_regex.push("\n", "\t", " ")
+  end
+
   op.on '-B', '--[no-]escape-backslash', "Same as --escape='\\\\' (backslash) (default if not in visual mode)" do |eb|
     $escape_backslash = eb end # Need this because it has adefault 
-  op.on '-s', "Same as --escape=' ' (space)" do $escape_regex.concat "\s" end
+  op.on '-s', "Same as --escape=' ' (space)" do $escape_regex.push   "\s" end
   op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_unicode = eu end
     # TODO: if this name is updated, update comments
   op.on       '--[no-]escape-outer-space', 'Visualize leading and trailing spaces. (default)', 'Only useful in visual mode; does not work with --files' do |ess| $escape_surronding_spaces = ess end
@@ -357,7 +378,7 @@ if $c_escapes
 end
 
 ## Individual character escapes
-CHARACTERS["\n"] = "\n" unless $escape_newline
+# CHARACTERS["\n"] = "\n" unless $escape_newline
 CHARACTERS["\t"] = "\t" unless $escape_tab
 CHARACTERS['\\'] = visualize('\\\\') if $escape_backslash
 CHARACTERS[' ']  = visualize(' ') if $escape_space
@@ -390,7 +411,7 @@ CHARACTERS.default_proc = proc do |hash, char|
     if !char.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$invalid_bytes_failure`.
       visualize hex_bytes(char), BEGIN_ERR, END_ERR
-    elsif $escape_regex.match?(char)
+    elsif $escape_regex.match?(char) && ($escape_ties ? true : !$unescape_regex.match?(char))
       visualize escape_bytes(char)
     elsif $escape_unicode
       visualize '\u{%04X}' % char.codepoints.sum
