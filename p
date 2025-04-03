@@ -260,30 +260,43 @@ end
 ####################################################################################################
 
 # Converts a string's bytes to their `\xHH` escaped version, and joins them
-def hex_bytes(string)
-  string.each_byte.map { |byte| '\x%02X' % byte }.join
+def hex_bytes(string) string.each_byte.map { |byte| '\x%02X' % byte }.join end
+def codepoints(string) '\u{%04x}' % string.ord end
+
+if $visual
+  def vis(string, start=BEGIN_VISUAL, stop=END_VISUAL) "#{start}#{string}#{stop}" end
+else
+  def vis(string, start=BEGIN_VISUAL, stop=END_VISUAL) string end
 end
 
 if $escape_how == :codepoints
-  def escape_bytes(string) '\u{%04X}' % string.ord end
+  alias generic_character_escape codepoints
 else
-  alias escape_bytes hex_bytes
+  alias generic_character_escape hex_bytes
 end
 
-# Add "visualize" escape sequences to a string; all escaped characters should be passed to this, as
-# visual effects are the whole purpose of the `p` program.
-# - if `$delete` is specified, then an empty string is returned---escaped characters are deleted.
-# - if `$visual` is specified, then `start` and `stop` surround `string`
-# - else, `string` is returned.
-def visualize(string, start=BEGIN_VISUAL, stop=END_VISUAL)
-  string = '.' if $escape_how == :dot
-
-  case
-  when $escape_how == :delete then ''
-  when $visual then "#{start}#{string}#{stop}"
-  else              string
-  end
+if $escape_how == :delete
+  def visualize(string, *) '' end
+elsif $escape_how == :dot
+  def visualize(string, *rest) vis('.', *rest) end
+else
+  alias visualize vis
 end
+
+# # Add "visualize" escape sequences to a string; all escaped characters should be passed to this, as
+# # visual effects are the whole purpose of the `p` program.
+# # - if `$delete` is specified, then an empty string is returned---escaped characters are deleted.
+# # - if `$visual` is specified, then `start` and `stop` surround `string`
+# # - else, `string` is returned.
+# def visualize(string, start=BEGIN_VISUAL, stop=END_VISUAL)
+#   string = '.' if $escape_how == :dot
+
+#   case
+#   when $escape_how == :delete then ''
+#   when $visual then "#{start}#{string}#{stop}"
+#   else              string
+#   end
+# end
 
 ####################################################################################################
 #                                                                                                  #
@@ -301,8 +314,8 @@ CHARACTERS = {}
 
 ## Escape the lower control characters (i.e. \x00..\x1F and \x7F) with their hex escapes. Note that
 # some of these escapes escapes may be overwritten below by user options (like `--c-escapes`).
-[*"\0".."\x1F", "\x7F"].each do |char|
-  CHARACTERS[char] = visualize escape_bytes(char)
+[*"\x00".."\x1F", "\x7F"].each do |char|
+  CHARACTERS[char] = visualize generic_character_escape(char)
 end
 
 ## Add in normal ASCII printable characters (i.e. \x20..\x7E).
@@ -315,7 +328,7 @@ end
 # true), so our logic later on would print them out verbatim.
 if $encoding == Encoding::BINARY
   ("\x80".."\xFF").each do |char|
-    CHARACTERS[char] = visualize escape_bytes(char)
+    CHARACTERS[char] = visualize generic_character_escape(char)
   end
 end
 
@@ -379,7 +392,7 @@ CHARACTERS.default_proc = proc do |hash, char|
       $ENCODING_FAILED = true # for the exit status with `$invalid_bytes_failure`.
       visualize hex_bytes(char), BEGIN_ERR, END_ERR
     elsif $escape_unicode
-      visualize '\u{%04X}' % char.codepoints.sum
+      visualize codepoints(char)
     else
       char
     end
@@ -392,7 +405,7 @@ end
 $unescape_all and CHARACTERS.replace(Hash.new{|x,y| x[y] = y})
 
 $escape_chars.each_char do |char|
-  CHARACTERS[char] = visualize escape_bytes char
+  CHARACTERS[char] = visualize generic_character_escape char
 end
 
 $unescape_chars.each_char do |char|
