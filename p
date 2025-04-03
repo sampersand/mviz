@@ -92,6 +92,7 @@ OptParse.new do |op|
     $escape_backslash = eb end # Need this because it has adefault 
   op.on '-s', "Same as --escape=' ' (space)" do $escape_chars.concat "\s" end
   op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_unicode = eu end
+    # TODO: if this name is updated, update comments
   op.on       '--[no-]escape-outer-space', 'Visualize leading and trailing spaces. (default)', 'Only useful in visual mode; does not work with --files' do |ess| $escape_surronding_spaces = ess end
 
   ##################################################################################################
@@ -217,7 +218,7 @@ defined? $invalid_bytes_failure    or $invalid_bytes_failure = true
 defined? $escape_spaces            or $escape_spaces = !$files
 defined? $escape_tab               or $escape_tab = true
 defined? $escape_newline           or $escape_newline = true
-defined? $headers                 or $headers = $stdout_tty && !$*.empty?
+defined? $headers                  or $headers = $stdout_tty && !$*.empty?
 defined? $escape_backslash         or $escape_backslash = !$visual
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 defined? $c_escapes                or $c_escapes = !defined?($escape_how) # Make sure to put this before `escape_how`'s default'
@@ -264,6 +265,7 @@ end
 # - else, `string` is returned.
 def visualize(string, start=BEGIN_VISUAL, stop=END_VISUAL)
   string = '.' if $escape_how == :dot
+
   case
   when $escape_how == :delete then ''
   when $visual then "#{start}#{string}#{stop}"
@@ -411,16 +413,29 @@ OUTPUT = String.new(capacity: CAPACITY * 8, encoding: Encoding::BINARY)
 
 $stdout.binmode
 # TODO: optimize this later
-def handle(string)
-  # OUTPUT.clear
-
-  string.force_encoding $encoding
-  string.each_char do |char|
-    # warn [char.encoding, CHARACTERS[char].encoding, char, char.bytes].inspect
-    print CHARACTERS[char]
+def print_escapes(has_each_char, suffix = nil)
+  ## Print out each character in the file, or their escapes. We capture the last printed character,
+  # so that we can match it in the following block. (We don't want to print newlines if the last
+  # character in a file was a newline.)
+  last = nil
+  has_each_char.each_char do |char|
+    print last = CHARACTERS[char]
   end
 
-  # $stdout.write OUTPUT
+  ## If a suffix is given (eg trailing spaces with `--escape-outer-space)`, then print it out before
+  # printing a (possible) trailing newline.
+  suffix and print suffix
+
+  ## Print a newline if the following are satisfied:
+  # 1. It was requested. (This is the default, but can be suppressed by `--no-trailing-newline`, or
+  #    `-n`. Note that if headers are enabled, trailing newlines are always enabled regardless.)
+  # 2. At least one character was printed, or headers were enabled; If no characters are printed,
+  #    we normally don't want to add a newline, when headers are being output we want each filename
+  #    to be on their own lines.
+  # 3. The last character to be printed was not a newline; This is normally the case, but if the
+  #    newline was unescaped (eg `-l`), then the last character may be a newline. This condition is
+  #    to prevent a blank line in the output. (Kinda like how `puts "a\n"` only prints one newline.)
+  puts if $trailing_newline && last != "\n" && (last != nil || $headers)
 end
 
 ## Interpret arguments as strings
@@ -448,15 +463,9 @@ unless $files
     end
 
     # handle the input string
-    handle string
-
-    # If any trailing spaces were made, print them out
-    trailing_spaces and $stdout.write visualize trailing_spaces
-
-    $trailing_newline or $headers and puts
+    print_escapes string.force_encoding($encoding), trailing_spaces
   end
 
-  # $trailing_newline && !$headers and $stdout.write "\n".encode $encoding
   exit
 end
 
@@ -503,26 +512,8 @@ ARGV.each do |filename|
   ## Print out the filename, a colon, and a space if headers were requested.
   print filename, ': ' if $headers
 
-  ## Print out each character in the file, or their escapes. We capture the last printed character,
-  # so that we can match it in the following block. (We don't want to print newlines if the last
-  # character in a file was a newline.)
-  last = nil
-  file.each_char do |char|
-    print last = CHARACTERS[char]
-  end
-
-  ## Print a newline if the following are satisfied:
-  # 1. It was requested. (This is the default, but can be suppressed by `--no-trailing-newline`, or
-  #    `-n`. Note that if headers are enabled, trailing newlines are always enabled regardless.)
-  # 2. At least one character was printed, or headers were enabled; If no characters are printed,
-  #    we normally don't want to add a newline, when headers are being output we want each filename
-  #    to be on their own lines.
-  # 3. The last character to be printed was not a newline; This is normally the case, but if the
-  #    newline was unescaped (eg `-l`), then the last character may be a newline. This condition is
-  #    to prevent a blank line in the output. (Kinda like how `puts "a\n"` only prints one newline.)
-  if $trailing_newline && last != "\n" && (last != nil || $headers)
-    puts
-  end
+  ## Print the escapes for the file
+  print_escapes file
 rescue => err
   ## Whenever an error occurs, we want to handle it, but not bail out: We want to print every file
   # we're given (like `cat`), reporting errors along the way, and then exiting with a non-zero exit
