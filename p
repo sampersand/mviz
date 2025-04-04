@@ -99,16 +99,16 @@ OptParse.new nil, 28 do |op|
   end
 
   # The `-l` is because of "lien-oriented mode" as found in things like perl and ruby.
-  op.on '-l', "Same as --unescape='\\n'. (newlines)" do
+  op.on '-l', "Same as --unescape='\\n'" do
     $unescape_regex.push "\n"
   end
 
-  op.on '-w', "Same as --unescape='[\\n\\t ]' (newline, tab, space)" do
+  op.on '-w', "Same as --unescape='[\\n\\t ]'" do
     $unescape_regex.push "\n", "\t", " "
   end
 
-  op.on '-s', "Same as --escape=' ' (space)" do
-    $escape_regex.push " "
+  op.on '-s', "Same as --escape=' '" do
+    $escape_regex.push ' '
   end
 
   op.on '-B', "Same as --escape='\\\\' (backslash) (default if not visual mode)" do |eb|
@@ -170,6 +170,7 @@ OptParse.new nil, 28 do |op|
 
   op.on '-P', '--[no-]control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do |cp|
     $pictures = cp
+    $space_picture = cp
     $c_escapes = false unless defined? $c_escapes
   end
 
@@ -270,7 +271,7 @@ defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 defined? $c_escapes                or $c_escapes = !defined?($escape_how) # Make sure to put this before `escape_how`'s default'
 defined? $escape_how               or $escape_how = :bytes
 defined? $trailing_newline         or $trailing_newline = true
-defined? $escape_ties              or $escape_ties = true
+defined? $escape_ties              or $escape_ties = false
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 
 if !Regexp.union($escape_regex).match?('\\') && !Regexp.union($unescape_regex).match?('\\') && !$visual
@@ -382,12 +383,6 @@ if $pictures
   CHARACTERS["\x7F"] = visualize "\u{2421}"
 end
 
-$space_picture ||= $pictures
-
-if should_escape?(' ')
-  CHARACTERS[" "] = visualize ($space_picture ? "\u{2423}" : ' ')
-end
-
 ## If C-Style escapes were specified, then change a subset of the control characters to use the
 # alternative syntax instead of their hex escapes.
 if $c_escapes
@@ -405,7 +400,7 @@ end
 ## Individual character escapes
 # CHARACTERS["\n"] = "\n" unless $escape_newline
 CHARACTERS["\t"] = "\t" unless $escape_tab
-CHARACTERS['\\'] = visualize('\\\\') if should_escape? '\\'#$escape_backslash
+# CHARACTERS['\\'] = visualize('\\\\') if should_escape? '\\'#$escape_backslash
 # CHARACTERS[' ']  = visualize($space_picture ? '␣' : ' ') if $escape_spaces
 
 ################################################################################
@@ -419,6 +414,7 @@ CHARACTERS.reject! do |key, value|
 end
 
 CHARACTERS['\\'] = visualize('\\\\') if should_escape? '\\' # special case?? i need to fix the thing before this
+CHARACTERS[" "] = visualize ($space_picture ? "\u{2423}" : ' ') if should_escape?(' ')
 
 ################################################################################
 #                             Any Other Characters                             #
