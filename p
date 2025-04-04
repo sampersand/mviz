@@ -154,7 +154,7 @@ OptParse.new do |op|
     $c_escapes = false unless defined? $c_escapes
   end
 
-  op.on '-s', '--[no-]space-picture', 'Enable control pictures for space specifically' do |sp|
+  op.on '-S', '--[no-]space-picture', 'Enable control pictures for space specifically; implies -s' do |sp|
     $space_picture = $escape_spaces = sp
   end
 
@@ -241,7 +241,7 @@ defined? $stdout_tty               or $stdout_tty = $stdout.tty?
 defined? $files                    or $files = !$stdin.tty? && $*.empty?
 defined? $visual                   or $visual = $stdout_tty
 defined? $invalid_bytes_failure    or $invalid_bytes_failure = true
-defined? $escape_spaces            or $escape_spaces = !$files
+defined? $escape_spaces            or $escape_spaces = false
 defined? $escape_tab               or $escape_tab = true
 defined? $escape_newline           or $escape_newline = true
 defined? $prefixes                 or $prefixes = $stdout_tty && !$*.empty?
@@ -277,6 +277,10 @@ end
 #                                       Visualizing Escapes                                        #
 #                                                                                                  #
 ####################################################################################################
+
+def should_escape?(character)
+  $escape_regex.match?(char) and ($escape_ties ? true : !$unescape_regex.match?(char))
+end
 
 # Converts a string's bytes to their `\xHH` escaped version, and joins them
 def hex_bytes(string)
@@ -350,6 +354,8 @@ if $pictures
   end
 
   CHARACTERS["\x7F"] = visualize "\u{2421}"
+end
+if $escape_spaces && ($pictures || $space_picture)
   CHARACTERS[" "] = visualize "\u{2423}"
 end
 
