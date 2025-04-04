@@ -1,4 +1,6 @@
-#!/usr/bin/env -S ruby -Ebinary --disable=all
+#!/bin/sh
+exec env ruby -S -Ebinary --disable=all $0 -- "$@"
+#!ruby
 # -*- encoding: binary; frozen-string-literal: true -*-
 defined?(RubyVM::YJIT.enable) and RubyVM::YJIT.enable
 
@@ -120,13 +122,10 @@ OptParse.new nil, 28 do |op|
     $escape_regex.push /[\u{80}-\u{10FFFF}]/
   end
 
-  # TODO: if this name is updated, update comments
-  op.on       '--[no-]escape-outer-space', 'Escape leading and trailing spaces. (default)', 'Does not work with --files' do |ess|
+  op.on '--[no-]escape-surrounding-space', 'Escape leading and trailing spaces. (default)',
+                                           'Does not work with --files' do |ess|
     $escape_surronding_spaces = ess
   end
-  # op.on       '--[no-]escape-surrounding-space', 'Escape leading and trailing spaces. (default)', 'Does not work with --files' do |ess|
-  #   $escape_surronding_spaces = ess
-  # end
 
   ##################################################################################################
   #                                         How to Escape                                          #
@@ -261,22 +260,15 @@ END_VISUAL   = ENV.fetch('P_END_VISUAL',   "\e[27m")
 BEGIN_ERR    = ENV.fetch('P_BEGIN_ERR',    "\e[37m\e[41m")
 END_ERR      = ENV.fetch('P_END_ERR',      "\e[49m\e[39m")
 
-return if $files && $*.empty? # Don't print out anything if `-f` was specified, and no args were given.
-
 # Specify defaults
 defined? $stdout_tty               or $stdout_tty = $stdout.tty?
 defined? $files                    or $files = !$stdin.tty? && $*.empty?
 defined? $visual                   or $visual = $stdout_tty
 defined? $invalid_bytes_failure    or $invalid_bytes_failure = true
-defined? $escape_spaces            or $escape_spaces = false
-defined? $escape_tab               or $escape_tab = true
-defined? $escape_newline           or $escape_newline = true
-defined? $prefixes                 or $prefixes = $stdout_tty && !$*.empty?
-defined? $escape_backslash         or $escape_backslash = !$visual
+defined? $prefixes                 or $prefixes = $stdout_tty && (!$*.empty? || $files)
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 defined? $c_escapes                or $c_escapes = !defined?($escape_how) # Make sure to put this before `escape_how`'s default'
 defined? $escape_how               or $escape_how = :bytes
-defined? $trailing_newline         or $trailing_newline = true
 defined? $escape_ties              or $escape_ties = false
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 
@@ -485,8 +477,8 @@ def print_escapes(has_each_char, suffix = nil)
     print last = CHARACTERS[char]
   end
 
-  ## If a suffix is given (eg trailing spaces with `--escape-outer-space)`, then print it out before
-  # printing a (possible) trailing newline.
+  ## If a suffix is given (eg trailing spaces with `--escape-surrounding-space)`, then print it out
+  # before printing a (possible) trailing newline.
   suffix and print visualize suffix
 
   ## Print a newline if the following are satisfied:
