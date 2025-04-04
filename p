@@ -154,8 +154,8 @@ OptParse.new do |op|
     $c_escapes = false unless defined? $c_escapes
   end
 
-  op.on '--[no-]space-picture', 'Enable control pictures for space specifically' do |sp|
-    $space_picture = sp
+  op.on '-s', '--[no-]space-picture', 'Enable control pictures for space specifically' do |sp|
+    $space_picture = $escape_spaces = sp
   end
 
   ##################################################################################################
@@ -479,8 +479,8 @@ unless $files
       # beforehand), this should be changed to use `byteslice`.The method used here is more convenient,
       # but is destructive. ALSO. It doesn't work wtih non-utf8 characters
       string.force_encoding Encoding::BINARY
-      leading_spaces  = string.slice!(/\A +/) and $stdout.write visualize leading_spaces
-      trailing_spaces = string.slice!(/ +\z/)
+      leading_spaces  = string.slice!(/\A +/) and $stdout.write visualize leading_spaces.gsub(' ', $space_picture ? '␣' : ' ')
+      trailing_spaces = string.slice!(/ +\z/)&.gsub(' ', $space_picture ? '␣' : ' ')
     end
 
     # handle the input string
