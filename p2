@@ -1,4 +1,14 @@
 #!ruby
+unescape = %w[a b].map { _1.encode('utf-16be') }
+unre = Regexp.union unescape
+p unre =~ 'a'.encode('utf-16be')
+# src = unre.source#.force_encoding 'utf-16be'
+p unre
+Regexp.new(unre)
+# $unescape_regex = Regexp.new(Regexp.union($unescape_regex).source.force_encoding($encoding), Regexp::FIXEDENCODING)
+# $escape_regex = Regexp.new(Regexp.union($escape_regex).source.force_encoding($encoding), Regexp::FIXEDENCODING)
+
+__END__
 $pictures = $c_escapes=1
 puts <<~RUBY
 def escape(char)

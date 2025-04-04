@@ -41,6 +41,10 @@ OptParse.new nil, 28 do |op|
     exit
   end
 
+  op.on '--debug', 'Enable debug mode' do
+    $DEBUG = $VERBOSE = true
+  end
+
   op.on '-f', '--files', 'Interpret trailing options as filenames to read' do
     # Note there's no `-[no-]` prefix, because we expect this to be an explicit toggle on each time
     # it's used (i.e. you shouldn't `alias p='p -f'`.)
@@ -276,6 +280,8 @@ if !Regexp.union($escape_regex).match?('\\') && !Regexp.union($unescape_regex).m
 end
 
 ## Union all the regexes we've been given
+# $unescape_regex = Regexp.union($unescape_regex.map { |x| x.encode $encoding })
+# $escape_regex   = Regexp.union($escape_regex.map { |x| x.encode $encoding })
 $unescape_regex = Regexp.union($unescape_regex)
 $escape_regex   = Regexp.union($escape_regex)
 
