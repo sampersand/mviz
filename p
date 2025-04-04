@@ -10,7 +10,7 @@ defined?(RubyVM::YJIT.enable) and RubyVM::YJIT.enable
 ####################################################################################################
 require 'optparse'
 
-OptParse.new do |op|
+OptParse.new nil, 28 do |op|
   $op = op # for `$op.abort` and `$op.warn`
 
   op.version = '0.7.3'
@@ -40,7 +40,7 @@ OptParse.new do |op|
     exit
   end
 
-  op.on '-f', '--files', 'Interpret arguments as filenames to read, not strings' do
+  op.on '-f', '--files', 'Interpret trailing options as filenames to read' do
     # Note there's no `-[no-]` prefix, because we expect this to be an explicit toggle on each time
     # it's used (i.e. you shouldn't `alias p='p -f'`.)
     $files = true
@@ -56,7 +56,7 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator "\nSeparating Outputs"
 
-  op.on '-p', '--prefixes', 'Add prefixes, i.e. arg number/file name. (default if tty)' do
+  op.on '-p', '--prefixes', 'Add prefixes to outputs. (default if tty)' do
     $prefixes = true
   end
 
@@ -64,11 +64,8 @@ OptParse.new do |op|
     $prefixes = false
   end
 
-  # op.on '--[no-]trailing-newline', 'Print trailing newlines after each argument. (default)',
-  #                                  'Only useful if --no-prefixes is given.' do |tnl|
-  #   $trailing_newline = tnl
-  # end
-
+  # No need to have an option to set `$trailing_newline` on its own to false, as it's useless
+  # when `$prefixes` is truthy.
   op.on '-n', '--no-prefixes-or-newline', 'Disables both prefixes and trailing newlines' do
     $prefixes = $trailing_newline = false
   end
@@ -80,9 +77,9 @@ OptParse.new do |op|
   $unescape_regex = []
   $escape_regex = []
 
-  op.on '-t', '--[no-]escape-ties', 'If set, then chars which match both -e and -u will be escaped.',
-                                    'If unset (default), then they will not be escaped' do |es|
-    $escape_ties = es
+  op.on '-t', '--[no-]escape-ties', 'Break ties that match both -e and -u by',
+                                    'escaping. (the default is to not escape ties.)' do |et|
+    $escape_ties = et
   end
 
   op.on '-e', '--escape=REGEX', Regexp, 'Also escape characters which match REGEX' do |rxp|
@@ -101,11 +98,12 @@ OptParse.new do |op|
     $unescape_regex.concat chars.split('')
   end
 
-  op.on '-l', "Same as --unescape='\\n'. (newlines). (\"Line-oriented mode\")" do
+  # The `-l` is because of "lien-oriented mode" as found in things like perl and ruby.
+  op.on '-l', "Same as --unescape='\\n'. (newlines)" do
     $unescape_regex.push "\n"
   end
 
-  op.on '-w', "Same as --unescape='\\n\\t ' (newline, tab, space)" do
+  op.on '-w', "Same as --unescape='[\\n\\t ]' (newline, tab, space)" do
     $unescape_regex.push "\n", "\t", " "
   end
 

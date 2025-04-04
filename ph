@@ -1,5 +1,5 @@
 #!ruby -s
-$w = ($w || 100).to_i
+$w = ($w || 80).to_i
 r, w = IO.popen './p -h', 'r'
 while line = r.gets(chomp: true)
   line = line.ljust($w)
