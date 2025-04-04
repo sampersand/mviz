@@ -115,18 +115,18 @@ OptParse.new nil, 28 do |op|
     $escape_regex.push '\\'
   end
 
-  op.on '-U', "Same as --upper-codepoints --escape='[\\u{80}-\\u{10FFFF}]'", '(escape all non-ascii codepoints)' do
+  op.on '-U', "Same as --upper-codepoints --escape='[\\u{80}-\\u{10FFFF}]'", '(i.e. escape all non-ascii codepoints)' do
     $escape_unicode = true
     $escape_regex.push /[\u{80}-\u{10FFFF}]/
   end
 
   # TODO: if this name is updated, update comments
-  # op.on       '--[no-]escape-outer-space', 'Escape leading and trailing spaces. (default)', 'Does not work with --files' do |ess|
-  #   $escape_surronding_spaces = ess
-  # end
-  op.on       '--[no-]escape-surrounding-space', 'Escape leading and trailing spaces. (default)', 'Does not work with --files' do |ess|
+  op.on       '--[no-]escape-outer-space', 'Escape leading and trailing spaces. (default)', 'Does not work with --files' do |ess|
     $escape_surronding_spaces = ess
   end
+  # op.on       '--[no-]escape-surrounding-space', 'Escape leading and trailing spaces. (default)', 'Does not work with --files' do |ess|
+  #   $escape_surronding_spaces = ess
+  # end
 
   ##################################################################################################
   #                                         How to Escape                                          #
@@ -141,41 +141,40 @@ OptParse.new nil, 28 do |op|
     $visual = false
   end
 
-  op.on '-d', '--delete', 'Escape characters by deleting them instead of printing' do
+  op.on '-d', '--delete', 'Delete escaped characters' do
     $escape_how = :delete
   end
 
-  op.on '-.', '--dot', 'Escape characters by printing a period' do
+  op.on '-.', '--dot', "Use a '.' instead of escapes" do
     $escape_how = :dot
   end
 
-  op.on '-x', '--hex', 'Escape characters by printing their hex escapes, \xHH (default)' do
+  op.on '-x', '--hex', 'Escape with hex bytes, \xHH (default)' do
     $escape_how = :bytes
   end
 
-  op.on '-C', '--codepoints', 'Escape characters by printing the \u{...} escape. Sets --utf-8',
-                              'implicitly and cannot be used with other encodings. See also -U' do
+  op.on '-C', '--codepoints', 'Escape with codepoints, \u{...}. Sets --utf-8,',
+                              "and can't be used with other encodings." do
     $escape_how = :codepoints
     $encoding = Encoding::UTF_8
   end
 
-  op.on '--[no-]upper-codepoints', 'Like --codepoints, but only for values 0x80 or above' do |uc|
+  op.on '--[no-]upper-codepoints', 'Like -C, but only for values above 0x7F; See -U'  do |uc|
     $escape_unicode = uc
     $encoding = Encoding::UTF_8
   end
 
-  op.on '-c', '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc). (default if no -d.xC given)' do |ce|
+  op.on '-c', '--[no-]c-escapes', 'Escape with C-style escapes (\n, \t, etc). (default if no -d.xC given)' do |ce|
     $c_escapes = ce
   end
 
-  op.on '-P', '--[no-]control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do |cp|
-    $pictures = cp
-    $space_picture = cp
+  op.on '-P', '--[no-]pictures', 'Use "pictures" (U+240x-U+242x) for some escapes' do |cp|
+    $pictures = $space_picture = cp
     $c_escapes = false unless defined? $c_escapes
   end
 
-  op.on '-S', '--[no-]space-picture', 'Like -p, but for spaces specifically; Does nothing without -s' do |sp|
-    $space_picture = $escape_spaces = sp
+  op.on '--[no-]space-picture', 'Like -P, but just for space (\' \'); Requires -s' do |sp|
+    $space_picture = sp
   end
 
   ##################################################################################################
@@ -185,9 +184,9 @@ OptParse.new nil, 28 do |op|
   # Implementation note: Even though these usage messages reference "input encodings," the input is
   # actually always read as binary data, and then attempted to be converted to whatever these
   # encodings are
-  op.separator "\nInput Encodings (default normally is --utf-8; If env var POSIXLY_CORRECT is set, it is --locale)"
+  op.separator "\nInput Encodings (default based on POSIXLY_CORRECT: -8 if unset, -L if set)"
 
-  op.on '-E', '--encoding=ENCODING', "Specify the input data's encoding. Case insensitive" do |enc|
+  op.on '-E', '--encoding=ENCODING', "Specify the input's encoding. Case insensitive" do |enc|
     $encoding = Encoding.find enc rescue op.abort
   end
 
@@ -197,25 +196,31 @@ OptParse.new nil, 28 do |op|
     exit
   end
 
-  op.on '-b', '--binary', '--bytes', 'Same as -Ebinary; High-bit bytes are escaped.' do
+  op.on '-b', '--binary', '--bytes', 'Same as --encoding=binary' do
     $encoding = Encoding::BINARY
   end
 
-  op.on '-a', '--ascii', 'Same as -Eascii. Like -b, but high-bit bytes are invalid.' do
+  op.on '-a', '--ascii', 'Same as --encoding=ascii' do
     $encoding = Encoding::ASCII
   end
 
-  op.on '-8', '--utf-8', 'Same as -Eutf-8. (See also the -U flag to escape UTF-8)' do
+  op.on '-8', '--utf-8', 'Same as --encoding=UTF-8 (See the -U flag)' do
     $encoding = Encoding::UTF_8
   end
 
-  op.on '-L', '--locale', 'Same as -Elocale, i.e. what LC_ALL/LC_CTYPE/LANG specify.' do
+  op.on '-L', '--locale', 'Same as --encoding=locale' do
     $encoding = Encoding.find('locale')
   end
 
-  op.on '--[no-]invalid-bytes-failure', 'Invalid bytes cause non-zero exit status. (default)' do |ibf|
+  op.on '--[no-]malformed-error', 'Invalid chars cause nonzero exit. (default)' do |ibf|
     $invalid_bytes_failure = ibf
   end
+  op.on <<~EOS
+  The only difference between --ascii and --binary is the former considers 0x80
+  and above to be invalid (and thus highlights them differently). The "locale"
+  encoding (--locale) uses whatever the environment specifies. Other encodings
+  are possible, but haven't been tested extensively.
+  EOS
 
   op.on_tail "\nnote: IF any invalid bytes for the output encoding are read, the exit status is"
   op.on_tail "based on `--encoding-failure-err`"
@@ -229,9 +234,10 @@ OptParse.new nil, 28 do |op|
     P_END_VISUAL       Ending escape sequence for --visual
     P_BEGIN_ERR        Beginning escape sequence for invalid bytes with --visual
     P_END_ERR          Ending escape sequence for invalid bytes with --visual
-    POSIXLY_CORRECT    If present, changes default encoding to the locale's (cf locale(1).),
-                       and also disables parsing switches after arguments (e.g. `p foo -x` will
-                       print out `foo` and `-x`, and won't interpret `-x` as a switch.)
+    POSIXLY_CORRECT    If present, changes default encoding to the locale's (cf
+                       locale(1).), and also disables parsing switches after ar-
+                       guments (e.g. `p foo -x` will print out `foo` and `-x`,
+                       and won't interpret `-x` as a switch.)
   EOS
 
   ##################################################################################################
