@@ -13,12 +13,14 @@ require 'optparse'
 OptParse.new do |op|
   $op = op # for `$op.abort` and `$op.warn`
 
-  op.version = '0.7'
+  op.version = '0.7.3'
   op.banner = <<~BANNER
     usage: #{op.program_name} [options] [string ...]
            #{op.program_name} -f/--files [options] [file ...]
     When no arguments, and stdin isn't a tty, the second form is assumed.
   BANNER
+
+  op.on_head 'A program to escape "weird" characters'
   # TODO: why youno work sometimes, eg `p --escape-ties`
   # op.require_exact = true if defined? op.require_exact = true
 
@@ -62,10 +64,10 @@ OptParse.new do |op|
     $prefixes = false
   end
 
-  op.on '--[no-]trailing-newline', 'Print trailing newlines after each argument. (default)',
-                                   'Only useful if --no-prefixes is given.' do |tnl|
-    $trailing_newline = tnl
-  end
+  # op.on '--[no-]trailing-newline', 'Print trailing newlines after each argument. (default)',
+  #                                  'Only useful if --no-prefixes is given.' do |tnl|
+  #   $trailing_newline = tnl
+  # end
 
   op.on '-n', '--no-prefixes-or-newline', 'Disables both prefixes and trailing newlines' do
     $prefixes = $trailing_newline = false
@@ -111,18 +113,27 @@ OptParse.new do |op|
     $escape_regex.push " "
   end
 
-  op.on '-B', "Same as --escape='\\\\' (backslash) (default if not in visual mode)" do |eb|
+  op.on '-B', "Same as --escape='\\\\' (backslash) (default if not visual mode)" do |eb|
     $escape_regex.push '\\'
   end
 
-  op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_unicode = eu end
-    # TODO: if this name is updated, update comments
-  op.on       '--[no-]escape-outer-space', 'Visualize leading and trailing spaces. (default)', 'Only useful in visual mode; does not work with --files' do |ess| $escape_surronding_spaces = ess end
+  op.on '-U', "Same as --upper-codepoints --escape='[\\u{80}-\\u{10FFFF}]'", '(escape all non-ascii codepoints)' do
+    $escape_unicode = true
+    $escape_regex.push /[\u{80}-\u{10FFFF}]/
+  end
+
+  # TODO: if this name is updated, update comments
+  op.on       '--[no-]escape-outer-space', 'Escape leading and trailing spaces. (default)', 'Does not work with --files' do |ess|
+    $escape_surronding_spaces = ess
+  end
+  op.on       '--[no-]escape-surrounding-space', 'Escape leading and trailing spaces. (default)', 'Does not work with --files' do |ess|
+    $escape_surronding_spaces = ess
+  end
 
   ##################################################################################################
   #                                         How to Escape                                          #
   ##################################################################################################
-  op.separator "\nHow to Escape (-d, -., -x, and -c are mutually exclusive)"
+  op.separator "\nHow to Escape (-d, -., -x, and -C are mutually exclusive)"
 
   op.on '-v', '--visual', 'Enable visual effects. (default if tty)' do
     $visual = true
@@ -150,7 +161,12 @@ OptParse.new do |op|
     $encoding = Encoding::UTF_8
   end
 
-  op.on '-c', '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc). (default if no -d.xc given)' do |ce|
+  op.on '--[no-]upper-codepoints', 'Like --codepoints, but only for values 0x80 or above' do |uc|
+    $escape_unicode = uc
+    $encoding = Encoding::UTF_8
+  end
+
+  op.on '-c', '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc). (default if no -d.xC given)' do |ce|
     $c_escapes = ce
   end
 
@@ -202,7 +218,8 @@ OptParse.new do |op|
     $invalid_bytes_failure = ibf
   end
 
-  op.on_tail "\nnote: IF any invalid bytes for the output encoding are read, the exit status is based on `--encoding-failure-err`"
+  op.on_tail "\nnote: IF any invalid bytes for the output encoding are read, the exit status is"
+  op.on_tail "based on `--encoding-failure-err`"
 
   ##################################################################################################
   #                                        Environment Vars                                        #
@@ -292,12 +309,14 @@ def should_escape?(char)
 end
 
 # Converts a string's bytes to their `\xHH` escaped version, and joins them
-def hex_bytes(string)
-  string.each_byte.map { |byte| '\x%02X' % byte }.join
-end
+def hex_bytes(string) string.each_byte.map { |byte| '\x%02X' % byte }.join end
+def codepoints(string) '\u{%04X}' % string.ord end
+
 
 if $escape_how == :codepoints
-  def escape_bytes(string) '\u{%04X}' % string.ord end
+  alias escape_bytes codepoints
+elsif $escape_unicode
+  def escape_bytes(string) string.codepoints.sum >= 0x80 ? codepoints(string) : hex_bytes(string) end
 else
   alias escape_bytes hex_bytes
 end
@@ -426,8 +445,6 @@ CHARACTERS.default_proc = proc do |hash, char|
       visualize hex_bytes(char), BEGIN_ERR, END_ERR
     elsif should_escape?(char)
       visualize escape_bytes(char)
-    elsif $escape_unicode
-      visualize '\u{%04X}' % char.codepoints.sum
     else
       char
     end
