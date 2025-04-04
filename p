@@ -184,7 +184,7 @@ OptParse.new nil, 28 do |op|
   # Implementation note: Even though these usage messages reference "input encodings," the input is
   # actually always read as binary data, and then attempted to be converted to whatever these
   # encodings are
-  op.separator "\nInput Encodings (default based on POSIXLY_CORRECT: -8 if unset, -L if set)"
+  op.separator "\nEncodings (default based on POSIXLY_CORRECT: --utf-8 if unset, --locale if set)"
 
   op.on '-E', '--encoding=ENCODING', "Specify the input's encoding. Case insensitive" do |enc|
     $encoding = Encoding.find enc rescue op.abort
