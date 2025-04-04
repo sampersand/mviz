@@ -22,20 +22,6 @@ OptParse.new do |op|
   # TODO: why youno work sometimes, eg `p --escape-ties`
   # op.require_exact = true if defined? op.require_exact = true
 
-  op.accept :chars do |c|
-    # chars = +''
-    # iter = c.each_char
-    # chars.concat iter.next if iter.peek == '-'
-
-    # Enumerator.produce { iter.next }.each do |char|
-    # end
-
-    # chars
-
-    # case c
-
-    %|"#{c.gsub('"', '\"')}"|.undump
-  end
 
   ##################################################################################################
   #                                        Generic Options                                         #
@@ -113,7 +99,7 @@ OptParse.new do |op|
     $unescape_regex.concat chars.split('')
   end
 
-  op.on '-l', "Same as --unescape='\\n'. (\"Line-oriented mode\")" do
+  op.on '-l', "Same as --unescape='\\n'. (newlines). (\"Line-oriented mode\")" do
     $unescape_regex.push "\n"
   end
 
@@ -459,7 +445,7 @@ def print_escapes(has_each_char, suffix = nil)
 
   ## If a suffix is given (eg trailing spaces with `--escape-outer-space)`, then print it out before
   # printing a (possible) trailing newline.
-  suffix and print suffix
+  suffix and print visualize suffix
 
   ## Print a newline if the following are satisfied:
   # 1. It was requested. (This is the default, but can be suppressed by `--no-trailing-newline`, or
