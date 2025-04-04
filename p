@@ -13,7 +13,7 @@ require 'optparse'
 OptParse.new do |op|
   $op = op # for `$op.abort` and `$op.warn`
 
-  op.version = '0.65'
+  op.version = '0.7'
   op.banner = <<~BANNER
     usage: #{op.program_name} [options] [string ...]
            #{op.program_name} -f/--files [options] [file ...]
