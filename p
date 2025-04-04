@@ -1,5 +1,5 @@
 #!/bin/sh
-exec env ruby -S -Ebinary --disable=all $0 -- "$@"
+exec env ruby -S -Ebinary --disable=all $0 "$@"
 #!ruby
 # -*- encoding: binary; frozen-string-literal: true -*-
 defined?(RubyVM::YJIT.enable) and RubyVM::YJIT.enable
