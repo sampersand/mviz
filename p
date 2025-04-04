@@ -285,11 +285,15 @@ $escape_regex   = Regexp.union($escape_regex)
 $trailing_newline ||= $prefixes
 
 ## Validate options
-if $escape_how == :codepoints && $encoding != Encoding::UTF_8
-  $op.abort "cannot use -c with non-UTF-8 encodings (encoding is #$encoding)"
+unless $encoding == Encoding::UTF_8
+  if $escape_how == :codepoints
+    $op.abort "cannot use --codepoints with non-UTF-8 encodings (encoding is #$encoding)"
+  elsif $escape_unicode
+    $op.abort "cannot use --upper-codepoints with non-UTF-8 encodings (encoding is #$encoding)"
+  end
 end
 
-## Add the functionality in for `--invalid-bytes-failure`: If the program is normally exiting (i.e.
+## Add the functionality in for `--malformed-error`: If the program is normally exiting (i.e.
 # it's not exiting due to an exception), and there was an encoding failure, then exit with status 1.
 $invalid_bytes_failure and at_exit do
   exit 1 if !$! && $ENCODING_FAILED
@@ -394,12 +398,6 @@ if $c_escapes
   CHARACTERS["\r"] = visualize '\r'
   CHARACTERS["\e"] = visualize '\e'
 end
-
-## Individual character escapes
-# CHARACTERS["\n"] = "\n" unless $escape_newline
-CHARACTERS["\t"] = "\t" unless $escape_tab
-# CHARACTERS['\\'] = visualize('\\\\') if should_escape? '\\'#$escape_backslash
-# CHARACTERS[' ']  = visualize($space_picture ? '␣' : ' ') if $escape_spaces
 
 ################################################################################
 #                               Escapes and unescapes            #
