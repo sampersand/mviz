@@ -111,7 +111,7 @@ OptParse.new nil, 28 do |op|
     $escape_regex.push ' '
   end
 
-  op.on '-B', "Same as --escape='\\\\' (backslash) (default if not visual mode)" do |eb|
+  op.on '-B', "Same as --escape='\\\\' (default if not visual mode)" do |eb|
     $escape_regex.push '\\'
   end
 
@@ -121,9 +121,9 @@ OptParse.new nil, 28 do |op|
   end
 
   # TODO: if this name is updated, update comments
-  op.on       '--[no-]escape-outer-space', 'Escape leading and trailing spaces. (default)', 'Does not work with --files' do |ess|
-    $escape_surronding_spaces = ess
-  end
+  # op.on       '--[no-]escape-outer-space', 'Escape leading and trailing spaces. (default)', 'Does not work with --files' do |ess|
+  #   $escape_surronding_spaces = ess
+  # end
   op.on       '--[no-]escape-surrounding-space', 'Escape leading and trailing spaces. (default)', 'Does not work with --files' do |ess|
     $escape_surronding_spaces = ess
   end
