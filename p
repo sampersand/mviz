@@ -54,7 +54,7 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator "\nSeparating Outputs"
 
-  op.on '-P', '--prefixes', 'Add prefixes, i.e. arg number/file name. (default if tty)' do
+  op.on '-p', '--prefixes', 'Add prefixes, i.e. arg number/file name. (default if tty)' do
     $prefixes = true
   end
 
@@ -107,9 +107,14 @@ OptParse.new do |op|
     $unescape_regex.push "\n", "\t", " "
   end
 
-  op.on '-B', '--[no-]escape-backslash', "Same as --escape='\\\\' (backslash) (default if not in visual mode)" do |eb|
-    $escape_backslash = eb end # Need this because it has adefault 
-  op.on '-s', "Same as --escape=' ' (space)" do $escape_regex.push   "\s"; $escape_spaces = true end
+  op.on '-s', "Same as --escape=' ' (space)" do
+    $escape_regex.push " "
+  end
+
+  op.on '-B', "Same as --escape='\\\\' (backslash) (default if not in visual mode)" do |eb|
+    $escape_regex.push '\\'
+  end
+
   op.on '-U', '--[no-]escape-unicode', 'Escape non-ASCII Unicode characters with "\u{...}"' do |eu| $escape_unicode = eu end
     # TODO: if this name is updated, update comments
   op.on       '--[no-]escape-outer-space', 'Visualize leading and trailing spaces. (default)', 'Only useful in visual mode; does not work with --files' do |ess| $escape_surronding_spaces = ess end
@@ -149,12 +154,12 @@ OptParse.new do |op|
     $c_escapes = ce
   end
 
-  op.on '-p', '--[no-]control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do |cp|
+  op.on '-P', '--[no-]control-pictures', 'Use "control pictures" (U+240x..U+242x) for some escapes' do |cp|
     $pictures = cp
     $c_escapes = false unless defined? $c_escapes
   end
 
-  op.on '-S', '--[no-]space-picture', 'Enable control pictures for space specifically; implies -s' do |sp|
+  op.on '-S', '--[no-]space-picture', 'Like -p, but for spaces specifically; Does nothing without -s' do |sp|
     $space_picture = $escape_spaces = sp
   end
 
@@ -253,6 +258,10 @@ defined? $trailing_newline         or $trailing_newline = true
 defined? $escape_ties              or $escape_ties = true
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 
+if !Regexp.union($escape_regex).match?('\\') && !Regexp.union($unescape_regex).match?('\\') && !$visual
+  $escape_regex.push '\\'
+end
+
 ## Union all the regexes we've been given
 $unescape_regex = Regexp.union($unescape_regex)
 $escape_regex   = Regexp.union($escape_regex)
@@ -278,7 +287,7 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-def should_escape?(character)
+def should_escape?(char)
   $escape_regex.match?(char) and ($escape_ties ? true : !$unescape_regex.match?(char))
 end
 
@@ -355,8 +364,8 @@ if $pictures
 
   CHARACTERS["\x7F"] = visualize "\u{2421}"
 end
-if $escape_spaces && ($pictures || $space_picture)
-  CHARACTERS[" "] = visualize "\u{2423}"
+if should_escape?(' ')
+  CHARACTERS[" "] = visualize ($pictures || $space_picture ? "\u{2423}" : ' ')
 end
 
 ## If C-Style escapes were specified, then change a subset of the control characters to use the
@@ -376,15 +385,20 @@ end
 ## Individual character escapes
 # CHARACTERS["\n"] = "\n" unless $escape_newline
 CHARACTERS["\t"] = "\t" unless $escape_tab
-CHARACTERS['\\'] = visualize('\\\\') if $escape_backslash
-CHARACTERS[' ']  = visualize($space_picture ? '␣' : ' ') if $escape_spaces
+CHARACTERS['\\'] = visualize('\\\\') if should_escape? '\\'#$escape_backslash
+# CHARACTERS[' ']  = visualize($space_picture ? '␣' : ' ') if $escape_spaces
 
 ################################################################################
 #                               Escapes and unescapes            #
 ################################################################################
 CHARACTERS.reject! do |key, value|
+  # should_escape?(key) == (key == value)
+
+  ## TODO: use `-t`
   key.match?(if key == value then $escape_regex else $unescape_regex end)
 end
+
+CHARACTERS['\\'] = visualize('\\\\') if should_escape? '\\' # special case?? i need to fix the thing before this
 
 ################################################################################
 #                             Any Other Characters                             #
@@ -407,7 +421,7 @@ CHARACTERS.default_proc = proc do |hash, char|
     if !char.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$invalid_bytes_failure`.
       visualize hex_bytes(char), BEGIN_ERR, END_ERR
-    elsif $escape_regex.match?(char) && ($escape_ties ? true : !$unescape_regex.match?(char))
+    elsif should_escape?(char)
       visualize escape_bytes(char)
     elsif $escape_unicode
       visualize '\u{%04X}' % char.codepoints.sum
