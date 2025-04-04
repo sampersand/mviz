@@ -364,8 +364,11 @@ if $pictures
 
   CHARACTERS["\x7F"] = visualize "\u{2421}"
 end
+
+$space_picture ||= $pictures
+
 if should_escape?(' ')
-  CHARACTERS[" "] = visualize ($pictures || $space_picture ? "\u{2423}" : ' ')
+  CHARACTERS[" "] = visualize ($space_picture ? "\u{2423}" : ' ')
 end
 
 ## If C-Style escapes were specified, then change a subset of the control characters to use the
