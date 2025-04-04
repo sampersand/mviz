@@ -175,7 +175,7 @@ OptParse.new nil, 28 do |op|
     $c_escapes = false unless defined? $c_escapes
   end
 
-  op.on '-S', '--[no-]space-picture', 'Like -P, but just for space (\' \'); Requires -s' do |sp|
+  op.on '-S', '--[no-]space-picture', 'Like -P, but just for spaces.' do |sp|
     $space_picture = sp
   end
 
