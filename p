@@ -234,6 +234,8 @@ END_VISUAL   = ENV.fetch('P_END_VISUAL',   "\e[27m")
 BEGIN_ERR    = ENV.fetch('P_BEGIN_ERR',    "\e[37m\e[41m")
 END_ERR      = ENV.fetch('P_END_ERR',      "\e[49m\e[39m")
 
+return if $files && $*.empty? # Don't print out anything if `-f` was specified, and no args were given.
+
 # Specify defaults
 defined? $stdout_tty               or $stdout_tty = $stdout.tty?
 defined? $files                    or $files = !$stdin.tty? && $*.empty?
