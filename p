@@ -1,8 +1,24 @@
 #!/bin/sh
-exec env ruby -S -Ebinary --disable=all $0 "$@"
+exec env ruby -S -Ebinary --disable=all "$0" "$@"
 #!ruby
 # -*- encoding: binary; frozen-string-literal: true -*-
 defined?(RubyVM::YJIT.enable) and RubyVM::YJIT.enable
+
+# Note on the "header" above:
+# 1. We want this script to be portable across systems, so we cannot use a shebang to some absolute
+#    path for Ruby (e.g. `#!/usr/bin/ruby` is a no-go). The standard fix to this is to use `env`,
+#    i.e. `#!/usr/bin/env ruby`. However, shebangs only let you pass in _one_ argument, and we need
+#    more. `#!/usr/bin/env -S ruby` would work, but isn't portable. Instead, we resort to a hack to
+#    actually invoke this file as a `/bin/sh` script, which then immediately `env ruby`, passing in
+#    the `-Ebinary --disable=all` flags, along with the script name and its arguments.
+# 2. We pass `--disable=all` so we can disable the unnecessary features like `gems`, `did_you_mean`,
+#    etc. which slow down startup speed.
+# 3. We pass `-Ebinary` to force the external encoding to binary. This is necessary, as `ARGV` may
+#    contain invalid UTF-8 bytes, which could cause ruby to not even start up. (This previously
+#    failed, but I cant seem to get it to fail anymore, so maybe I've solved the problem?)
+# 4. We force the the internal encoding to be binary as well. (I also don't know if this's necessary
+#    anymore... Maybe it's not?)
+# 5. We enable YJIT if it's defined, to improve speed.
 
 ####################################################################################################
 #                                                                                                  #
@@ -14,11 +30,11 @@ require 'optparse'
 OptParse.new nil, 28 do |op|
   $op = op # for `$op.abort` and `$op.warn`
 
-  op.version = '0.7.3'
+  op.version = '0.7.5'
   op.banner = <<~BANNER
     usage: #{op.program_name} [options] [string ...]
-           #{op.program_name} -f/--files [options] [file ...]
-    When no arguments, and stdin isn't a tty, the second form is assumed.
+           #{op.program_name} -f [options] [file ...]
+    The second form is assumed when no arguments are given, and stdin is not a tty.
   BANNER
 
   op.on_head 'A program to escape "weird" characters'
@@ -104,23 +120,29 @@ OptParse.new nil, 28 do |op|
   end
 
   # The `-l` is because of "lien-oriented mode" as found in things like perl and ruby.
-  op.on '-l', "Same as --unescape='\\n'" do
+  op.on '-l', "Same as: --unescape='\\n'" do
     $unescape_regex.push "\n"
   end
 
-  op.on '-w', "Same as --unescape='[\\n\\t ]'" do
+  op.on '-w', "Same as: --unescape='[\\n\\t ]'" do
     $unescape_regex.push "\n", "\t", " "
   end
 
-  op.on '-s', "Same as --escape=' '" do
+  op.on '-s', "Same as: --escape=' '" do
     $escape_regex.push ' '
   end
 
-  op.on '-B', "Same as --escape='\\\\' (default if not visual mode)" do |eb|
+  op.on '-S', 'Same as: -s --space-picture' do
+    $space_picture = true
+    $escape_regex.push ' '
+  end
+
+  op.on '-B', "Same: as --escape='\\\\' (default if not visual)" do |eb|
     $escape_regex.push '\\'
   end
 
-  op.on '-U', "Same as --upper-codepoints --escape='[\\u{80}-\\u{10FFFF}]'", '(i.e. escape all non-ascii codepoints)' do
+  op.on '-U', 'Escapes all non-ascii codepoints. Same',
+              "as: --upper-codepoints -e'[\\u{80}-\\u{10FFFF}]'" do
     $escape_unicode = true
     $escape_regex.push /[\u{80}-\u{10FFFF}]/
   end
@@ -161,21 +183,21 @@ OptParse.new nil, 28 do |op|
     $encoding = Encoding::UTF_8
   end
 
-  op.on '--[no-]upper-codepoints', 'Like -C, but only for values above 0x7F; See -U'  do |uc|
+  op.on '--[no-]upper-codepoints', 'Like -C, but only for values above 0x7F.'  do |uc|
     $escape_unicode = uc
     $encoding = Encoding::UTF_8
   end
 
-  op.on '-c', '--[no-]c-escapes', 'Escape with C-style escapes (\n, \t, etc). (default if no -d.xC given)' do |ce|
+  op.on '-c', '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc) for some',
+                                  'escapes. (default only if none of -d.xCP given)' do |ce|
     $c_escapes = ce
   end
 
   op.on '-P', '--[no-]pictures', 'Use "pictures" (U+240x-U+242x) for some escapes' do |cp|
     $pictures = $space_picture = cp
-    $c_escapes = false unless defined? $c_escapes
   end
 
-  op.on '-S', '--[no-]space-picture', 'Like -P, but just for spaces.' do |sp|
+  op.on '--[no-]space-picture', 'Like -P, but just for spaces; Does not imply -s' do |sp|
     $space_picture = sp
   end
 
@@ -186,7 +208,7 @@ OptParse.new nil, 28 do |op|
   # Implementation note: Even though these usage messages reference "input encodings," the input is
   # actually always read as binary data, and then attempted to be converted to whatever these
   # encodings are
-  op.separator "\nEncodings (default based on POSIXLY_CORRECT: --utf-8 if unset, --locale if set)"
+  op.separator "\nEncodings (default based on POSIXLY_CORRECT; --utf-8 if unset, --locale if set)"
 
   op.on '-E', '--encoding=ENCODING', "Specify the input's encoding. Case insensitive" do |enc|
     $encoding = Encoding.find enc rescue op.abort
@@ -198,19 +220,19 @@ OptParse.new nil, 28 do |op|
     exit
   end
 
-  op.on '-b', '--binary', '--bytes', 'Same as --encoding=binary' do
+  op.on '-b', '--binary', '--bytes', 'Same as: --encoding=binary' do
     $encoding = Encoding::BINARY
   end
 
-  op.on '-a', '--ascii', 'Same as --encoding=ascii' do
+  op.on '-a', '--ascii', 'Same as: --encoding=ascii' do
     $encoding = Encoding::ASCII
   end
 
-  op.on '-8', '--utf-8', 'Same as --encoding=UTF-8 (See the -U flag)' do
+  op.on '-8', '--utf-8', 'Same as: --encoding=UTF-8 (See the -U flag)' do
     $encoding = Encoding::UTF_8
   end
 
-  op.on '-L', '--locale', 'Same as --encoding=locale' do
+  op.on '-L', '--locale', 'Same: as --encoding=locale' do
     $encoding = Encoding.find('locale')
   end
 
@@ -271,7 +293,7 @@ defined? $files                    or $files = !$stdin.tty? && $*.empty?
 defined? $visual                   or $visual = $stdout_tty
 defined? $invalid_bytes_failure    or $invalid_bytes_failure = true
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
-defined? $c_escapes                or $c_escapes = !defined?($escape_how) # Make sure to put this before `escape_how`'s default'
+defined? $c_escapes                or $c_escapes = !defined?($escape_how) && !defined?($pictures) # Make sure to put this before `escape_how`'s default'
 defined? $escape_how               or $escape_how = :bytes
 defined? $escape_ties              or $escape_ties = false
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8

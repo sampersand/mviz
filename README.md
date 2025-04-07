@@ -7,8 +7,8 @@ A program to print out invisible characters in strings or files.
 $ p "$variable"      # See the contents of `$variable`
 $ p $variable        # See how `$variable` word splits
 $ p *                # See what files are expanded by a glob
-$ some_command | p   # escape characters that `some_command` outputs
-$ p -f some-file.txt # print out `some-file.txt`
+$ some_command | p   # See if `some_command` outputs something weird
+$ p -f some-file.txt # see if `some-file.txt` is contains weird characters
 ```
 
 Try `p --help` for usage
@@ -37,3 +37,6 @@ hello\x04world, how are you? \xC3👍\n
 hello\^Dworld, how are you? \M-C\M-p\M^_\M^Q\M^M
 
 ```
+
+## TODO
+- Should I add an `--highlight-means-error` flag (name subject to bikeshed)? I.e. if there's _any_ form of highlights, return an error
