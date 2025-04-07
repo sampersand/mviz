@@ -98,10 +98,10 @@ OptParse.new nil, 28 do |op|
   $escape_regex = []
   $default_escape_regex = true
 
-  op.on '-t', '--[no-]escape-ties', 'Break ties that match both -e and -u by',
-                                    'escaping. (the default is to not escape ties.)' do |et|
-    $escape_ties = et
-  end
+  # op.on '-t', '--[no-]escape-ties', 'Break ties that match both -e and -u by',
+  #                                   'escaping. (the default is to not escape ties.)' do |et|
+  #   $escape_ties = et
+  # end
 
   op.on '--default-escape-regex', 'Implicitly include the default escape regex (\0-\x1f, \x7F); default',
                                   'if -b is given, this also enables 0x80-0xff.' do
@@ -115,24 +115,13 @@ OptParse.new nil, 28 do |op|
     $escape_regex.push /[#{rxp}]/
   end
 
-  op.on '--escape-all', 'Escape every character' do
-    $escape_regex.push /./
+  op.on '--escape-all', 'Escape every character' do # ; Same as -e\'\x00-\x{10FFFF}\'' do ??
+    $escape_regex.push /./m
   end
 
-  op.on '--escape-chars=CHARS', 'Also escape any characters in CHARS' do |chars|
-    $escape_regex.concat chars.split('')
-  end
-
-  op.on '-u', '--unescape=REGEX', 'Do not escape characters which match the Regex Character Class CHAR_CLASS' do |rxp|
+  op.on '-u', '--unescape=CHAR_CLASS', 'Do not escape characters which match the Regex Character Class CHAR_CLASS',
+  'if a char is both unescaped and escaped, then it will be unescaped.' do |rxp|
     $unescape_regex.push /[#{rxp}]/
-  end
-
-  op.on '--unescape-all', 'Unescape every character' do
-    $escape_regex.push /./
-  end
-
-  op.on '--unescape-chars=CHARS', 'Do not escape any characters in CHARS' do |chars|
-    $unescape_regex.concat chars.split('')
   end
 
   # The `-l` is because of "lien-oriented mode" as found in things like perl and ruby.
@@ -311,7 +300,6 @@ defined? $invalid_bytes_failure    or $invalid_bytes_failure = true
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 defined? $c_escapes                or $c_escapes = !defined?($escape_how) && !defined?($pictures) # Make sure to put this before `escape_how`'s default'
 defined? $escape_how               or $escape_how = :bytes
-defined? $escape_ties              or $escape_ties = false
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 
 if !Regexp.union($escape_regex).match?('\\') && !Regexp.union($unescape_regex).match?('\\') && !$visual
@@ -355,10 +343,8 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-if $escape_ties
-  def should_escape?(char) $escape_regex.match?(char) end
-else
-  def should_escape?(char) $escape_regex.match?(char) && !$unescape_regex.match?(char) end
+def should_escape?(char)
+  $escape_regex.match?(char) && !$unescape_regex.match?(char)
 end
 
 # Converts a string's bytes to their `\xHH` escaped version, and joins them
@@ -436,113 +422,6 @@ CHARACTERS = Hash.new do |hash, key|
   end
 end
 
-=begin
-# ## Add in normal ASCII printable characters (i.e. \x20..\x7E).
-# (' '..'~').each do |char|
-#   CHARACTERS[char] = char
-# end
-
-## Escape the high-bit characters (i.e. \x80..\xFF) when we're outputting binary data, because the
-# high-bit characters are technically valid (ie `"\x80".force_encoding("binary").valid_encoding?` is
-# true), so our logic later on would print them out verbatim.
-if $encoding == Encoding::BINARY
-  ("\x80".."\xFF").each do |char|
-    CHARACTERS[char] = visualize escape_character(char)
-  end
-end
-
-################################################################################
-#                                 Apply Flags                                  #
-################################################################################
-
-## If the control pictures were requested, then print out visualizations of the control characters
-# instead of whatever else.
-(0x00..0x20).each do |byte|
-  CHARACTERS.escape byte.chr
-end
-
-# if $pictures
-#   (0x00...0x20).each do |byte|
-#     CHARACTERS.set_old byte.chr do
-#       visualize((0x2400 + byte).chr(Encoding::UTF_8))
-#     end
-#   end
-
-#   CHARACTERS["\x7F"] = visualize "\u{2421}"
-# end
-
-## If C-Style escapes were specified, then change a subset of the control characters to use the
-# alternative syntax instead of their hex escapes.
-if $c_escapes
-  CHARACTERS["\0"] = visualize '\0'
-  CHARACTERS["\a"] = visualize '\a'
-  CHARACTERS["\b"] = visualize '\b'
-  CHARACTERS["\t"] = visualize '\t'
-  CHARACTERS["\n"] = visualize '\n'
-  CHARACTERS["\v"] = visualize '\v'
-  CHARACTERS["\f"] = visualize '\f'
-  CHARACTERS["\r"] = visualize '\r'
-  CHARACTERS["\e"] = visualize '\e'
-end
-
-################################################################################
-#                               Escapes and unescapes            #
-################################################################################
-# CHARACTERS.reject! do |key, value|
-#   # should_escape?(key) == (key == value)
-
-#   ## TODO: use `-t`
-#   key.match?(if key == value then $escape_regex else $unescape_regex end)
-# end
-
-CHARACTERS['\\'] = visualize('\\\\') if should_escape? '\\' # special case?? i need to fix the thing before this
-CHARACTERS[" "] = visualize ($space_picture ? "\u{2423}" : ' ') if should_escape?(' ')
-
-################################################################################
-#                             Any Other Characters                             #
-################################################################################
-
-## Handle characters without entries in CHARACTERS by adding their value to `CHARACTERS`:
-#
-# 1. If the character's not valid for $encoding (eg an invalid UTF-8 byte), then `$ENCODING_FAILED`
-#    is set (for later use for the exit status of `p`) and an "error" visualization is used (unless
-#    `--no-visualize-invalid` was given).
-# 2. If the character is valid, but `--escape-unicode` was passed in, then the character is escaped
-#    with the `\u{...}` syntax (`...` being the unicode codepoint for the character). This might be
-#    separated further in the future to allow for more precise handling over _what_ becomes escaped.
-# 3. Otherwise, the character (and all its bytes) are used directly.
-#
-# Note that the escapes are cached for further re-use. While theoretically over time memory
-# consumption may grow, in reality there's not enough unique characters for this to be a problem.
-CHARACTERS.default_proc = proc do |hash, char|
-  hash[char] =
-    if !char.valid_encoding?
-      $ENCODING_FAILED = true # for the exit status with `$invalid_bytes_failure`.
-      visualize hex_bytes(char), BEGIN_ERR, END_ERR
-    else
-
-    elsif should_escape?(char)
-      visualize escape_character(char)
-    else
-      char
-    end
-end
-
-################################################################################
-#                    Handle Non-ASCII Compatible Characters                    #
-################################################################################
-
-## If not using ASCII-compatible encodings (like UTF-16), then encode all the keys to the encoding.
-# This is required because hash lookups in ruby are based on "compatible" encodings, and all of the
-# values added to CHARACTERS previously are all ASCII-based. (This section is de-optimized, i.e. we
-# do it at the end here instead of converting every string in-place, because conversions to/from
-# UTF-16 aren't a terribly common use-case; Users have to explicitly supply `--encoding=UTF-16`.)
-unless $encoding.ascii_compatible?
-  tmp = CHARACTERS.to_h { [_1.encode($encoding), _2.encode($encoding)] } # Can't use `encode!` because keys of hashes are frozen
-  CHARACTERS.clear
-  CHARACTERS.merge! tmp
-end
-=end
 
 ####################################################################################################
 #                                                                                                  #
@@ -550,8 +429,8 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-CAPACITY = ENV['P_CAP'].to_i.nonzero? || 4096 * 3
-OUTPUT = String.new(capacity: CAPACITY * 8, encoding: Encoding::BINARY)
+# CAPACITY = ENV['P_CAP'].to_i.nonzero? || 4096 * 3
+# OUTPUT = String.new(capacity: CAPACITY * 8, encoding: Encoding::BINARY)
 
 $stdout.binmode
 # TODO: optimize this later
