@@ -41,7 +41,6 @@ OptParse.new nil, 28 do |op|
   # TODO: why youno work sometimes, eg `p --escape-ties`
   # op.require_exact = true if defined? op.require_exact = true
 
-
   ##################################################################################################
   #                                        Generic Options                                         #
   ##################################################################################################
