@@ -143,7 +143,7 @@ OptParse.new nil, 28 do |op|
 
   op.on '-U', 'Escapes all non-ascii codepoints. Same',
               "as: --upper-codepoints -e'[\\u{80}-\\u{10FFFF}]'" do
-    $escape_unicode = true
+    $upper_codepoints = true
     $escape_regex.push /[\u{80}-\u{10FFFF}]/
   end
 
@@ -184,7 +184,7 @@ OptParse.new nil, 28 do |op|
   end
 
   op.on '--[no-]upper-codepoints', 'Like -C, but only for values above 0x7F.'  do |uc|
-    $escape_unicode = uc
+    $upper_codepoints = uc
     $encoding = Encoding::UTF_8
   end
 
@@ -316,15 +316,15 @@ $trailing_newline ||= $prefixes
 unless $encoding == Encoding::UTF_8
   if $escape_how == :codepoints
     $op.abort "cannot use --codepoints with non-UTF-8 encodings (encoding is #$encoding)"
-  elsif $escape_unicode
+  elsif $upper_codepoints
     $op.abort "cannot use --upper-codepoints with non-UTF-8 encodings (encoding is #$encoding)"
   end
 end
 
 ## Add the functionality in for `--malformed-error`: If the program is normally exiting (i.e.
-# it's not exiting due to an exception), and there was an encoding failure, then exit with status 1.
+# it's not exiting due to an exception), then exit based on whether an encoding failed.
 $invalid_bytes_failure and at_exit do
-  exit 1 if !$! && $ENCODING_FAILED
+  exit !$ENCODING_FAILED unless $!
 end
 
 ####################################################################################################
@@ -333,21 +333,22 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-def should_escape?(char)
-  $escape_regex.match?(char) and ($escape_ties ? true : !$unescape_regex.match?(char))
+if $escape_ties
+  def should_escape?(char) $escape_regex.match?(char) end
+else
+  def should_escape?(char) $escape_regex.match?(char) && !$unescape_regex.match?(char) end
 end
 
 # Converts a string's bytes to their `\xHH` escaped version, and joins them
 def hex_bytes(string) string.each_byte.map { |byte| '\x%02X' % byte }.join end
 def codepoints(string) '\u{%04X}' % string.ord end
 
-
 if $escape_how == :codepoints
-  alias escape_bytes codepoints
-elsif $escape_unicode
-  def escape_bytes(string) string.codepoints.sum >= 0x80 ? codepoints(string) : hex_bytes(string) end
+  alias escape_character codepoints
+elsif $upper_codepoints
+  def escape_character(string) string.codepoints.sum >= 0x80 ? codepoints(string) : hex_bytes(string) end
 else
-  alias escape_bytes hex_bytes
+  alias escape_character hex_bytes
 end
 
 # Add "visualize" escape sequences to a string; all escaped characters should be passed to this, as
@@ -382,7 +383,7 @@ CHARACTERS = {}
 ## Escape the lower control characters (i.e. \x00..\x1F and \x7F) with their hex escapes. Note that
 # some of these escapes escapes may be overwritten below by user options (like `--c-escapes`).
 [*"\0".."\x1F", "\x7F"].each do |char|
-  CHARACTERS[char] = visualize escape_bytes(char)
+  CHARACTERS[char] = visualize escape_character(char)
 end
 
 ## Add in normal ASCII printable characters (i.e. \x20..\x7E).
@@ -395,7 +396,7 @@ end
 # true), so our logic later on would print them out verbatim.
 if $encoding == Encoding::BINARY
   ("\x80".."\xFF").each do |char|
-    CHARACTERS[char] = visualize escape_bytes(char)
+    CHARACTERS[char] = visualize escape_character(char)
   end
 end
 
@@ -462,7 +463,7 @@ CHARACTERS.default_proc = proc do |hash, char|
       $ENCODING_FAILED = true # for the exit status with `$invalid_bytes_failure`.
       visualize hex_bytes(char), BEGIN_ERR, END_ERR
     elsif should_escape?(char)
-      visualize escape_bytes(char)
+      visualize escape_character(char)
     else
       char
     end
