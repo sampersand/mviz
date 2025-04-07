@@ -96,27 +96,22 @@ OptParse.new nil, 28 do |op|
   op.separator "\nWhat to Escape. (You can specify multiple options; they are additive.)"
   $unescape_regex = []
   $escape_regex = []
-  $default_escape_regex = true
 
   op.on '-t', '--[no-]escape-ties', 'Break ties that match both -e and -u by',
                                     'escaping. (the default is to not escape ties.)' do |et|
     $escape_ties = et
   end
 
-  op.on '--no-default-escape-regex', 'Disable the default escape regex' do
-    $default_escape_regex = false
-  end
-
-  op.on '-e', '--escape=CHAR_CLASS', 'Also escape characters which match the Regex Character Class CHAR_CLASS' do |rxp|
-    $escape_regex.push /[#{rxp}]/
+  op.on '-e', '--escape=REGEX', Regexp, 'Also escape characters which match REGEX' do |rxp|
+    $escape_regex.push rxp
   end
 
   op.on '--escape-chars=CHARS', 'Also escape any characters in CHARS' do |chars|
     $escape_regex.concat chars.split('')
   end
 
-  op.on '-u', '--unescape=REGEX', 'Do not escape characters which match the Regex Character Class CHAR_CLASS' do |rxp|
-    $unescape_regex.push /[#{rxp}]/
+  op.on '-u', '--unescape=REGEX', Regexp, 'Do not escape characters which match REGEX' do |rxp|
+    $unescape_regex.push rxp
   end
 
   op.on '--unescape-chars=CHARS', 'Do not escape any characters in CHARS' do |chars|
@@ -128,7 +123,7 @@ OptParse.new nil, 28 do |op|
     $unescape_regex.push "\n"
   end
 
-  op.on '-w', "Same as: --unescape='\\n\\t '" do
+  op.on '-w', "Same as: --unescape='[\\n\\t ]'" do
     $unescape_regex.push "\n", "\t", " "
   end
 
@@ -146,7 +141,7 @@ OptParse.new nil, 28 do |op|
   end
 
   op.on '-U', 'Escapes all non-ascii codepoints. Same',
-              "as: --upper-codepoints -e'\\u{80}-\\u{10FFFF}'" do
+              "as: --upper-codepoints -e'[\\u{80}-\\u{10FFFF}]'" do
     $upper_codepoints = true
     $escape_regex.push /[\u{80}-\u{10FFFF}]/
   end
@@ -307,10 +302,7 @@ if !Regexp.union($escape_regex).match?('\\') && !Regexp.union($unescape_regex).m
 end
 
 ## Union all the regexes we've been given
-if $default_escape_regex
-  $escape_regex.prepend /[\x00-\x1F\x7F]/
-  $escape_regex.prepend /[\x80-\xFF]/ if $encoding == Encoding::BINARY
-end
+$escape_regex.prepend /[\x00-\x1F\x7F]/ if true
 
 # $unescape_regex = Regexp.union($unescape_regex.map { |x| x.encode $encoding })
 # $escape_regex   = Regexp.union($escape_regex.map { |x| x.encode $encoding })
@@ -381,6 +373,14 @@ end
 #                                                                                                  #
 ####################################################################################################
 
+## Construct the `CHARACTERS` hash, whose keys are characters, and values are the corresponding
+# sequences to be printed.
+CHARACTERS = {}
+
+def CHARACTERS.set_old(key)
+  self[key] = yield(key) if should_escape?(key)
+end
+
 C_ESCAPES = {
   "\0" => '\0',
   "\a" => '\a',
@@ -393,37 +393,42 @@ C_ESCAPES = {
   "\e" => '\e',
 }
 
-## Construct the `CHARACTERS` hash, whose keys are characters, and values are the corresponding
-# sequences to be printed.
-CHARACTERS = Hash.new do |hash, key|
-  hash[key] =
-    if !key.valid_encoding?
-      $ENCODING_FAILED = true # for the exit status with `$invalid_bytes_failure`.
-      visualize hex_bytes(key), BEGIN_ERR, END_ERR
-    elsif !should_escape?(key)
-      key
+def CHARACTERS.escape(key)
+  self[key] ||= if !should_escape?(key)
+    key
+  else
+    visualize (
+    if $c_escapes && (esc = C_ESCAPES[key])
+      esc
+    elsif $pictures && key.match?(/[\x00-\x1F]/)
+      ((0x2400 + key.ord).chr(Encoding::UTF_8))
+    elsif $pictures && key.match?(/[\7F]/)
+      "\u{2421}"
+    elsif key == '\\'
+      '\\\\'
+    elsif key == ' '
+      $space_picture ? "\u{2423}" : ' '
+    elsif $escape_how == :codepoints || ($upper_codepoints && key.codepoints.sum >= 0x80)
+      codepoints key
     else
-      visualize (
-        if $c_escapes && (esc = C_ESCAPES[key])
-          esc
-        elsif $pictures && key.match?(/[\x00-\x1F]/)
-          ((0x2400 + key.ord).chr(Encoding::UTF_8))
-        elsif $pictures && key.match?(/[\7F]/)
-          "\u{2421}"
-        elsif key == '\\'
-          '\\\\'
-        elsif key == ' '
-          $space_picture ? "\u{2423}" : ' '
-        elsif $escape_how == :codepoints || ($upper_codepoints && key.codepoints.sum >= 0x80)
-          codepoints key
-        else
-          hex_bytes key
-        end
-      )
+      hex_bytes key
+    end)
   end
 end
 
-=begin
+################################################################################
+#                               Set the Defaults                               #
+################################################################################
+
+## Escape the lower control characters (i.e. \x00..\x1F and \x7F) with their hex escapes. Note that
+# some of these escapes escapes may be overwritten below by user options (like `--c-escapes`).
+# [*"\0".."\x1F", "\x7F"].each do |char|
+#   CHARACTERS.set_old char do
+#     visualize escape_character(char)
+#   end
+# end
+p CHARACTERS['a']
+
 # ## Add in normal ASCII printable characters (i.e. \x20..\x7E).
 # (' '..'~').each do |char|
 #   CHARACTERS[char] = char
@@ -506,15 +511,12 @@ CHARACTERS.default_proc = proc do |hash, char|
     if !char.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$invalid_bytes_failure`.
       visualize hex_bytes(char), BEGIN_ERR, END_ERR
-    else
-
     elsif should_escape?(char)
       visualize escape_character(char)
     else
       char
     end
 end
-=end
 
 ################################################################################
 #                    Handle Non-ASCII Compatible Characters                    #
