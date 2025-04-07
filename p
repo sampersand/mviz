@@ -98,11 +98,6 @@ OptParse.new nil, 28 do |op|
   $escape_regex = []
   $default_escape_regex = true
 
-  # op.on '-t', '--[no-]escape-ties', 'Break ties that match both -e and -u by',
-  #                                   'escaping. (the default is to not escape ties.)' do |et|
-  #   $escape_ties = et
-  # end
-
   op.on '--default-escape-regex', 'Implicitly include the default escape regex (\0-\x1f, \x7F); default',
                                   'if -b is given, this also enables 0x80-0xff.' do
                                     $default_escape_regex = true end
@@ -350,14 +345,6 @@ end
 # Converts a string's bytes to their `\xHH` escaped version, and joins them
 def hex_bytes(string) string.each_byte.map { |byte| '\x%02X' % byte }.join end
 def codepoints(string) '\u{%04X}' % string.ord end
-
-if $escape_how == :codepoints
-  alias escape_character codepoints
-elsif $upper_codepoints
-  def escape_character(string) string.codepoints.sum >= 0x80 ? codepoints(string) : hex_bytes(string) end
-else
-  alias escape_character hex_bytes
-end
 
 # Add "visualize" escape sequences to a string; all escaped characters should be passed to this, as
 # visual effects are the whole purpose of the `p` program.
