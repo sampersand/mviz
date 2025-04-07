@@ -265,10 +265,11 @@ END_ERR      = ENV.fetch('P_END_ERR',      "\e[49m\e[39m")
 
 # Specify defaults
 defined? $stdout_tty               or $stdout_tty = $stdout.tty?
+defined? $prefixes                 or $prefixes = $stdout_tty && (!$*.empty? || $files)
+defined? $trailing_newline         or $trailing_newline = true
 defined? $files                    or $files = !$stdin.tty? && $*.empty?
 defined? $visual                   or $visual = $stdout_tty
 defined? $invalid_bytes_failure    or $invalid_bytes_failure = true
-defined? $prefixes                 or $prefixes = $stdout_tty && (!$*.empty? || $files)
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 defined? $c_escapes                or $c_escapes = !defined?($escape_how) # Make sure to put this before `escape_how`'s default'
 defined? $escape_how               or $escape_how = :bytes

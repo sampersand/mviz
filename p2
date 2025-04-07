@@ -1,7 +1,7 @@
 #!ruby
 unescape = %w[a b].map { _1.encode('utf-16be') }
 unre = Regexp.union unescape
-p unre =~ 'a'.encode('utf-16be')
+p unre =~ 'a'.encode('')
 # src = unre.source#.force_encoding 'utf-16be'
 p unre
 Regexp.new(unre)
