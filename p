@@ -103,12 +103,20 @@ OptParse.new nil, 28 do |op|
     $escape_ties = et
   end
 
-  op.on '--no-default-escape-regex', 'Disable the default escape regex' do
+  op.on '--default-escape-regex', 'Implicitly include the default escape regex (\0-\x1f, \x7F); default',
+                                  'if -b is given, this also enables 0x80-0xff.' do
+                                    $default_escape_regex = true end
+
+  op.on '-E', '--no-default-escape-regex', 'Disable the default escape regex' do
     $default_escape_regex = false
   end
 
   op.on '-e', '--escape=CHAR_CLASS', 'Also escape characters which match the Regex Character Class CHAR_CLASS' do |rxp|
     $escape_regex.push /[#{rxp}]/
+  end
+
+  op.on '--escape-all', 'Escape every character' do
+    $escape_regex.push /./
   end
 
   op.on '--escape-chars=CHARS', 'Also escape any characters in CHARS' do |chars|
@@ -117,6 +125,10 @@ OptParse.new nil, 28 do |op|
 
   op.on '-u', '--unescape=REGEX', 'Do not escape characters which match the Regex Character Class CHAR_CLASS' do |rxp|
     $unescape_regex.push /[#{rxp}]/
+  end
+
+  op.on '--unescape-all', 'Unescape every character' do
+    $escape_regex.push /./
   end
 
   op.on '--unescape-chars=CHARS', 'Do not escape any characters in CHARS' do |chars|
@@ -214,7 +226,7 @@ OptParse.new nil, 28 do |op|
   # encodings are
   op.separator "\nEncodings (default based on POSIXLY_CORRECT; --utf-8 if unset, --locale if set)"
 
-  op.on '-E', '--encoding=ENCODING', "Specify the input's encoding. Case insensitive" do |enc|
+  op.on '--encoding=ENCODING', "Specify the input's encoding. Case insensitive" do |enc|
     $encoding = Encoding.find enc rescue op.abort
   end
 
@@ -311,6 +323,7 @@ if $default_escape_regex
   $escape_regex.prepend /[\x00-\x1F\x7F]/
   $escape_regex.prepend /[\x80-\xFF]/ if $encoding == Encoding::BINARY
 end
+
 
 # $unescape_regex = Regexp.union($unescape_regex.map { |x| x.encode $encoding })
 # $escape_regex   = Regexp.union($escape_regex.map { |x| x.encode $encoding })
@@ -514,7 +527,6 @@ CHARACTERS.default_proc = proc do |hash, char|
       char
     end
 end
-=end
 
 ################################################################################
 #                    Handle Non-ASCII Compatible Characters                    #
@@ -530,6 +542,7 @@ unless $encoding.ascii_compatible?
   CHARACTERS.clear
   CHARACTERS.merge! tmp
 end
+=end
 
 ####################################################################################################
 #                                                                                                  #
