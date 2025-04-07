@@ -28,11 +28,12 @@ hello\x04world, how are you? \xC3👍\n
 00000010  20 61 72 65 20 79 6f 75  3f 20 c3 f0 9f 91 8d 0a  | are you? ......|
 00000020
 
+% printf 'hello\x04world, how are you? \xC3👍\n' | od -c
+0000000    h   e   l   l   o 004   w   o   r   l   d   ,       h   o   w
+0000020        a   r   e       y   o   u   ?     303  👍  **  **  **  \n
+0000040
+
 % printf 'hello\x04world, how are you? \xC3👍\n' | vis
 hello\^Dworld, how are you? \M-C\M-p\M^_\M^Q\M^M
 
-% printf 'hello\x04world, how are you? \xC3👍\n' | od
-0000000    062550  066154  002157  067567  066162  026144  064040  073557
-0000020    060440  062562  074440  072557  020077  170303  110637  005215
-0000040
 ```
