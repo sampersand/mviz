@@ -308,17 +308,17 @@ if $default_escapes
 end
 
 def make_regexp(regex_array, flag)
-  Regexp.union regex_array.map { |re|
-    Regexp.new(re.force_encoding($encoding), Regexp::FIXEDENCODING)
-  }
+  Regexp.union regex_array.map{|re| Regexp.new re.force_encoding($encoding), Regexp::FIXEDENCODING }
 rescue RegexpError => err
   $op.abort "issue with --#{flag} (encoding: #$encoding): #{err}"
 end
 
-$escape_regex   = make_regexp $escape_regex, 'escape'
-$unescape_regex = make_regexp $unescape_regex, 'unescape'
+$escape_regex   = make_regexp($escape_regex, 'escape')
+$unescape_regex = make_regexp($unescape_regex, 'unescape')
 
-if !$visual && !$unescape_regex.match?('\\') && !$escape_regex.match?('\\')
+# Default for backslashes: If visual is disabled, and was given to neither `-e` or `-u`, then
+# escape backslashes too.
+if $default_escapes && !$visual && !$unescape_regex.match?('\\') && !$escape_regex.match?('\\')
   $escape_regex = Regexp.union '\\'.encode($encoding), $escape_regex
 end
 
@@ -337,6 +337,7 @@ end
 
 at_exit do
   next if $! # If there's an exception, then just yield that
+
   if $malformed_error && $ENCODING_FAILED
     exit 1
   elsif $escape_error && $SOMETHING_ESCAPED
