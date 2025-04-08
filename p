@@ -31,7 +31,7 @@ OptParse.new do |op|
 
   $op = op # for `$op.abort` and `$op.warn`
 
-  op.version = '0.8.0'
+  op.version = '0.8.1'
   op.banner = <<~BANNER
     #{VISUAL_BEGIN}usage#{VISUAL_END}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
            #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
