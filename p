@@ -309,7 +309,7 @@ was_escape_how_defined = defined?($escape_how)
 defined? $escape_how               or $escape_how = :hex
 defined? $c_escapes                or $c_escapes = $escape_how == :hex && !$pictures
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
-defined? $upper_codepoints         or $upper_codepoints = $encoding == Encoding::UTF_8 && !was_escape_how_defined
+defined? $upper_codepoints         or $upper_codepoints = $encoding == Encoding::UTF_8 #&& !was_escape_how_defined
 
 ## Union all the regexes we've been given
 if $default_escapes
