@@ -1,6 +1,8 @@
-#!/usr/bin/env ruby
-# -*- encoding: utf-8; frozen-string-literal: true -*-
+#!/usr/bin/env -S ruby -Ebinary
+# -*- encoding: binary; frozen-string-literal: true -*-
 # ^ Force all strings in this file to be utf-8, regardless of what the environment says
+# NOTE: we needthe `-Ebinary` up top to force `$*` arguments to be binary. otherwise, optparse's
+# regexes will die. We could fix it by `$*.replace $*.map { (+_1).force_encoding 'binary' }` but ew.
 require 'optparse'
 
 # Enable YJIT, but if there's any problems just ignore them
@@ -84,6 +86,10 @@ OptParse.new do |op|
   op.on '--version', 'Print the version and exit' do
     puts op.ver
     exit
+  end
+
+  op.on '--debug', 'Enable internal debugging code' do
+    $DEBUG = $VERBOSE = true
   end
 
   op.on '-f', '--[no-]files', 'Interpret trailing options as filenames to read' do |f|
@@ -309,7 +315,8 @@ was_escape_how_defined = defined?($escape_how)
 defined? $escape_how               or $escape_how = :hex
 defined? $c_escapes                or $c_escapes = $escape_how == :hex && !$pictures
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
-defined? $upper_codepoints         or $upper_codepoints = $encoding == Encoding::UTF_8 #&& !was_escape_how_defined
+defined? $upper_codepoints         or $upper_codepoints = $encoding == Encoding::UTF_8 && $escape_how != :hex_all
+# ^ Escape things above `\x80` by replacing them with their codepoints if in utf-8 mode, and "make everything hex" wasn't requested
 
 ## Union all the regexes we've been given
 if $default_escapes
