@@ -19,7 +19,7 @@ require 'optparse'
 OptParse.new do |op|
   $op = op # for `$op.abort` and `$op.warn`
 
-  op.version = '0.7.6'
+  op.version = '0.8.0'
   op.banner = <<~BANNER
     usage: #{op.program_name} [options]                # Read from stdin
            #{op.program_name} [options] [string ...]   # Print strings
@@ -42,24 +42,31 @@ OptParse.new do |op|
   end
 
   op.on '-h', 'Shorter help usage' do
+    bold   = "\e[1m" if $stdout.tty?
+    nobold = "\e[0m" if $stdout.tty?
+
     puts <<~EOS
-    Usage: #{op.program_name} [options] [string-or-file ...]
-      --help          Print more verbose usage
+    #{bold}usage: #{op.program_name} [options] [string ...]#{nobold}
+      --help          Print a longer help message, with more options
       -f              interpret args as files, not strings
+      -M, -H          Exit nonzero if invalid/any escapes are encountered.
+    #{bold}PREFIXES#{nobold}
       -p, -N          Do/don't add prefixes to output
       -n              Don't add prefixes or newlines to output
-      -M, -H          Exit nonzero if invalid/any escapes are encountered.
+    #{bold}WHAT TO ESCAPE#{nobold}
       -e CHARSET      Escape chars matching /[CHARSET]/
       -u CHARSET      Don't escape chars matching /[CHARSET]/
-      -E              Don't use default escapes
+      -E              Don't use the default escapes
       -A              Escape all characters
       -l, -w          Unescape newlines/whitespace (space, tab, newline)
       -s, -B, -U      Escape spaces/backslashes/all non-ASCII characters
+    #{bold}HOW TO ESCAPE#{nobold}
       -v, -V          Enable/disable visual mode
       -d, -., -x, -X  Escape by deleting/with `.`/hex bytes/always hex bytes
-      -C              Escape with codepoints (implies -8)
-      -c              Escape with C-style escapes
+      -c              Escape with codepoints (implies -8)
+      -C              Escape with C-style escapes
       -P, -S          Have "pictures" for some characters/only spaces
+    #{bold}ENCODINGS#{nobold}
       -b, -a, -8, -L  Interpret input data as binary/ASCII/UTF-8/locale data
     EOS
   end
@@ -67,10 +74,6 @@ OptParse.new do |op|
   op.on '--version', 'Print the version and exit' do
     puts op.ver
     exit
-  end
-
-  op.on '--debug', 'Enable debug mode' do
-    $DEBUG = $VERBOSE = true
   end
 
   op.on '-f', '--files', 'Interpret trailing options as filenames to read' do
@@ -201,7 +204,7 @@ OptParse.new do |op|
     $escape_how = :hex_all
   end
 
-  op.on '-C', '--codepoints', 'Escape with \u{...}. Sets (and can only be used with) --utf-8.' do
+  op.on '-c', '--codepoints', 'Escape with \u{...}. Sets (and can only be used with) --utf-8.' do
     $escape_how = :codepoints
     $encoding = Encoding::UTF_8
   end
@@ -211,7 +214,7 @@ OptParse.new do |op|
     $encoding = Encoding::UTF_8
   end
 
-  op.on '-c', '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc). (default if -x and not -P)' do |ce|
+  op.on '-C', '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc). (default if -x and not -P)' do |ce|
     $c_escapes = ce
   end
 
