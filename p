@@ -388,6 +388,36 @@ C_ESCAPES = {
   "\e" => '\e',
 }
 
+# Returns the escape sequence for a character, depending on the flags given to the program. It does
+# not actually add any visualizations, however; that's `escape`'s job
+def escape_sequence(character)
+  if $c_escapes && (esc = C_ESCAPES[character])
+    esc
+  elsif $pictures && character.match?(/[\x00-\x1F]/)
+    ((0x2400 + character.ord).chr(Encoding::UTF_8))
+  elsif $pictures && character.match?(/[\7F]/)
+    "\u{2421}"
+  elsif character == '\\'
+    '\\\\'
+  elsif character == ' '
+    $space_picture ? "\u{2423}" : ' '
+  elsif $escape_how == :codepoints || ($upper_codepoints && character.codepoints.sum >= 0x80)
+    codepoints character
+  else
+    hex_bytes character
+  end
+end
+
+# Return the escape sequence associated with `character`, and visual effects (if there are any). It
+# does not actually verify if a character _should_ be escaped; `should_escape?` is used for that.
+def escape(character)
+  case $escape_how
+  when :dot    then visualize '.'
+  when :delete then ''
+  else              visualize escape_sequence character
+  end
+end
+
 ## Construct the `CHARACTERS` hash, whose keys are characters, and values are the corresponding
 # sequences to be printed.
 CHARACTERS = Hash.new do |hash, key|
@@ -398,7 +428,6 @@ CHARACTERS = Hash.new do |hash, key|
     else
       should_escape?(key) ? escape(key) : key
     end
-  end
 end
 
 ####################################################################################################
@@ -424,7 +453,7 @@ def print_escapes(has_each_char, suffix = nil)
 
   ## If a suffix is given (eg trailing spaces with `--escape-surrounding-space)`, then print it out
   # before printing a (possible) trailing newline.
-  suffix and print visualize suffix
+  print suffix if suffix
 
   ## Print a newline if the following are satisfied:
   # 1. It was requested. (This is the default, but can be suppressed by `--no-trailing-newline`, or
@@ -456,8 +485,8 @@ unless $files
       # beforehand), this should be changed to use `byteslice`.The method used here is more convenient,
       # but is destructive. ALSO. It doesn't work wtih non-utf8 characters
       string.force_encoding Encoding::BINARY
-      leading_spaces  = string.slice!(/\A +/) and $stdout.write visualize leading_spaces.gsub(' ', $space_picture ? '␣' : ' ')
-      trailing_spaces = string.slice!(/ +\z/)&.gsub(' ', $space_picture ? '␣' : ' ')
+      leading_spaces  = string.slice!(/\A +/) and print visualize escape_sequence(' ') * $&.length
+      trailing_spaces = string.slice!(/ +\z/) && visualize(escape_sequence(' ') * $&.length)
     end
 
     # handle the input string
