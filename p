@@ -101,8 +101,8 @@ OptParse.new nil, 28 do |op|
     $unescape_regex.push "[#{rxp}]"
   end
 
-  op.on '--default-escapes', 'Implicitly include --escape=\'\0-\x1F\x7F\'; If',
-                              'a -b is given, also include \x80-\xFF (default)' do
+  op.on '--default-escapes', 'Implicitly include -e\'\0-\x1F\x7F\'; If -V, also',
+                             'add -e\'\\\\\'. If -b, also -e\'\x80-\xFF\' (default)' do
     $default_escapes = true
   end
 
