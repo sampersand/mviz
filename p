@@ -1,5 +1,6 @@
 #!/bin/sh
 exec env ruby -S -Ebinary --disable=all "$0" "$@"
+
 #!ruby
 # -*- encoding: binary; frozen-string-literal: true -*-
 defined?(RubyVM::YJIT.enable) and RubyVM::YJIT.enable
@@ -69,6 +70,14 @@ OptParse.new nil, 28 do |op|
   # This maybe removed in a future release, as it doesn't control a whole lot.
   op.on '--[no-]assume-tty', 'Assume stdout is tty for defaults' do |tty|
     $stdout_tty = tty
+  end
+
+  op.on '-M', '--[no-]malformed-error', 'Invalid chars in the --encoding cause nonzero exit. (default)' do |me|
+    $malformed_error = me
+  end
+
+  op.on '-H', '--[no-]escape-error', '_Any_ escapes cause an error status' do |ee|
+    $escape_error = ee
   end
 
   ##################################################################################################
@@ -246,9 +255,6 @@ OptParse.new nil, 28 do |op|
     $encoding = Encoding.find('locale')
   end
 
-  op.on '--[no-]malformed-error', 'Invalid chars cause nonzero exit. (default)' do |ibf|
-    $invalid_bytes_failure = ibf
-  end
   op.on <<~EOS
   The only difference between --ascii and --binary is the former considers 0x80
   and above to be invalid (and thus highlights them differently). The "locale"
@@ -301,7 +307,7 @@ defined? $prefixes                 or $prefixes = $stdout_tty && (!$*.empty? || 
 defined? $trailing_newline         or $trailing_newline = true
 defined? $files                    or $files = !$stdin.tty? && $*.empty?
 defined? $visual                   or $visual = $stdout_tty
-defined? $invalid_bytes_failure    or $invalid_bytes_failure = true
+defined? $malformed_error          or $malformed_error = true
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 defined? $c_escapes                or $c_escapes = !defined?($escape_how) && !defined?($pictures) # Make sure to put this before `escape_how`'s default'
 defined? $escape_how               or $escape_how = :bytes
@@ -334,11 +340,20 @@ unless $encoding == Encoding::UTF_8
   end
 end
 
-## Add the functionality in for `--malformed-error`: If the program is normally exiting (i.e.
-# it's not exiting due to an exception), then exit based on whether an encoding failed.
-$invalid_bytes_failure and at_exit do
-  exit !$ENCODING_FAILED unless $!
+at_exit do
+  next if $! # If there's an exception, then just yield that
+  if $malformed_error && $ENCODING_FAILED
+    exit 1
+  elsif $escape_error && $SOMETHING_ESCAPED
+    exit 1
+  end
 end
+
+# ## Add the functionality in for `--malformed-error`: If the program is normally exiting (i.e.
+# # it's not exiting due to an exception), then exit based on whether an encoding failed.
+# $malformed_error and at_exit do
+#   exit !$ENCODING_FAILED unless $!
+# end
 
 ####################################################################################################
 #                                                                                                  #
@@ -391,6 +406,7 @@ C_ESCAPES = {
 # Returns the escape sequence for a character, depending on the flags given to the program. It does
 # not actually add any visualizations, however; that's `escape`'s job
 def escape_sequence(character)
+  $SOMETHING_ESCAPED = true
   if $c_escapes && (esc = C_ESCAPES[character])
     esc
   elsif $pictures && character.match?(/[\x00-\x1F]/)
@@ -423,7 +439,7 @@ end
 CHARACTERS = Hash.new do |hash, key|
   hash[key] =
     if !key.valid_encoding?
-      $ENCODING_FAILED = true # for the exit status with `$invalid_bytes_failure`.
+      $ENCODING_FAILED = true # for the exit status with `$malformed_error`.
       visualize hex_bytes(key), BEGIN_ERR, END_ERR
     else
       should_escape?(key) ? escape(key) : key
@@ -493,7 +509,9 @@ unless $files
     print_escapes string.force_encoding($encoding), trailing_spaces
   end
 
-  exit
+  # Exit early so we don't deal with the chunk below. note however, the `at_exit` above for the
+  # `--malformed-error` flag.
+  return
 end
 
 # Sadly, we can't use `ARGF` for numerous reasons:
