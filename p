@@ -304,12 +304,6 @@ defined? $escape_how               or $escape_how = :bytes
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 defined? $upper_codepoints         or $upper_codepoints = $encoding == Encoding::UTF_8 && !was_escape_how_defined
 
-if false # TODO: THIS
-if !Regexp.union($escape_regex).match?('\\') && !Regexp.union($unescape_regex).match?('\\') && !$visual
-  $escape_regex.push '\\'
-end
-end
-
 ## Union all the regexes we've been given
 if $default_escapes
   $escape_regex.push '[\x00-\x1F\x7F]'
@@ -326,6 +320,10 @@ end
 
 $escape_regex   = make_regexp $escape_regex, 'escape'
 $unescape_regex = make_regexp $unescape_regex, 'unescape'
+
+if !$visual && !$unescape_regex.match?('\\') && !$escape_regex.match?('\\')
+  $escape_regex = Regexp.union '\\'.encode($encoding), $escape_regex
+end
 
 ## Force `$trailing_newline` to be set if `$prefixes` are set, as otherwise there wouldn't be a
 # newline between each header, which is weird.
@@ -360,7 +358,6 @@ end
 #                                       Visualizing Escapes                                        #
 #                                                                                                  #
 ####################################################################################################
-
 
 def should_escape?(char)
   $escape_regex.match?(char) && !$unescape_regex.match?(char)
