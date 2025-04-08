@@ -318,13 +318,15 @@ end
 
 $unescape_regex = Regexp.union($unescape_regex)
 # ($escape_regex  = Regexp.union($escape_regex)) rescue (
-  def $escape_regex.match?(key) any? do |re|
-    re.match?(key.force_encoding(re.encoding))
-  rescue ArgumentError
-  ensure
-    key.force_encoding $encoding
+  def $escape_regex.match?(key)
+    any? do |re|
+      re.match?(key.force_encoding(re.encoding))
+    rescue ArgumentError
+      # do nothing, that just means encodings dont match...
+    ensure
+      key.force_encoding $encoding
+    end
   end
-end
 # )
 
 ## Force `$trailing_newline` to be set if `$prefixes` are set, as otherwise there wouldn't be a
