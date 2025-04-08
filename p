@@ -57,9 +57,7 @@ OptParse.new do |op|
       --help          Print a longer help message, with more options
       -f              interpret args as files, not strings
       -M, -H          Exit nonzero if invalid/any escapes are encountered.
-    #{BOLD_BEGIN}PREFIXES#{BOLD_END}
-      -p, -N          Do/don't add prefixes to output
-      -n              Don't add prefixes or newlines to output
+      -N, -n          Don't add prefixes/prefixes or newlines to output
     #{BOLD_BEGIN}WHAT TO ESCAPE#{BOLD_END}
       -e CHARSET      Escape chars matching /[CHARSET]/
       -u CHARSET      Don't escape chars matching /[CHARSET]/
@@ -105,7 +103,7 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator 'SEPARATING OUTPUTS'
 
-  op.on '-p', '--prefixes', 'Add prefixes to the output. (default if any args are given & stdout isnt a tty)' do
+  op.on '--prefixes', 'Add prefixes to the output. (default if any args are given & stdout isnt a tty)' do
     $prefixes = true
   end
 
