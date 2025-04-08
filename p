@@ -69,7 +69,7 @@ OptParse.new nil, 28 do |op|
   ##################################################################################################
   op.separator "\nSeparating Outputs"
 
-  op.on '-p', '--prefixes', 'Add prefixes to outputs. (default if any args are given)' do
+  op.on '-p', '--prefixes', 'Add prefixes. (default if any args are given)' do
     $prefixes = true
   end
 
