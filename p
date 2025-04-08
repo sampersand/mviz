@@ -220,6 +220,7 @@ OptParse.new do |op|
     $space_picture = sp
   end
 
+=begin
   # TODO: THESE
   $escape_backslash_with_backslash = true
   op.on '--[no-]escape-backslash', 'When escaping a backslash, use \'\\\\\' instead of \'\x5C\' (default)' do |eb|
@@ -235,6 +236,7 @@ OptParse.new do |op|
     # when $space_picture
     # $escape_backslash_with_backslash = eb
   end
+=end
 
   ##################################################################################################
   #                                        Input Encodings                                         #
