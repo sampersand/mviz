@@ -2,6 +2,22 @@
 # -*- frozen-string-literal: true -*-
 defined?(RubyVM::YJIT.enable) and RubyVM::YJIT.enable
 
+# Note on the "header" above:
+# 1. We want this script to be portable across systems, so we cannot use a shebang to some absolute
+#    path for Ruby (e.g. `#!/usr/bin/ruby` is a no-go). The standard fix to this is to use `env`,
+#    i.e. `#!/usr/bin/env ruby`. However, shebangs only let you pass in _one_ argument, and we need
+#    more. `#!/usr/bin/env -S ruby` would work, but isn't portable. Instead, we resort to a hack to
+#    actually invoke this file as a `/bin/sh` script, which then immediately `env ruby`, passing in
+#    the `-Ebinary --disable=all` flags, along with the script name and its arguments.
+# 2. We pass `--disable=all` so we can disable the unnecessary features like `gems`, `did_you_mean`,
+#    etc. which slow down startup speed.
+# 3. We pass `-Ebinary` to force the external encoding to binary. This is necessary, as `ARGV` may
+#    contain invalid UTF-8 bytes, which could cause ruby to not even start up. (This previously
+#    failed, but I cant seem to get it to fail anymore, so maybe I've solved the problem?)
+# 4. We force the the internal encoding to be binary as well. (I also don't know if this's necessary
+#    anymore... Maybe it's not?)
+# 5. We enable YJIT if it's defined, to improve speed.
+
 ####################################################################################################
 #                                                                                                  #
 #                                         Parse Arguments                                          #
