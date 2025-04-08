@@ -16,7 +16,7 @@ end
 ####################################################################################################
 require 'optparse'
 
-OptParse.new nil, 28 do |op|
+OptParse.new do |op|
   $op = op # for `$op.abort` and `$op.warn`
 
   op.version = '0.7.6'
@@ -82,7 +82,7 @@ OptParse.new nil, 28 do |op|
     $malformed_error = me
   end
 
-  op.on '-H ', '--[no-]escape-error', '_Any_ escapes cause an error status' do |ee|
+  op.on '-H ', '--[no-]escape-error', 'Any escapes cause an error status' do |ee|
     $escape_error = ee
   end
 
@@ -91,7 +91,7 @@ OptParse.new nil, 28 do |op|
   ##################################################################################################
   op.separator "\nSeparating Outputs"
 
-  op.on '-p', '--prefixes', 'Add prefixes. (default if any args are given)' do
+  op.on '-p', '--prefixes', 'Add prefixes to the output. (default if any args are given)' do
     $prefixes = true
   end
 
@@ -113,17 +113,17 @@ OptParse.new nil, 28 do |op|
   $escape_regex = []
   $default_escapes = true
 
-  op.on '-e', '--escape=CHARSET', 'Escape chars that match the regex /[CHARSET]/' do |rxp|
+  op.on '-e', '--escape=CHARSET', 'Escape characters that match the regex /[CHARSET]/' do |rxp|
     $escape_regex.push "[#{rxp}]"
   end
 
-  op.on '-u', '--unescape=CHARSET', 'Do not escape chars if they match /[CHARSET]/;',
-                                    'If a char matches both -e and -u, -u wins.' do |rxp|
+  op.on '-u', '--unescape=CHARSET', 'Do not escape characters if they match /[CHARSET]/. If a char',
+                                    'matches both an --escape and --unescape, it is unescaped.' do |rxp|
     $unescape_regex.push "[#{rxp}]"
   end
 
-  op.on '--default-escapes', 'Implicitly include -e\'\0-\x1F\x7F\'; If -V, also',
-                             'add -e\'\\\\\'. If -b, also -e\'\x80-\xFF\' (default)' do
+  op.on '--default-escapes', 'Implicitly include --escape=\'\0-\x1F\x7F\'; If not visual mode,',
+                             'also --escape=\'\\\\\'. If --binary, also -e\'\x80-\xFF\' (default)' do
     $default_escapes = true
   end
 
@@ -131,13 +131,13 @@ OptParse.new nil, 28 do |op|
     $default_escapes = false
   end
 
-  op.on '-A', '--escape-all', 'Escape all characters. Useful with --unescape.' do
+  op.on '-A', '--escape-all', 'Escape all characters. Useful when combined with --unescape.' do
                               # 'Same as --escape=\'\0-\u{10FFFF}\'', in utf-8
     $escape_regex.push '.'
   end
 
   # The `-l` is because of "line-oriented mode" as found in things like perl and ruby.
-  op.on '-l', '--unescape-newline', "Same as --unescape='\\n'" do
+  op.on '-l', '--unescape-newline', 'Same as --unescape=\'\n\'. ("Line-Oriented mode")' do
     $unescape_regex.push "\n"
   end
 
@@ -154,12 +154,12 @@ OptParse.new nil, 28 do |op|
     $escape_regex.push ' '
   end
 
-  op.on '-B', '--escape-backslash', "Same as --escape='\\\\' (default if not visual)" do |eb|
+  op.on '-B', '--escape-backslash', "Same as --escape='\\\\' (default if not visual mode)" do |eb|
     $escape_regex.push '\\'
   end
 
-  op.on '-U', '--escape-non-ascii', 'Escapes all non-ascii codepoints. Same',
-              "as --upper-codepoints -e'\\u{80}-\\u{10FFFF}'" do
+  op.on '-U', '--escape-non-ascii', 'Same as --upper-codepoints --escape=\'\u{80}-\u{10FFFF}\'.',
+                                    '(Escapes all non-ascii codepoints.)' do
     $upper_codepoints = true
     $escape_regex.push /[\u{80}-\u{10FFFF}]/
   end
@@ -174,7 +174,7 @@ OptParse.new nil, 28 do |op|
   ##################################################################################################
   op.separator "\nHow to Escape (-d, -., -x, and -C are mutually exclusive)"
 
-  op.on '-v', '--visual', 'Enable visual effects. (default if tty)' do
+  op.on '-v', '--visual', 'Enable visual effects. (default only if stdout is tty)' do
     $visual = true
   end
 
@@ -182,11 +182,11 @@ OptParse.new nil, 28 do |op|
     $visual = false
   end
 
-  op.on '-d', '--delete', 'Delete escaped characters' do
+  op.on '-d', '--delete', 'Delete escaped characters instead of printing their escape' do
     $escape_how = :delete
   end
 
-  op.on '-.', '--dot', "Use a '.' instead of escapes" do
+  op.on '-.', '--dot', "Use a '.' when escaping characters" do
     $escape_how = :dot
   end
 
@@ -194,19 +194,19 @@ OptParse.new nil, 28 do |op|
     $escape_how = :bytes
   end
 
-  op.on '-C', '--codepoints', 'Escape with codepoints, \u{...}. Sets --utf-8,',
-                              "and can't be used with other encodings." do
+  op.on '-C', '--codepoints', 'Escape with codepoints, \u{...}. Sets --utf-8, and can\'t be',
+                              'used with other encodings.' do
     $escape_how = :codepoints
     $encoding = Encoding::UTF_8
   end
 
-  op.on '--[no-]upper-codepoints', 'Like -C, but only for values above 0x7F.'  do |uc|
+  op.on '--[no-]upper-codepoints', 'Like --codepoints, but only for values above 0x7F.'  do |uc|
     $upper_codepoints = uc
     $encoding = Encoding::UTF_8
   end
 
-  op.on '-c', '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc) for some',
-                                  'escapes. (default only if none of -d.xCP given)' do |ce|
+  op.on '-c', '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc) for some escapes. (default',
+                                  'only if none of -d, -., -x, -C, -P given)' do |ce|
     $c_escapes = ce
   end
 
@@ -214,7 +214,7 @@ OptParse.new nil, 28 do |op|
     $pictures = $space_picture = cp
   end
 
-  op.on '--[no-]space-picture', 'Like -P, but just for spaces; Does not imply -s' do |sp|
+  op.on '--[no-]space-picture', 'Like --pictures, but only for spaces; Doesn\'t imply -s.' do |sp|
     $space_picture = sp
   end
 
@@ -227,11 +227,13 @@ OptParse.new nil, 28 do |op|
   # encodings are
   op.separator "\nEncodings (default based on POSIXLY_CORRECT; --utf-8 if unset, --locale if set)"
 
-  op.on '--encoding=ENCODING', "Specify the input's encoding. Case insensitive" do |enc|
+  op.on '--encoding=ENCODING', "Specify the input's encoding. Case-insensitive.",
+                               "Non-ascii-compatible encodings (eg UTF-16) will not work" do |enc|
     $encoding = Encoding.find enc rescue op.abort
+    op.abort "Encoding #$encoding is not ASCII-compatible!"
   end
 
-  op.on '--list-encodings', 'List all possible encodings and exit' do
+  op.on '--list-encodings', 'List all possible encodings, and exit.' do
     # Don't list external/internal encodings, as they're not really relevant.
     possible_encodings = (Encoding.name_list - %w[external internal])
       .select { |name| Encoding.find(name).ascii_compatible? }
@@ -246,27 +248,20 @@ OptParse.new nil, 28 do |op|
     $encoding = Encoding::BINARY
   end
 
-  op.on '-a', '--ascii', 'Same as --encoding=ascii' do
+  op.on '-a', '--ascii', 'Same as --encoding=ascii. Like -b, but 0x80-0xFF are "invalid".' do
     $encoding = Encoding::ASCII
   end
 
-  op.on '-8', '--utf-8', 'Same as --encoding=UTF-8 (See the -U flag)' do
+  op.on '-8', '--utf-8', 'Same as --encoding=UTF-8. (See also the -U flag)' do
     $encoding = Encoding::UTF_8
   end
 
-  op.on '-L', '--locale', 'Same: as --encoding=locale' do
+  op.on '-L', '--locale', 'Same as --encoding=locale. (Uses LANG/LC_ALL/LC_CTYPE Env vars)' do
     $encoding = Encoding.find('locale')
   end
 
-  op.on <<~EOS
-  The only difference between --ascii and --binary is the former considers 0x80
-  and above to be invalid (and thus highlights them differently). The "locale"
-  encoding (--locale) uses whatever the environment specifies. Other encodings
-  are possible, but haven't been tested extensively.
-  EOS
-
-  op.on_tail "\nnote: IF any invalid bytes for the output encoding are read, the exit status is"
-  op.on_tail "based on `--encoding-failure-err`"
+  # op.on_tail "\nnote: IF any invalid bytes for the output encoding are read, the exit status is"
+  # op.on_tail "based on `--encoding-failure-err`"
 
   ##################################################################################################
   #                                        Environment Vars                                        #
@@ -277,10 +272,9 @@ OptParse.new nil, 28 do |op|
     P_END_VISUAL       Ending escape sequence for --visual
     P_BEGIN_ERR        Beginning escape sequence for invalid bytes with --visual
     P_END_ERR          Ending escape sequence for invalid bytes with --visual
-    POSIXLY_CORRECT    If present, changes default encoding to the locale's (cf
-                       locale(1).), and also disables parsing switches after ar-
-                       guments (e.g. `p foo -x` will print out `foo` and `-x`,
-                       and won't interpret `-x` as a switch.)
+    POSIXLY_CORRECT    If present, changes default encoding to the locale's (cf locale(1).), and
+                       also disables parsing switches after arguments (e.g. `p foo -x` will print
+                       out `foo` and `-x`, and won't interpret `-x` as a switch.)
   EOS
 
   ##################################################################################################
