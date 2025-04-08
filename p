@@ -111,14 +111,10 @@ OptParse.new nil, 28 do |op|
 
   op.on '-A', '--escape-all', 'Escape all characters. Useful with --unescape.' do
                               # 'Same as --escape=\'\0-\u{10FFFF}\'', in utf-8
-    $escape_regex.push +'.'
+    $escape_regex.push '.'
   end
 
-  # op.on '-t', '--[no-]escape-ties', 'Escape chars which match both -e and -u.' do |et|
-  #   $escape_ties = et
-  # end
-
-  # The `-l` is because of "lien-oriented mode" as found in things like perl and ruby.
+  # The `-l` is because of "line-oriented mode" as found in things like perl and ruby.
   op.on '-l', '--unescape-newline', "Same as --unescape='\\n'" do
     $unescape_regex.push "\n"
   end
@@ -301,12 +297,12 @@ defined? $upper_codepoints         or $upper_codepoints = $encoding == Encoding:
 
 ## Union all the regexes we've been given
 if $default_escapes
-  $escape_regex.push +'[\x00-\x1F\x7F]'
-  $escape_regex.push +'[\x80-\xFF]' if $encoding == Encoding::BINARY
+  $escape_regex.push '[\x00-\x1F\x7F]'
+  $escape_regex.push '[\x80-\xFF]' if $encoding == Encoding::BINARY
 end
 
 def make_regexp(regex_array, flag)
-  Regexp.union regex_array.map{|re| Regexp.new re.force_encoding($encoding), Regexp::FIXEDENCODING }
+  Regexp.union regex_array.map{|re| Regexp.new (+re).force_encoding($encoding), Regexp::FIXEDENCODING }
 rescue RegexpError => err
   $op.abort "issue with --#{flag} (encoding: #$encoding): #{err}"
 end
