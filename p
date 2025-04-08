@@ -56,11 +56,11 @@ OptParse.new nil, 28 do |op|
     $files = true
   end
 
-  op.on '-M', '--[no-]malformed-error', 'Invalid chars in the --encoding cause nonzero exit. (default)' do |me|
+  op.on '--[no-]malformed-error', 'Invalid chars for --encoding a cause nonzero exit. (default)' do |me|
     $malformed_error = me
   end
 
-  op.on '-H', '--[no-]escape-error', '_Any_ escapes cause an error status' do |ee|
+  op.on '-H ', '--[no-]escape-error', '_Any_ escapes cause an error status' do |ee|
     $escape_error = ee
   end
 
@@ -68,7 +68,6 @@ OptParse.new nil, 28 do |op|
   #                                       Separating Outputs                                       #
   ##################################################################################################
   op.separator "\nSeparating Outputs"
-
 
   op.on '-p', '--prefixes', 'Add prefixes to outputs. (default if any args are given)' do
     $prefixes = true
@@ -111,9 +110,8 @@ OptParse.new nil, 28 do |op|
   end
 
   op.on '-A', '--escape-all', 'Escape all characters. Useful with --unescape.' do
-                              # 'Same as --escape=\'\0-\u{10FFFF}\''
-    $escape_regex.push /./u # UGH, which one
-    $escape_regex.push /./n
+                              # 'Same as --escape=\'\0-\u{10FFFF}\'', in utf-8
+    $escape_regex.push +'.'
   end
 
   # op.on '-t', '--[no-]escape-ties', 'Escape chars which match both -e and -u.' do |et|
@@ -290,8 +288,8 @@ END_ERR      = ENV.fetch('P_END_ERR',      "\e[49m\e[39m")
 
 # Specify defaults
 defined? $visual                   or $visual = $stdout.tty?
-defined? $files                    or $files = !$stdin.tty? && $*.empty?
 defined? $prefixes                 or $prefixes = (!$*.empty? || $files)
+defined? $files                    or $files = !$stdin.tty? && $*.empty?
 defined? $trailing_newline         or $trailing_newline = true
 defined? $malformed_error          or $malformed_error = true
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
