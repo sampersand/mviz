@@ -1,5 +1,29 @@
 #!ruby
+# encoding: binary
+p Regexp.new('[\xA1]'.force_encoding('binary')) =~ "\xA1".force_encoding('utf-8')
+__END__
+# p Encoding.list.select(&:ascii_compatible?).map { |enc|
+#   /[\0-\x1F\x7F]/u =~ p(("\x00".."\xFF").to_a.join.encode(enc))
+# }
 
+p Regexp.new('[\x80-\xFF]'.force_encoding('us-ascii')) =~ "åfoo".force_encoding('utf-8')
+p /[\x80-\xFF]/n =~ "åfoo".force_encoding('utf-8')
+p /[\x80-\xFF]/ =~ "åfoo".force_encoding('utf-8')
+exit
+p Encoding.list.select(&:ascii_compatible?).map { |enc|
+  begin eval("# encoding: #{enc}\n/[\\0-\\x1F\\x7F\\x80]/").fixed_encoding?
+  rescue SyntaxError
+    nil
+  end
+}
+re = eval("# encoding: ISO-8859-1\n/foo\\xff?/")
+re.encoding                 # => #<Encoding:ISO-8859-1>
+p re.fixed_encoding?
+exit
+re =~ "foo".encode("UTF-8") # => 0
+re =~ "foo\u0100"           # Raises Encoding::CompatibilityError
+
+__END__
 require 'optparse'
 OptParse.new do |op|
 

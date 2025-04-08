@@ -1,6 +1,12 @@
 #!/usr/bin/env ruby
-# -*- frozen-string-literal: true -*-
-defined?(RubyVM::YJIT.enable) and RubyVM::YJIT.enable
+# -*- encoding: binary; frozen-string-literal: true -*-
+# ^ Force all strings in this file to be UTF-8, regardless of what the environment says
+
+begin
+  # Enable YJIT, but if there's any problems just ignore them
+  RubyVM::YJIT.enable
+rescue Exception
+end
 
 ####################################################################################################
 #                                                                                                  #
@@ -89,17 +95,18 @@ OptParse.new nil, 28 do |op|
   $default_escapes = true
 
   op.on '-e', '--escape=CHARSET', 'Escape chars that match the regex /[CHARSET]/' do |rxp|
-    $escape_regex.push /[#{rxp}]/
+    $escape_regex.push (/[#{rxp}]/u rescue /[#{rxp}]/n)
   end
 
   op.on '-u', '--unescape=CHARSET', 'Do not escape chars if they match /[CHARSET]/;',
-  'If a char matches both -e and -u, -u wins.' do |rxp|
-    $unescape_regex.push /[#{rxp}]/
+                                    'If a char matches both -e and -u, -u wins.' do |rxp|
+    $unescape_regex.push (/[#{rxp}]/u rescue /[#{rxp}]/n)
   end
 
   op.on '--default-escapes', 'Implicitly include --escape=\'\0-\x1F\x7F\'; If',
-      'a -b is given, also include \x80-\xFF (default)' do
-                                    $default_escapes = true end
+                              'a -b is given, also include \x80-\xFF (default)' do
+    $default_escapes = true
+  end
 
   op.on '-E', '--no-default-escapes', 'Dont include --default-escapes' do
     $default_escapes = false
@@ -107,7 +114,8 @@ OptParse.new nil, 28 do |op|
 
   op.on '-A', '--escape-all', 'Escape all characters. Useful with --unescape.' do
                               # 'Same as --escape=\'\0-\u{10FFFF}\''
-    $escape_regex.push /./m
+    $escape_regex.push /./u # UGH, which one
+    $escape_regex.push /./n
   end
 
   # op.on '-t', '--[no-]escape-ties', 'Escape chars which match both -e and -u.' do |et|
@@ -290,23 +298,34 @@ defined? $files                    or $files = !$stdin.tty? && $*.empty?
 defined? $visual                   or $visual = $stdout_tty
 defined? $malformed_error          or $malformed_error = true
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
+was_escape_how_defined = defined?($escape_how)
 defined? $c_escapes                or $c_escapes = !defined?($escape_how) && !defined?($pictures) # Make sure to put this before `escape_how`'s default'
 defined? $escape_how               or $escape_how = :bytes
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
+defined? $upper_codepoints         or $upper_codepoints = $encoding == Encoding::UTF_8 && !was_escape_how_defined
 
+if false # TODO: THIS
 if !Regexp.union($escape_regex).match?('\\') && !Regexp.union($unescape_regex).match?('\\') && !$visual
   $escape_regex.push '\\'
+end
 end
 
 ## Union all the regexes we've been given
 if $default_escapes
-  $escape_regex.prepend /[\x00-\x1F\x7F#{$encoding == Encoding::BINARY ? '\x80-\xFF' : ''}]/
+  $escape_regex.push /[\x00-\x1F\x7F]/u # Force utf-8, because it'll match everything
+  $escape_regex.push /[\x80-\xFF]/n if $encoding == Encoding::BINARY # force ascii-binary, cause encoding isthat anyways
 end
 
-# $unescape_regex = Regexp.union($unescape_regex.map { |x| x.encode $encoding })
-# $escape_regex   = Regexp.union($escape_regex.map { |x| x.encode $encoding })
 $unescape_regex = Regexp.union($unescape_regex)
-$escape_regex   = Regexp.union($escape_regex)
+# ($escape_regex  = Regexp.union($escape_regex)) rescue (
+  def $escape_regex.match?(key) any? do |re|
+    re.match?(key.force_encoding(re.encoding))
+  rescue ArgumentError
+  ensure
+    key.force_encoding $encoding
+  end
+end
+# )
 
 ## Force `$trailing_newline` to be set if `$prefixes` are set, as otherwise there wouldn't be a
 # newline between each header, which is weird.
@@ -436,7 +455,13 @@ end
 # CAPACITY = ENV['P_CAP'].to_i.nonzero? || 4096 * 3
 # OUTPUT = String.new(capacity: CAPACITY * 8, encoding: Encoding::BINARY)
 
-$stdout.binmode # TODO: NEEDED?
+## Put both stdin and stdout in bin(ary)mode: Disable newline conversion (which is used by Windows),
+# no encoding conversion done, and defaults the encoding to Encoding::BINARY (ie ascii-8bit). We
+# need this to ensure that we're handling exactly what we're given, and ruby's not trying to be
+# smart. Note that we set the encoding of `$stdin` (which doesn't undo the other binmode things),
+# as we might be iterating over `$encoding`'s characters from `$stdin` (if `-` was given).
+$stdout.binmode
+$stdin.binmode.set_encoding $encoding
 
 # TODO: optimize this later
 def print_escapes(has_each_char, suffix = nil)
@@ -530,7 +555,7 @@ ARGV.each do |filename|
   # `$stdin` directly.)
   file =
     if filename == '-'
-      $stdin.binmode.set_encoding $encoding
+      $stdin
     else
       File.open(filename, 'rb', encoding: $encoding)
     end
@@ -544,8 +569,8 @@ rescue => err
   ## Whenever an error occurs, we want to handle it, but not bail out: We want to print every file
   # we're given (like `cat`), reporting errors along the way, and then exiting with a non-zero exit
   # status if there's a problem.
-  $op.warn err  # Warn of the problem
-  @file_error = true # For use when we're exiting
+  $op.warn err       # Warn of the problem
+  $FILE_ERROR = true # For use when we're exiting
 ensure
   ## Regardless of whether an exception occurred, attempt to close the file after each execution.
   # However, do not close `$stdin` (which occurs when `-` is passed in as a filename), as we might
@@ -557,6 +582,6 @@ ensure
 end
 
 ## If there was a problem reading a file, exit with a non-zero exit status. Note that we do this
-# instead of `exit !@file_error`, as the `--invalid-bytes-failure` flag sets an `at_exit` earlier in
+# instead of `exit !$FILE_ERROR`, as the `--invalid-bytes-failure` flag sets an `at_exit` earlier in
 # this file which checks for the exiting exception, which `exit false` would still raise.
-exit 1 if @file_error
+exit 1 if $FILE_ERROR

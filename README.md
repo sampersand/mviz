@@ -39,7 +39,14 @@ hello\^Dworld, how are you? \M-C\M-p\M^_\M^Q\M^M
 ```
 
 ## TODO
-- Should I add an `--highlight-means-error` flag (name subject to bikeshed)? I.e. if there's _any_ form of highlights, return an error
+- Should I add an `--highlight-means-error` flag (name subject to bikeshed)? I.e. if there's _any_ form of highlights, return an error. (done)
+- Should make `-l` not `--unescape='\n'` but instead act like `/\R/` (ie platform-indep line sep)?
 
 ## Character class
 - There's a 
+
+Oops:
+```sh
+print '\xC3👍' | p --escape='\u{1F44D}' --escape='\xC3'
+```
+This isn't great, cause regexes can't be one or the other. so i have to figure out what to do...
