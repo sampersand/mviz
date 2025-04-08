@@ -9,6 +9,10 @@ rescue Exception
   # Ignore
 end
 
+PROGRAM_NAME = File.basename($0, '.*')
+def abort(msg = $!) super "#{PROGRAM_NAME}: #{msg}" end
+def warn(msg = $!)  super "#{PROGRAM_NAME}: #{msg}" end
+
 ####################################################################################################
 #                                                                                                  #
 #                                         Parse Arguments                                          #
@@ -25,23 +29,23 @@ BOLD_BEGIN       = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if $stdout.tty? || true)
 BOLD_END         = (ENV.fetch('P_BOLD_END',   "\e[0m") if $stdout.tty? || true)
 
 OptParse.new do |op|
+  op.program_name = PROGRAM_NAME
+  op.version = '0.8.1'
+  op.banner = <<~BANNER
+  #{VISUAL_BEGIN}usage#{VISUAL_END}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
+         #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
+         #{BOLD_BEGIN}#{op.program_name} -f [options] [file ...]#{BOLD_END}  # Read from files
+  When no args are given, first form is assumed if stdin is not a tty.
+  BANNER
+
+  # TODO: why youno work sometimes, eg `p --escape-ties`
+  # op.require_exact = true if defined? op.require_exact = true
+  op.on_head 'A program to escape "weird" characters'
+
+  # Define a custom `separator` function to add bold to each section
   def op.separator(title, additional = nil)
     super "\n#{BOLD_BEGIN}#{title}#{BOLD_END}#{additional && ' '}#{additional}"
   end
-
-  $op = op # for `$op.abort` and `$op.warn`
-
-  op.version = '0.8.1'
-  op.banner = <<~BANNER
-    #{VISUAL_BEGIN}usage#{VISUAL_END}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
-           #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
-           #{BOLD_BEGIN}#{op.program_name} -f [options] [file ...]#{BOLD_END}  # Read from files
-    When no args are given, first form is assumed if stdin is not a tty.
-  BANNER
-
-  op.on_head 'A program to escape "weird" characters'
-  # TODO: why youno work sometimes, eg `p --escape-ties`
-  # op.require_exact = true if defined? op.require_exact = true
 
   ##################################################################################################
   #                                        Generic Options                                         #
@@ -246,8 +250,8 @@ OptParse.new do |op|
 
   op.on '--encoding=ENCODING', "Specify the input's encoding. Case-insensitive.",
                                "Non-ascii-compatible encodings (eg UTF-16) will not work" do |enc|
-    $encoding = Encoding.find enc rescue op.abort
-    op.abort "Encoding #$encoding is not ASCII-compatible!"
+    $encoding = Encoding.find enc rescue abort
+    $encoding.ascii_compatible? or abort "Encoding #$encoding is not ASCII-compatible!"
   end
 
   op.on '--list-encodings', 'List all possible encodings, and exit.' do
@@ -299,7 +303,7 @@ OptParse.new do |op|
 
   # Parse the options; Note that `op.parse!` handles `POSIXLY_CORRECT` internally to determine if
   # flags should be allowed to come after arguments.
-  op.parse! rescue op.abort
+  op.parse! rescue abort
 end
 
 ####################################################################################################
@@ -330,7 +334,7 @@ end
 def make_regexp(regex_array, flag)
   Regexp.union regex_array.map{|re| Regexp.new (+re).force_encoding($encoding), Regexp::FIXEDENCODING }
 rescue RegexpError => err
-  $op.abort "issue with --#{flag} (encoding: #$encoding): #{err}"
+  abort "issue with --#{flag} (encoding: #$encoding): #{err}"
 end
 
 $escape_regex   = make_regexp($escape_regex, 'escape')
@@ -349,9 +353,9 @@ $trailing_newline ||= $prefixes
 ## Validate options
 unless $encoding == Encoding::UTF_8
   if $escape_how == :codepoints
-    $op.abort "cannot use --codepoints with non-UTF-8 encodings (encoding is #$encoding)"
+    abort "cannot use --codepoints with non-UTF-8 encodings (encoding is #$encoding)"
   elsif $upper_codepoints
-    $op.abort "cannot use --upper-codepoints with non-UTF-8 encodings (encoding is #$encoding)"
+    abort "cannot use --upper-codepoints with non-UTF-8 encodings (encoding is #$encoding)"
   end
 end
 
@@ -583,7 +587,7 @@ rescue => err
   ## Whenever an error occurs, we want to handle it, but not bail out: We want to print every file
   # we're given (like `cat`), reporting errors along the way, and then exiting with a non-zero exit
   # status if there's a problem.
-  $op.warn err       # Warn of the problem
+  warn err       # Warn of the problem
   $FILE_ERROR = true # For use when we're exiting
 ensure
   ## Regardless of whether an exception occurred, attempt to close the file after each execution.
