@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 # -*- encoding: utf-8; frozen-string-literal: true -*-
 # ^ Force all strings in this file to be utf-8, regardless of what the environment says
+require 'optparse'
 
 # Enable YJIT, but if there's any problems just ignore them
 begin
@@ -9,6 +10,7 @@ rescue Exception
   # Ignore
 end
 
+## Define custom `abort` and `warn`s to use the program name when writing messages.
 PROGRAM_NAME = File.basename($0, '.*')
 def abort(msg = $!) super "#{PROGRAM_NAME}: #{msg}" end
 def warn(msg = $!)  super "#{PROGRAM_NAME}: #{msg}" end
@@ -18,7 +20,6 @@ def warn(msg = $!)  super "#{PROGRAM_NAME}: #{msg}" end
 #                                         Parse Arguments                                          #
 #                                                                                                  #
 ####################################################################################################
-require 'optparse'
 
 # Fetch standout constants (regardless of whether we're using them, as they're used as defaults)
 VISUAL_BEGIN     = ENV.fetch('P_VISUAL_BEGIN', "\e[7m")
@@ -38,8 +39,6 @@ OptParse.new do |op|
   When no args are given, first form is assumed if stdin is not a tty.
   BANNER
 
-  # TODO: why youno work sometimes, eg `p --escape-ties`
-  # op.require_exact = true if defined? op.require_exact = true
   op.on_head 'A program to escape "weird" characters'
 
   # Define a custom `separator` function to add bold to each section
@@ -65,7 +64,7 @@ OptParse.new do |op|
       -e CHARSET      Escape chars matching /[CHARSET]/
       -u CHARSET      Don't escape chars matching /[CHARSET]/
       -E              Don't use the default escapes
-      -A              Escape all characters
+      -a              Escape all characters
       -l, -w          Unescape newlines/whitespace (space, tab, newline)
       -s, -B, -U      Escape spaces/backslashes/all non-ASCII characters
     #{BOLD_BEGIN}HOW TO ESCAPE#{BOLD_END}
@@ -75,11 +74,11 @@ OptParse.new do |op|
       -C              Escape with C-style escapes
       -P, -S          Have "pictures" for some characters/only spaces
     #{BOLD_BEGIN}ENCODINGS#{BOLD_END}
-      -b, -a, -8, -L  Interpret input data as binary/ASCII/UTF-8/locale data
+      -b, -A, -8, -L  Interpret input data as binary/ASCII/UTF-8/locale data
     EOS
   end
 
-  op.on '--help', 'Print this message and exit' do
+  op.on '--help', 'Print a longer usage message and exit' do
     puts op.help # Newer versions of OptParse have `op.help_exit`, but we are targeting older ones.
     exit
   end
@@ -89,10 +88,8 @@ OptParse.new do |op|
     exit
   end
 
-  op.on '-f', '--files', 'Interpret trailing options as filenames to read' do
-    # Note there's no `-[no-]` prefix, because we expect this to be an explicit toggle on each time
-    # it's used (i.e. you shouldn't `alias p='p -f'`.)
-    $files = true
+  op.on '-f', '--[no-]files', 'Interpret trailing options as filenames to read' do |f|
+    $files = f
   end
 
   op.on '-M', '--[no-]malformed-error', 'Invalid chars for --encoding a cause nonzero exit. (default)' do |me|
@@ -126,17 +123,17 @@ OptParse.new do |op|
   #                                         What To Escape                                         #
   ##################################################################################################
   op.separator 'WHAT TO ESCAPE', '(You can specify multiple options; they are additive.)'
-  $unescape_regex = []
-  $escape_regex = []
+  $unescape_regexes = []
+  $escape_regexes = []
   $default_escapes = true
 
   op.on '-e', '--escape=CHARSET', 'Escape characters that match the regex /[CHARSET]/' do |rxp|
-    $escape_regex.push "[#{rxp}]"
+    $escape_regexes.push "[#{rxp}]"
   end
 
   op.on '-u', '--unescape=CHARSET', 'Do not escape characters if they match /[CHARSET]/. If a char',
                                     'matches both an --escape and --unescape, it is unescaped.' do |rxp|
-    $unescape_regex.push "[#{rxp}]"
+    $unescape_regexes.push "[#{rxp}]"
   end
 
   op.on '--default-escapes', "Implicitly include --escape='\\0-\\x1F\\x7F'; If not visual mode,",
@@ -149,36 +146,36 @@ OptParse.new do |op|
   end
 
   # 'Same as --escape=\'\0-\u{10FFFF}\'', in utf-8
-  op.on '-A', '--escape-all', 'Escape all characters. Useful when combined with --unescape.' do
-    $escape_regex.push '.'
+  op.on '-a', '--escape-all', 'Escape all characters. Useful when combined with --unescape.' do
+    $escape_regexes.push '.'
   end
 
-  # The `-l` is because of "line-oriented mode" as found in things like perl and ruby.
   op.on '-l', '--unescape-newline', "Same as --unescape='\\n'. (\"Line-oriented mode\")" do
-    $unescape_regex.push "\n"
+    $unescape_regexes.push '[\n]'
   end
 
   op.on '-w', '--unescape-whitespace', "Same as --unescape='\\n\\t '" do
-    $unescape_regex.push "\n", "\t", ' '
+    $unescape_regexes.push '[\n\t ]'
   end
 
   op.on '-s', '--escape-space', "Same as --escape=' '" do
-    $escape_regex.push ' '
+    $escape_regexes.push ' '
   end
 
   op.on '-S', 'Same as --escape-space --space-picture' do
     $space_picture = true
-    $escape_regex.push ' '
+    $escape_regexes.push ' '
   end
 
   op.on '-B', '--escape-backslash', "Same as --escape='\\\\' (default if not visual mode)" do |eb|
-    $escape_regex.push '\\\\'
+    $escape_regexes.push '\\\\'
   end
 
   op.on '-U', '--escape-non-ascii', "Same as --upper-codepoints --escape='\\u{80}-\\u{10FFFF}'.",
                                     '(Escapes all non-ascii codepoints.)' do
     $upper_codepoints = true
-    $escape_regex.push /[\u{80}-\u{10FFFF}]/
+    $encoding = Encoding::UTF_8
+    $escape_regexes.push '[\u{80}-\u{10FFFF}]'
   end
 
   op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
@@ -206,8 +203,6 @@ OptParse.new do |op|
     $escape_how = :dot
   end
 
-  # op.on '--default-escapes', 'Escape with the default characters'
-
   op.on '-x', '--hex', 'Escape with hex bytes, \xHH (default)' do
     $escape_how = :hex
   end
@@ -221,7 +216,7 @@ OptParse.new do |op|
     $encoding = Encoding::UTF_8
   end
 
-  op.on '--[no-]upper-codepoints', 'Like --codepoints, but only for values above 0x7F.'  do |uc|
+  op.on '--[no-]upper-codepoints', 'Like --codepoints, but only for values above 0x7F. See -U'  do |uc|
     $upper_codepoints = uc
     $encoding = Encoding::UTF_8
   end
@@ -230,7 +225,7 @@ OptParse.new do |op|
     $c_escapes = ce
   end
 
-  op.on '-P', '--[no-]pictures', 'Use "pictures" (U+240x-U+242x) for some escapes' do |cp|
+  op.on '-P', '--[no-]pictures', 'Use "pictures" (U+240x-U+242x) for some escapes. Implies --space-picture' do |cp|
     $pictures = $space_picture = cp
   end
 
@@ -242,10 +237,6 @@ OptParse.new do |op|
   ##################################################################################################
   #                                        Input Encodings                                         #
   ##################################################################################################
-
-  # Implementation note: Even though these usage messages reference "input encodings," the input is
-  # actually always read as binary data, and then attempted to be converted to whatever these
-  # encodings are
   op.separator 'ENCODINGS', '(default based on POSIXLY_CORRECT; --utf-8 if unset, --locale if set)'
 
   op.on '--encoding=ENCODING', "Specify the input's encoding. Case-insensitive.",
@@ -255,7 +246,7 @@ OptParse.new do |op|
   end
 
   op.on '--list-encodings', 'List all possible encodings, and exit.' do
-    # Don't list external/internal encodings, as they're not really relevant.
+    # Don't list external or internal encodings, as they're not really options
     possible_encodings = (Encoding.name_list - %w[external internal])
       .select { |name| Encoding.find(name).ascii_compatible? }
       .join(', ')
@@ -264,11 +255,11 @@ OptParse.new do |op|
     exit
   end
 
-  op.on '-b', '--binary', '--bytes', 'Same as --encoding=binary' do
+  op.on '-b', '--binary', '--bytes', 'Same as --encoding=binary. (Escapes high-bit bytes)' do
     $encoding = Encoding::BINARY
   end
 
-  op.on '-a', '--ascii', 'Same as --encoding=ascii. Like -b, but 0x80-0xFF are "invalid".' do
+  op.on '-A', '--ascii', 'Same as --encoding=ASCII. Like -b, but high-bits are "invalid".' do
     $encoding = Encoding::ASCII
   end
 
@@ -279,9 +270,6 @@ OptParse.new do |op|
   op.on '-L', '--locale', 'Same as --encoding=locale. (Uses LANG/LC_ALL/LC_CTYPE env vars)' do
     $encoding = Encoding.find('locale')
   end
-
-  # op.on_tail "\nnote: IF any invalid bytes for the output encoding are read, the exit status is"
-  # op.on_tail "based on `--encoding-failure-err`"
 
   ##################################################################################################
   #                                        Environment Vars                                        #
@@ -321,14 +309,14 @@ defined? $malformed_error          or $malformed_error = true
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 was_escape_how_defined = defined?($escape_how)
 defined? $escape_how               or $escape_how = :hex
-defined? $c_escapes                or $c_escapes = $escape_how == :hex && !defined?($pictures) # Make sure to put this before `escape_how`'s default'
+defined? $c_escapes                or $c_escapes = $escape_how == :hex && !$pictures
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 defined? $upper_codepoints         or $upper_codepoints = $encoding == Encoding::UTF_8 && !was_escape_how_defined
 
 ## Union all the regexes we've been given
 if $default_escapes
-  $escape_regex.push '[\x00-\x1F\x7F]'
-  $escape_regex.push '[\x80-\xFF]' if $encoding == Encoding::BINARY
+  $escape_regexes.push '[\x00-\x1F\x7F]'
+  $escape_regexes.push '[\x80-\xFF]' if $encoding == Encoding::BINARY
 end
 
 def make_regexp(regex_array, flag)
@@ -337,8 +325,8 @@ rescue RegexpError => err
   abort "issue with --#{flag} (encoding: #$encoding): #{err}"
 end
 
-$escape_regex   = make_regexp($escape_regex, 'escape')
-$unescape_regex = make_regexp($unescape_regex, 'unescape')
+$escape_regex   = make_regexp($escape_regexes, 'escape')
+$unescape_regex = make_regexp($unescape_regexes, 'unescape')
 
 # Default for backslashes: If visual is disabled, and was given to neither `-e` or `-u`, then
 # escape backslashes too.
