@@ -221,7 +221,12 @@ OptParse.new nil, 28 do |op|
 
   op.on '--list-encodings', 'List all possible encodings and exit' do
     # Don't list external/internal encodings, as they're not really relevant.
-    puts "available encodings: #{(Encoding.name_list - %w[external internal]).join(', ')}"
+    possible_encodings = (Encoding.name_list - %w[external internal])
+      .select { |name| Encoding.find(name).ascii_compatible? }
+      .join(', ')
+
+    puts "available encodings: #{possible_encodings}"
+    puts "NOTE: non-ascii-compatible encodings, like UTF-16/UTF-32, will not work."
     exit
   end
 
@@ -390,29 +395,11 @@ CHARACTERS = Hash.new do |hash, key|
     if !key.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$invalid_bytes_failure`.
       visualize hex_bytes(key), BEGIN_ERR, END_ERR
-    elsif !should_escape?(key)
-      key
     else
-      visualize (
-        if $c_escapes && (esc = C_ESCAPES[key])
-          esc
-        elsif $pictures && key.match?(/[\x00-\x1F]/)
-          ((0x2400 + key.ord).chr(Encoding::UTF_8))
-        elsif $pictures && key.match?(/[\7F]/)
-          "\u{2421}"
-        elsif key == '\\'
-          '\\\\'
-        elsif key == ' '
-          $space_picture ? "\u{2423}" : ' '
-        elsif $escape_how == :codepoints || ($upper_codepoints && key.codepoints.sum >= 0x80)
-          codepoints key
-        else
-          hex_bytes key
-        end
-      )
+      should_escape?(key) ? escape(key) : key
+    end
   end
 end
-
 
 ####################################################################################################
 #                                                                                                  #
@@ -423,7 +410,8 @@ end
 # CAPACITY = ENV['P_CAP'].to_i.nonzero? || 4096 * 3
 # OUTPUT = String.new(capacity: CAPACITY * 8, encoding: Encoding::BINARY)
 
-$stdout.binmode
+$stdout.binmode # TODO: NEEDED?
+
 # TODO: optimize this later
 def print_escapes(has_each_char, suffix = nil)
   ## Print out each character in the file, or their escapes. We capture the last printed character,
@@ -532,7 +520,7 @@ rescue => err
   @file_error = true # For use when we're exiting
 ensure
   ## Regardless of whether an exception occurred, attempt to close the file after each execution.
-  # However,# do not close `$stdin` (which occurs when `-` is passed in as a filename), as we might
+  # However, do not close `$stdin` (which occurs when `-` is passed in as a filename), as we might
   # be reading from it later on. Additionally any problems closing the file are silently swallowed,
   # as we only care about problems opening/reading files, not closing them.
   unless file.nil? || file.equal?($stdin) # file can be `nil` if opening it failed
