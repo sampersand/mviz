@@ -91,7 +91,7 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator "\nSeparating Outputs"
 
-  op.on '-p', '--prefixes', 'Add prefixes to the output. (default if any args are given)' do
+  op.on '-p', '--prefixes', 'Add prefixes to the output. (default if any args are given & stdout isnt a tty)' do
     $prefixes = true
   end
 
@@ -155,7 +155,7 @@ OptParse.new do |op|
   end
 
   op.on '-B', '--escape-backslash', "Same as --escape='\\\\' (default if not visual mode)" do |eb|
-    $escape_regex.push '\\'
+    $escape_regex.push '\\\\'
   end
 
   op.on '-U', '--escape-non-ascii', 'Same as --upper-codepoints --escape=\'\u{80}-\u{10FFFF}\'.',
@@ -190,6 +190,8 @@ OptParse.new do |op|
     $escape_how = :dot
   end
 
+  # op.on '--default-escapes', 'Escape with the default characters'
+
   op.on '-x', '--hex', 'Escape with hex bytes, \xHH (default)' do
     $escape_how = :bytes
   end
@@ -216,6 +218,22 @@ OptParse.new do |op|
 
   op.on '--[no-]space-picture', 'Like --pictures, but only for spaces; Doesn\'t imply -s.' do |sp|
     $space_picture = sp
+  end
+
+  # TODO: THESE
+  $escape_backslash_with_backslash = true
+  op.on '--[no-]escape-backslash', 'When escaping a backslash, use \'\\\\\' instead of \'\x5C\' (default)' do |eb|
+    $escape_backslash_with_backslash = eb
+  end
+
+  op.on '--escape-space=HOW', 'When escaping a space, escape with space, picture, or hex. (space default)' do |es|
+    unless %i[space picture hex].include? ($escape_space = es.to_sym)
+      raise "oops!"
+    end
+    # case es
+    # when 'space' then # ??
+    # when $space_picture
+    # $escape_backslash_with_backslash = eb
   end
 
   ##################################################################################################
@@ -300,7 +318,7 @@ END_ERR      = ENV.fetch('P_END_ERR',      "\e[49m\e[39m")
 
 # Specify defaults
 defined? $visual                   or $visual = $stdout.tty?
-defined? $prefixes                 or $prefixes = (!$*.empty? || $files)
+defined? $prefixes                 or $prefixes = $stdout.tty? && (!$*.empty? || $files)
 defined? $files                    or $files = !$stdin.tty? && $*.empty?
 defined? $trailing_newline         or $trailing_newline = true
 defined? $malformed_error          or $malformed_error = true
@@ -416,11 +434,11 @@ def escape_sequence(character)
     esc
   elsif $pictures && character.match?(/[\x00-\x1F]/)
     ((0x2400 + character.ord).chr(Encoding::UTF_8))
-  elsif $pictures && character.match?(/[\7F]/)
+  elsif $pictures && character.match?(/[\x7F]/)
     "\u{2421}"
   elsif character == '\\'
     '\\\\'
-  elsif character == ' '
+  elsif character == ' ' #&& $space_picture
     $space_picture ? "\u{2423}" : ' '
   elsif $escape_how == :codepoints || ($upper_codepoints && character.codepoints.sum >= 0x80)
     codepoints character

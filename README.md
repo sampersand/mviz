@@ -41,6 +41,7 @@ hello\^Dworld, how are you? \M-C\M-p\M^_\M^Q\M^M
 ## TODO
 - Should I add an `--highlight-means-error` flag (name subject to bikeshed)? I.e. if there's _any_ form of highlights, return an error. (done)
 - Should make `-l` not `--unescape='\n'` but instead act like `/\R/` (ie platform-indep line sep)?
+- `p -Ax` makes everything hex, except for spaces and backslashes. should we do this?
 
 ## Character class
 - There's a 
@@ -50,3 +51,10 @@ Oops:
 print '\xC3👍' | p --escape='\u{1F44D}' --escape='\xC3'
 ```
 This isn't great, cause regexes can't be one or the other. so i have to figure out what to do...
+
+You can also `LC_ALL=en_US-iso8859-1"
+
+# HOW ESCAPES WORK
+If a character is to be escaped, it goes through the following steps:
+1. If `--delete` is given, nothing is printed
+2. If `--dot` is given, a `.` is used
