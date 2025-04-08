@@ -207,12 +207,14 @@ OptParse.new do |op|
     $escape_how = :dot
   end
 
+  # Note: this applies only to characters without any other values
   op.on '-x', '--hex', 'Escape with hex bytes, \xHH (default)' do
     $escape_how = :hex
   end
 
-  op.on '-X', '--hex-all', 'Like --hex, but applies to all bytes (even space and backslash)' do
+  op.on '-X', '--hex-all', 'Like --hex, but applies to _all_ characters' do
     $escape_how = :hex_all
+    $upper_codepoints = false
   end
 
   op.on '-c', '--codepoints', 'Escape with \u{...}. Sets (and can only be used with) --utf-8.' do
@@ -220,6 +222,7 @@ OptParse.new do |op|
     $encoding = Encoding::UTF_8
   end
 
+  # op.on '--[no-]upper-codepoints', 'When --utf-8, escape codepoints above 0x7F with \u{...}. (default).', 'When disabled, their hex values are displayed instead'  do |uc|
   op.on '--[no-]upper-codepoints', 'Like --codepoints, but only for values above 0x7F. See -U'  do |uc|
     $upper_codepoints = uc
     $encoding = Encoding::UTF_8
@@ -315,7 +318,7 @@ was_escape_how_defined = defined?($escape_how)
 defined? $escape_how               or $escape_how = :hex
 defined? $c_escapes                or $c_escapes = $escape_how == :hex && !$pictures
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
-defined? $upper_codepoints         or $upper_codepoints = $encoding == Encoding::UTF_8 && $escape_how != :hex_all
+defined? $upper_codepoints         or $upper_codepoints = $encoding == Encoding::UTF_8
 # ^ Escape things above `\x80` by replacing them with their codepoints if in utf-8 mode, and "make everything hex" wasn't requested
 
 ## Union all the regexes we've been given
