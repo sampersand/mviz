@@ -48,6 +48,7 @@ OptParse.new do |op|
       -f              interpret args as files, not strings
       -p, -N          Do/don't add prefixes to output
       -n              Don't add prefixes or newlines to output
+      -M, -H          Exit nonzero if invalid/any escapes are encountered.
       -e CHARSET      Escape chars matching /[CHARSET]/
       -u CHARSET      Don't escape chars matching /[CHARSET]/
       -E              Don't use default escapes
@@ -55,7 +56,7 @@ OptParse.new do |op|
       -l, -w          Unescape newlines/whitespace (space, tab, newline)
       -s, -B, -U      Escape spaces/backslashes/all non-ASCII characters
       -v, -V          Enable/disable visual mode
-      -d, -., -x      Escape by deleting, with `.`, hex bytes
+      -d, -., -x, -X  Escape by deleting/with `.`/hex bytes/always hex bytes
       -C              Escape with codepoints (implies -8)
       -c              Escape with C-style escapes
       -P, -S          Have "pictures" for some characters/only spaces
@@ -78,11 +79,11 @@ OptParse.new do |op|
     $files = true
   end
 
-  op.on '--[no-]malformed-error', 'Invalid chars for --encoding a cause nonzero exit. (default)' do |me|
+  op.on '-M', '--[no-]malformed-error', 'Invalid chars for --encoding a cause nonzero exit. (default)' do |me|
     $malformed_error = me
   end
 
-  op.on '-H ', '--[no-]escape-error', 'Any escapes cause an error status' do |ee|
+  op.on '-H', '--[no-]escape-error', 'Any escapes cause an error status' do |ee|
     $escape_error = ee
   end
 
@@ -131,13 +132,13 @@ OptParse.new do |op|
     $default_escapes = false
   end
 
+  # 'Same as --escape=\'\0-\u{10FFFF}\'', in utf-8
   op.on '-A', '--escape-all', 'Escape all characters. Useful when combined with --unescape.' do
-                              # 'Same as --escape=\'\0-\u{10FFFF}\'', in utf-8
     $escape_regex.push '.'
   end
 
   # The `-l` is because of "line-oriented mode" as found in things like perl and ruby.
-  op.on '-l', '--unescape-newline', 'Same as --unescape=\'\n\'. ("Line-Oriented mode")' do
+  op.on '-l', '--unescape-newline', 'Same as --unescape=\'\n\'. ("Line-oriented mode")' do
     $unescape_regex.push "\n"
   end
 
@@ -196,12 +197,11 @@ OptParse.new do |op|
     $escape_how = :hex
   end
 
-  op.on '-X', '--hex-all', 'Like --hex, but applies to all characters (even those with their own escapes); disables --c-escapes' do
+  op.on '-X', '--hex-all', 'Like --hex, but applies to all bytes (even space and backslash)' do
     $escape_how = :hex_all
   end
 
-  op.on '-C', '--codepoints', 'Escape with codepoints, \u{...}. Sets --utf-8, and can\'t be',
-                              'used with other encodings.' do
+  op.on '-C', '--codepoints', 'Escape with \u{...}. Sets (and can only be used with) --utf-8.' do
     $escape_how = :codepoints
     $encoding = Encoding::UTF_8
   end
@@ -211,8 +211,7 @@ OptParse.new do |op|
     $encoding = Encoding::UTF_8
   end
 
-  op.on '-c', '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc) for some escapes. (default',
-                                  'only if none of -d, -., -x, -C, -P given)' do |ce|
+  op.on '-c', '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc). (default if -x and not -P)' do |ce|
     $c_escapes = ce
   end
 
@@ -220,28 +219,10 @@ OptParse.new do |op|
     $pictures = $space_picture = cp
   end
 
+  # The reason this doesn't imply `-s` is because you may want to use it exclusively with `--escape-surrounding-space`
   op.on '--[no-]space-picture', 'Like --pictures, but only for spaces; Doesn\'t imply -s.' do |sp|
     $space_picture = sp
   end
-
-
-=begin
-  # TODO: THESE
-  $escape_backslash_with_backslash = true
-  op.on '--[no-]escape-backslash', 'When escaping a backslash, use \'\\\\\' instead of \'\x5C\' (default)' do |eb|
-    $escape_backslash_with_backslash = eb
-  end
-
-  op.on '--escape-space=HOW', 'When escaping a space, escape with space, picture, or hex. (space default)' do |es|
-    unless %i[space picture hex].include? ($escape_space = es.to_sym)
-      raise "oops!"
-    end
-    # case es
-    # when 'space' then # ??
-    # when $space_picture
-    # $escape_backslash_with_backslash = eb
-  end
-=end
 
   ##################################################################################################
   #                                        Input Encodings                                         #
@@ -439,10 +420,10 @@ def escape_sequence(character)
   $SOMETHING_ESCAPED = true
 
   case
-  when $c_escapes && (esc = C_ESCAPES[character]) then esc
+  when $c_escapes && (esc = C_ESCAPES[character])   then esc
   when $pictures && character.match?(/[\x00-\x1F]/)
     (0x2400 + character.ord).chr(Encoding::UTF_8)
-  when $pictures && character.match?(/[\x7F]/) then "\u{2421}"
+  when $pictures && character.match?(/[\x7F]/)      then "\u{2421}"
   when character == '\\' && $escape_how != :hex_all then '\\\\'
   when character == ' '  && $space_picture          then "\u{2423}"
   when character == ' '  && $escape_how != :hex_all then ' '
