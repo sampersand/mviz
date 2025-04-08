@@ -21,9 +21,10 @@ OptParse.new nil, 28 do |op|
 
   op.version = '0.7.6'
   op.banner = <<~BANNER
-    usage: #{op.program_name} [options] [string ...]
-           #{op.program_name} -f [options] [file ...]
-    The second form is assumed when no arguments are given, and stdin is not a tty.
+    usage: #{op.program_name} [options]                # Read from stdin
+           #{op.program_name} [options] [string ...]   # Print strings
+           #{op.program_name} -f [options] [file ...]  # Read from files
+    When no args are given, first form is assumed if stdin is not a tty.
   BANNER
 
   op.on_head 'A program to escape "weird" characters'
@@ -68,7 +69,8 @@ OptParse.new nil, 28 do |op|
   ##################################################################################################
   op.separator "\nSeparating Outputs"
 
-  op.on '-p', '--prefixes', 'Add prefixes to outputs. (default: !$*.empty? || $files)' do
+
+  op.on '-p', '--prefixes', 'Add prefixes to outputs. (default if any args are given)' do
     $prefixes = true
   end
 
