@@ -1,11 +1,12 @@
 #!/usr/bin/env ruby
-# -*- encoding: binary; frozen-string-literal: true -*-
-# ^ Force all strings in this file to be UTF-8, regardless of what the environment says
+# -*- encoding: utf-8; frozen-string-literal: true -*-
+# ^ Force all strings in this file to be utf-8, regardless of what the environment says
 
+# Enable YJIT, but if there's any problems just ignore them
 begin
-  # Enable YJIT, but if there's any problems just ignore them
   RubyVM::YJIT.enable
 rescue Exception
+  # Ignore
 end
 
 ####################################################################################################
@@ -292,9 +293,9 @@ END_ERR      = ENV.fetch('P_END_ERR',      "\e[49m\e[39m")
 
 # Specify defaults
 defined? $stdout_tty               or $stdout_tty = $stdout.tty?
+defined? $files                    or $files = !$stdin.tty? && $*.empty?
 defined? $prefixes                 or $prefixes = $stdout_tty && (!$*.empty? || $files)
 defined? $trailing_newline         or $trailing_newline = true
-defined? $files                    or $files = !$stdin.tty? && $*.empty?
 defined? $visual                   or $visual = $stdout_tty
 defined? $malformed_error          or $malformed_error = true
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
@@ -306,8 +307,8 @@ defined? $upper_codepoints         or $upper_codepoints = $encoding == Encoding:
 
 ## Union all the regexes we've been given
 if $default_escapes
-  $escape_regex.push '[\x00-\x1F\x7F]'
-  $escape_regex.push '[\x80-\xFF]' if $encoding == Encoding::BINARY
+  $escape_regex.push +'[\x00-\x1F\x7F]'
+  $escape_regex.push +'[\x80-\xFF]' if $encoding == Encoding::BINARY
 end
 
 def make_regexp(regex_array, flag)
