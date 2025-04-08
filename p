@@ -55,11 +55,6 @@ OptParse.new nil, 28 do |op|
     $files = true
   end
 
-  # This maybe removed in a future release, as it doesn't control a whole lot.
-  op.on '--[no-]assume-tty', 'Assume stdout is tty for defaults' do |tty|
-    $stdout_tty = tty
-  end
-
   op.on '-M', '--[no-]malformed-error', 'Invalid chars in the --encoding cause nonzero exit. (default)' do |me|
     $malformed_error = me
   end
@@ -73,7 +68,7 @@ OptParse.new nil, 28 do |op|
   ##################################################################################################
   op.separator "\nSeparating Outputs"
 
-  op.on '-p', '--prefixes', 'Add prefixes to outputs. (default if tty)' do
+  op.on '-p', '--prefixes', 'Add prefixes to outputs. (default: !$*.empty? || $files)' do
     $prefixes = true
   end
 
@@ -292,11 +287,10 @@ BEGIN_ERR    = ENV.fetch('P_BEGIN_ERR',    "\e[37m\e[41m")
 END_ERR      = ENV.fetch('P_END_ERR',      "\e[49m\e[39m")
 
 # Specify defaults
-defined? $stdout_tty               or $stdout_tty = $stdout.tty?
+defined? $visual                   or $visual = $stdout.tty?
 defined? $files                    or $files = !$stdin.tty? && $*.empty?
-defined? $prefixes                 or $prefixes = $stdout_tty && (!$*.empty? || $files)
+defined? $prefixes                 or $prefixes = (!$*.empty? || $files)
 defined? $trailing_newline         or $trailing_newline = true
-defined? $visual                   or $visual = $stdout_tty
 defined? $malformed_error          or $malformed_error = true
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 was_escape_how_defined = defined?($escape_how)
