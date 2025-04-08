@@ -96,52 +96,57 @@ OptParse.new nil, 28 do |op|
   op.separator "\nWhat to Escape. (You can specify multiple options; they are additive.)"
   $unescape_regex = []
   $escape_regex = []
-  $default_escape_regex = true
+  $default_escapes = true
 
-  op.on '--default-escape', 'Implicitly include the default escape regex (\0-\x1f, \x7F); default',
-                                  'if -b is given, this also enables 0x80-0xff.' do
-                                    $default_escape_regex = true end
-
-  op.on '-E', '--no-default-escape', 'Disable the default escape regex' do
-    $default_escape_regex = false
-  end
-
-  op.on '-e', '--escape=CHAR_CLASS', 'Also escape characters which match the Regex Character Class CHAR_CLASS' do |rxp|
+  op.on '-e', '--escape=CHARSET', 'Escape chars that match the regex /[CHARSET]/' do |rxp|
     $escape_regex.push /[#{rxp}]/
   end
 
-  op.on '--escape-all', 'Escape every character' do # ; Same as -e\'\x00-\x{10FFFF}\'' do ??
+  op.on '-u', '--unescape=CHARSET', 'Do not escape chars if they match /[CHARSET]/;',
+  'If a char matches both -e and -u, -u wins.' do |rxp|
+    $unescape_regex.push /[#{rxp}]/
+  end
+
+  op.on '--default-escapes', 'Implicitly include --escape=\'\0-\x1F\x7F\'; If',
+      'a -b is given, also include \x80-\xFF (default)' do
+                                    $default_escapes = true end
+
+  op.on '-E', '--no-default-escapes', 'Dont include --default-escapes' do
+    $default_escapes = false
+  end
+
+  op.on '-A', '--escape-all', 'Escape all characters. Useful with --unescape.' do
+                              # 'Same as --escape=\'\0-\u{10FFFF}\''
     $escape_regex.push /./m
   end
 
-  op.on '-u', '--unescape=CHAR_CLASS', 'Do not escape characters which match the Regex Character Class CHAR_CLASS',
-  'if a char is both unescaped and escaped, then it will be unescaped.' do |rxp|
-    $unescape_regex.push /[#{rxp}]/
-  end
+  # op.on '-t', '--[no-]escape-ties', 'Escape chars which match both -e and -u.' do |et|
+  #   $escape_ties = et
+  # end
 
   # The `-l` is because of "lien-oriented mode" as found in things like perl and ruby.
   op.on '-l', '--unescape-newline', "Same as --unescape='\\n'" do
     $unescape_regex.push "\n"
   end
 
-  op.on '-w', "Same as --unescape='\\n\\t '" do
+  op.on '-w', '--unescape-whitespace', "Same as --unescape='\\n\\t '" do
     $unescape_regex.push "\n", "\t", " "
   end
 
-  op.on '-s', "Same as --escape=' '" do
+  op.on '-s', '--escape-space', "Same as --escape=' '" do
     $escape_regex.push ' '
   end
 
-  op.on '-S', 'Same as -s --space-picture' do
+  op.on '-S', 'Same as --escape-space --space-picture' do
     $space_picture = true
     $escape_regex.push ' '
   end
 
-  op.on '-B', "Same as --escape='\\\\' (default if not visual)" do |eb|
+  op.on '-B', '--escape-backslash', "Same as --escape='\\\\' (default if not visual)" do |eb|
     $escape_regex.push '\\'
   end
 
-  op.on '-U', 'Escapes all non-ascii codepoints. Same',
+  op.on '-U', '--escape-non-ascii', 'Escapes all non-ascii codepoints. Same',
               "as --upper-codepoints -e'\\u{80}-\\u{10FFFF}'" do
     $upper_codepoints = true
     $escape_regex.push /[\u{80}-\u{10FFFF}]/
@@ -302,11 +307,9 @@ if !Regexp.union($escape_regex).match?('\\') && !Regexp.union($unescape_regex).m
 end
 
 ## Union all the regexes we've been given
-if $default_escape_regex
-  $escape_regex.prepend /[\x00-\x1F\x7F]/
-  $escape_regex.prepend /[\x80-\xFF]/ if $encoding == Encoding::BINARY
+if $default_escapes
+  $escape_regex.prepend /[\x00-\x1F\x7F#{$encoding == Encoding::BINARY ? '\x80-\xFF' : ''}]/
 end
-
 
 # $unescape_regex = Regexp.union($unescape_regex.map { |x| x.encode $encoding })
 # $escape_regex   = Regexp.union($escape_regex.map { |x| x.encode $encoding })
@@ -337,6 +340,7 @@ end
 #                                       Visualizing Escapes                                        #
 #                                                                                                  #
 ####################################################################################################
+
 
 def should_escape?(char)
   $escape_regex.match?(char) && !$unescape_regex.match?(char)

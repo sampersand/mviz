@@ -1,4 +1,38 @@
 #!ruby
+
+require 'optparse'
+OptParse.new do |op|
+
+  top.append OptionParser::Switch::RequiredArgument.new(
+
+    def initialize(pattern = nil, conv = nil,
+                   short = nil, long = nil, arg = nil,
+                   desc = ([] if short or long), block = nil, &_block)
+      raise if Array === pattern
+      block ||= _block
+      @pattern, @conv, @short, @long, @arg, @desc, @block =
+        pattern, conv, short, long, arg, desc, block
+    end
+
+  -e
+  -h
+  --escape>,
+ ["e", "h"],
+ ["escape"],
+ nil,
+ []]
+"escaped: bar"
+[]
+[Finished in 138ms]
+  op.on '-e', '--escape foo', 'foo', '-h oopsies' do |f|
+    p "escaped: #{f}"
+  end
+
+  op.parse! %w[--escape bar]
+  p $*
+end
+
+__END__
 unescape = %w[a b].map { _1.encode('utf-16be') }
 unre = Regexp.union unescape
 p unre =~ 'a'.encode('')

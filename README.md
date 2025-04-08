@@ -40,3 +40,6 @@ hello\^Dworld, how are you? \M-C\M-p\M^_\M^Q\M^M
 
 ## TODO
 - Should I add an `--highlight-means-error` flag (name subject to bikeshed)? I.e. if there's _any_ form of highlights, return an error
+
+## Character class
+- There's a 
