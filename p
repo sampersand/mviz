@@ -16,14 +16,26 @@ end
 ####################################################################################################
 require 'optparse'
 
+# Fetch standout constants (regardless of whether we're using them, as they're used as defaults)
+VISUAL_BEGIN     = ENV.fetch('P_VISUAL_BEGIN', "\e[7m")
+VISUAL_END       = ENV.fetch('P_VISUAL_END',   "\e[27m")
+VISUAL_ERR_BEGIN = ENV.fetch('P_VISUAL_ERR_BEGIN', "\e[37m\e[41m")
+VISUAL_ERR_END   = ENV.fetch('P_VISUAL_ERR_END',   "\e[49m\e[39m")
+BOLD_BEGIN       = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if $stdout.tty? || true)
+BOLD_END         = (ENV.fetch('P_BOLD_END',   "\e[0m") if $stdout.tty? || true)
+
 OptParse.new do |op|
+  def op.separator(title, additional = nil)
+    super "\n#{BOLD_BEGIN}#{title}#{BOLD_END}#{additional && ' '}#{additional}"
+  end
+
   $op = op # for `$op.abort` and `$op.warn`
 
   op.version = '0.8.0'
   op.banner = <<~BANNER
-    usage: #{op.program_name} [options]                # Read from stdin
-           #{op.program_name} [options] [string ...]   # Print strings
-           #{op.program_name} -f [options] [file ...]  # Read from files
+    #{VISUAL_BEGIN}usage#{VISUAL_END}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
+           #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
+           #{BOLD_BEGIN}#{op.program_name} -f [options] [file ...]#{BOLD_END}  # Read from files
     When no args are given, first form is assumed if stdin is not a tty.
   BANNER
 
@@ -34,41 +46,38 @@ OptParse.new do |op|
   ##################################################################################################
   #                                        Generic Options                                         #
   ##################################################################################################
-  op.separator "\nGeneric Options"
-
-  op.on '--help', 'Print this message and exit' do
-    puts op.help # Newer versions of OptParse have `op.help_exit`, but we are targeting older ones.
-    exit
-  end
+  op.separator 'GENERIC OPTIONS'
 
   op.on '-h', 'Shorter help usage' do
-    bold   = "\e[1m" if $stdout.tty?
-    nobold = "\e[0m" if $stdout.tty?
-
     puts <<~EOS
-    #{bold}usage: #{op.program_name} [options] [string ...]#{nobold}
+    #{BOLD_BEGIN}usage: #{op.program_name} [options] [string ...]#{BOLD_END}
       --help          Print a longer help message, with more options
       -f              interpret args as files, not strings
       -M, -H          Exit nonzero if invalid/any escapes are encountered.
-    #{bold}PREFIXES#{nobold}
+    #{BOLD_BEGIN}PREFIXES#{BOLD_END}
       -p, -N          Do/don't add prefixes to output
       -n              Don't add prefixes or newlines to output
-    #{bold}WHAT TO ESCAPE#{nobold}
+    #{BOLD_BEGIN}WHAT TO ESCAPE#{BOLD_END}
       -e CHARSET      Escape chars matching /[CHARSET]/
       -u CHARSET      Don't escape chars matching /[CHARSET]/
       -E              Don't use the default escapes
       -A              Escape all characters
       -l, -w          Unescape newlines/whitespace (space, tab, newline)
       -s, -B, -U      Escape spaces/backslashes/all non-ASCII characters
-    #{bold}HOW TO ESCAPE#{nobold}
+    #{BOLD_BEGIN}HOW TO ESCAPE#{BOLD_END}
       -v, -V          Enable/disable visual mode
       -d, -., -x, -X  Escape by deleting/with `.`/hex bytes/always hex bytes
       -c              Escape with codepoints (implies -8)
       -C              Escape with C-style escapes
       -P, -S          Have "pictures" for some characters/only spaces
-    #{bold}ENCODINGS#{nobold}
+    #{BOLD_BEGIN}ENCODINGS#{BOLD_END}
       -b, -a, -8, -L  Interpret input data as binary/ASCII/UTF-8/locale data
     EOS
+  end
+
+  op.on '--help', 'Print this message and exit' do
+    puts op.help # Newer versions of OptParse have `op.help_exit`, but we are targeting older ones.
+    exit
   end
 
   op.on '--version', 'Print the version and exit' do
@@ -93,7 +102,7 @@ OptParse.new do |op|
   ##################################################################################################
   #                                       Separating Outputs                                       #
   ##################################################################################################
-  op.separator "\nSeparating Outputs"
+  op.separator 'SEPARATING OUTPUTS'
 
   op.on '-p', '--prefixes', 'Add prefixes to the output. (default if any args are given & stdout isnt a tty)' do
     $prefixes = true
@@ -112,7 +121,7 @@ OptParse.new do |op|
   ##################################################################################################
   #                                         What To Escape                                         #
   ##################################################################################################
-  op.separator "\nWhat to Escape. (You can specify multiple options; they are additive.)"
+  op.separator 'WHAT TO ESCAPE', '(You can specify multiple options; they are additive.)'
   $unescape_regex = []
   $escape_regex = []
   $default_escapes = true
@@ -126,8 +135,8 @@ OptParse.new do |op|
     $unescape_regex.push "[#{rxp}]"
   end
 
-  op.on '--default-escapes', 'Implicitly include --escape=\'\0-\x1F\x7F\'; If not visual mode,',
-                             'also --escape=\'\\\\\'. If --binary, also -e\'\x80-\xFF\' (default)' do
+  op.on '--default-escapes', "Implicitly include --escape='\\0-\\x1F\\x7F'; If not visual mode,",
+                             "also --escape='\\\\'. If --binary, also -e'\\x80-\\xFF' (default)" do
     $default_escapes = true
   end
 
@@ -141,12 +150,12 @@ OptParse.new do |op|
   end
 
   # The `-l` is because of "line-oriented mode" as found in things like perl and ruby.
-  op.on '-l', '--unescape-newline', 'Same as --unescape=\'\n\'. ("Line-oriented mode")' do
+  op.on '-l', '--unescape-newline', "Same as --unescape='\\n'. (\"Line-oriented mode\")" do
     $unescape_regex.push "\n"
   end
 
   op.on '-w', '--unescape-whitespace', "Same as --unescape='\\n\\t '" do
-    $unescape_regex.push "\n", "\t", " "
+    $unescape_regex.push "\n", "\t", ' '
   end
 
   op.on '-s', '--escape-space', "Same as --escape=' '" do
@@ -162,21 +171,20 @@ OptParse.new do |op|
     $escape_regex.push '\\\\'
   end
 
-  op.on '-U', '--escape-non-ascii', 'Same as --upper-codepoints --escape=\'\u{80}-\u{10FFFF}\'.',
+  op.on '-U', '--escape-non-ascii', "Same as --upper-codepoints --escape='\\u{80}-\\u{10FFFF}'.",
                                     '(Escapes all non-ascii codepoints.)' do
     $upper_codepoints = true
     $escape_regex.push /[\u{80}-\u{10FFFF}]/
   end
 
-  op.on '--[no-]escape-surrounding-space', 'Escape leading and trailing spaces. (default)',
-                                           'Does not work with --files' do |ess|
+  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
     $escape_surronding_spaces = ess
   end
 
   ##################################################################################################
   #                                         How to Escape                                          #
   ##################################################################################################
-  op.separator "\nHow to Escape (-d, -., -x, and -C are mutually exclusive)"
+  op.separator 'HOW TO ESCAPE', '(-d, -., -x, -X, and -C are mutually exclusive)'
 
   op.on '-v', '--visual', 'Enable visual effects. (default only if stdout is tty)' do
     $visual = true
@@ -223,7 +231,7 @@ OptParse.new do |op|
   end
 
   # The reason this doesn't imply `-s` is because you may want to use it exclusively with `--escape-surrounding-space`
-  op.on '--[no-]space-picture', 'Like --pictures, but only for spaces; Doesn\'t imply -s.' do |sp|
+  op.on '--[no-]space-picture', "Like --pictures, but only for spaces; Doesn't imply -s." do |sp|
     $space_picture = sp
   end
 
@@ -234,7 +242,7 @@ OptParse.new do |op|
   # Implementation note: Even though these usage messages reference "input encodings," the input is
   # actually always read as binary data, and then attempted to be converted to whatever these
   # encodings are
-  op.separator "\nEncodings (default based on POSIXLY_CORRECT; --utf-8 if unset, --locale if set)"
+  op.separator 'ENCODINGS', '(default based on POSIXLY_CORRECT; --utf-8 if unset, --locale if set)'
 
   op.on '--encoding=ENCODING', "Specify the input's encoding. Case-insensitive.",
                                "Non-ascii-compatible encodings (eg UTF-16) will not work" do |enc|
@@ -249,7 +257,6 @@ OptParse.new do |op|
       .join(', ')
 
     puts "available encodings: #{possible_encodings}"
-    puts "NOTE: non-ascii-compatible encodings, like UTF-16/UTF-32, will not work."
     exit
   end
 
@@ -265,7 +272,7 @@ OptParse.new do |op|
     $encoding = Encoding::UTF_8
   end
 
-  op.on '-L', '--locale', 'Same as --encoding=locale. (Uses LANG/LC_ALL/LC_CTYPE Env vars)' do
+  op.on '-L', '--locale', 'Same as --encoding=locale. (Uses LANG/LC_ALL/LC_CTYPE env vars)' do
     $encoding = Encoding.find('locale')
   end
 
@@ -275,15 +282,15 @@ OptParse.new do |op|
   ##################################################################################################
   #                                        Environment Vars                                        #
   ##################################################################################################
-  op.separator "\nEnvironment Variables"
+  op.separator 'ENVIRONMENT VARIABLES'
   op.on <<-EOS # Note: `-EOS` not `~EOS` to keep leading spaces
-    P_BEGIN_VISUAL     Beginning escape sequence for --visual
-    P_END_VISUAL       Ending escape sequence for --visual
-    P_BEGIN_ERR        Beginning escape sequence for invalid bytes with --visual
-    P_END_ERR          Ending escape sequence for invalid bytes with --visual
-    POSIXLY_CORRECT    If present, changes default encoding to the locale's (cf locale(1).), and
-                       also disables parsing switches after arguments (e.g. `p foo -x` will print
-                       out `foo` and `-x`, and won't interpret `-x` as a switch.)
+    P_VISUAL_BEGIN        Beginning escape sequence for --visual
+    P_VISUAL_END          Ending escape sequence for --visual
+    P_VISUAL_ERR_BEGIN    Beginning escape sequence for invalid bytes with --visual
+    P_VISUAL_ERR_END      Ending escape sequence for invalid bytes with --visual
+    POSIXLY_CORRECT       If present, changes default encoding to the locale's (cf locale(1).), and
+                          also disables parsing switches after arguments (e.g. `p foo -x` will print
+                          out `foo` and `-x`, and won't interpret `-x` as a switch.)
   EOS
 
   ##################################################################################################
@@ -300,12 +307,6 @@ end
 #                                      Defaults for Arguments                                      #
 #                                                                                                  #
 ####################################################################################################
-
-# Fetch standout constants (regardless of whether we're using them, as they're used as defaults)
-BEGIN_VISUAL = ENV.fetch('P_BEGIN_VISUAL', "\e[7m")
-END_VISUAL   = ENV.fetch('P_END_VISUAL',   "\e[27m")
-BEGIN_ERR    = ENV.fetch('P_BEGIN_ERR',    "\e[37m\e[41m")
-END_ERR      = ENV.fetch('P_END_ERR',      "\e[49m\e[39m")
 
 # Specify defaults
 defined? $visual                   or $visual = $stdout.tty?
@@ -389,7 +390,7 @@ def codepoints(string) '\u{%04X}' % string.ord end
 # - if `$delete` is specified, then an empty string is returned---escaped characters are deleted.
 # - if `$visual` is specified, then `start` and `stop` surround `string`
 # - else, `string` is returned.
-def visualize(string, start=BEGIN_VISUAL, stop=END_VISUAL)
+def visualize(string, start=VISUAL_BEGIN, stop=VISUAL_END)
   string = '.' if $escape_how == :dot
 
   case
@@ -453,7 +454,7 @@ CHARACTERS = Hash.new do |hash, key|
   hash[key] =
     if !key.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$malformed_error`.
-      visualize hex_bytes(key), BEGIN_ERR, END_ERR
+      visualize hex_bytes(key), VISUAL_ERR_BEGIN, VISUAL_ERR_END
     else
       should_escape?(key) ? escape(key) : key
     end
