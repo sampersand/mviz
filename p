@@ -95,12 +95,12 @@ OptParse.new nil, 28 do |op|
   $default_escapes = true
 
   op.on '-e', '--escape=CHARSET', 'Escape chars that match the regex /[CHARSET]/' do |rxp|
-    $escape_regex.push (/[#{rxp}]/u rescue /[#{rxp}]/n)
+    $escape_regex.push "[#{rxp}]"
   end
 
   op.on '-u', '--unescape=CHARSET', 'Do not escape chars if they match /[CHARSET]/;',
                                     'If a char matches both -e and -u, -u wins.' do |rxp|
-    $unescape_regex.push (/[#{rxp}]/u rescue /[#{rxp}]/n)
+    $unescape_regex.push "[#{rxp}]"
   end
 
   op.on '--default-escapes', 'Implicitly include --escape=\'\0-\x1F\x7F\'; If',
@@ -312,22 +312,20 @@ end
 
 ## Union all the regexes we've been given
 if $default_escapes
-  $escape_regex.push /[\x00-\x1F\x7F]/u # Force utf-8, because it'll match everything
-  $escape_regex.push /[\x80-\xFF]/n if $encoding == Encoding::BINARY # force ascii-binary, cause encoding isthat anyways
+  $escape_regex.push '[\x00-\x1F\x7F]'
+  $escape_regex.push '[\x80-\xFF]' if $encoding == Encoding::BINARY
 end
 
-$unescape_regex = Regexp.union($unescape_regex)
-# ($escape_regex  = Regexp.union($escape_regex)) rescue (
-  def $escape_regex.match?(key)
-    any? do |re|
-      re.match?(key.force_encoding(re.encoding))
-    rescue ArgumentError
-      # do nothing, that just means encodings dont match...
-    ensure
-      key.force_encoding $encoding
-    end
-  end
-# )
+def make_regexp(regex_array, flag)
+  Regexp.union regex_array.map { |re|
+    Regexp.new(re.force_encoding($encoding), Regexp::FIXEDENCODING)
+  }
+rescue RegexpError => err
+  $op.abort "issue with --#{flag} (encoding: #$encoding): #{err}"
+end
+
+$escape_regex   = make_regexp $escape_regex, 'escape'
+$unescape_regex = make_regexp $unescape_regex, 'unescape'
 
 ## Force `$trailing_newline` to be set if `$prefixes` are set, as otherwise there wouldn't be a
 # newline between each header, which is weird.
