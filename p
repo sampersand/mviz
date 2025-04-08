@@ -98,11 +98,11 @@ OptParse.new nil, 28 do |op|
   $escape_regex = []
   $default_escape_regex = true
 
-  op.on '--default-escape-regex', 'Implicitly include the default escape regex (\0-\x1f, \x7F); default',
+  op.on '--default-escape', 'Implicitly include the default escape regex (\0-\x1f, \x7F); default',
                                   'if -b is given, this also enables 0x80-0xff.' do
                                     $default_escape_regex = true end
 
-  op.on '-E', '--no-default-escape-regex', 'Disable the default escape regex' do
+  op.on '-E', '--no-default-escape', 'Disable the default escape regex' do
     $default_escape_regex = false
   end
 
@@ -120,29 +120,29 @@ OptParse.new nil, 28 do |op|
   end
 
   # The `-l` is because of "lien-oriented mode" as found in things like perl and ruby.
-  op.on '-l', "Same as: --unescape='\\n'" do
+  op.on '-l', '--unescape-newline', "Same as --unescape='\\n'" do
     $unescape_regex.push "\n"
   end
 
-  op.on '-w', "Same as: --unescape='\\n\\t '" do
+  op.on '-w', "Same as --unescape='\\n\\t '" do
     $unescape_regex.push "\n", "\t", " "
   end
 
-  op.on '-s', "Same as: --escape=' '" do
+  op.on '-s', "Same as --escape=' '" do
     $escape_regex.push ' '
   end
 
-  op.on '-S', 'Same as: -s --space-picture' do
+  op.on '-S', 'Same as -s --space-picture' do
     $space_picture = true
     $escape_regex.push ' '
   end
 
-  op.on '-B', "Same: as --escape='\\\\' (default if not visual)" do |eb|
+  op.on '-B', "Same as --escape='\\\\' (default if not visual)" do |eb|
     $escape_regex.push '\\'
   end
 
   op.on '-U', 'Escapes all non-ascii codepoints. Same',
-              "as: --upper-codepoints -e'\\u{80}-\\u{10FFFF}'" do
+              "as --upper-codepoints -e'\\u{80}-\\u{10FFFF}'" do
     $upper_codepoints = true
     $escape_regex.push /[\u{80}-\u{10FFFF}]/
   end
@@ -220,15 +220,15 @@ OptParse.new nil, 28 do |op|
     exit
   end
 
-  op.on '-b', '--binary', '--bytes', 'Same as: --encoding=binary' do
+  op.on '-b', '--binary', '--bytes', 'Same as --encoding=binary' do
     $encoding = Encoding::BINARY
   end
 
-  op.on '-a', '--ascii', 'Same as: --encoding=ascii' do
+  op.on '-a', '--ascii', 'Same as --encoding=ascii' do
     $encoding = Encoding::ASCII
   end
 
-  op.on '-8', '--utf-8', 'Same as: --encoding=UTF-8 (See the -U flag)' do
+  op.on '-8', '--utf-8', 'Same as --encoding=UTF-8 (See the -U flag)' do
     $encoding = Encoding::UTF_8
   end
 
