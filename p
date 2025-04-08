@@ -36,9 +36,37 @@ OptParse.new nil, 28 do |op|
   ##################################################################################################
   op.separator "\nGeneric Options"
 
-  op.on '-h', '--help', 'Print this message and exit' do
+  op.on '--help', 'Print this message and exit' do
     puts op.help # Newer versions of OptParse have `op.help_exit`, but we are targeting older ones.
     exit
+  end
+
+  op.on '-h', 'Shorter help usage' do
+    puts <<~EOS
+    Usage: #{op.program_name} [options] [string-or-file ...]
+      --help          Print more verbose usage
+      -f              interpret args as files, not strings
+      -N              Don't add prefixes to output
+      -n              Don't add prefixes or newlines to output
+      -eCHARSET       Escape chars within /[CHARSET]/
+      -uCHARSET       Don't escape chars within /[CHARSET]/
+      -E              Don't use default escapes
+      -A              Escape all characters
+      -l              Unescape newlines
+      -w              Unescape whitespace (space, tab, newline)
+      -s              Escape spaces
+      -B              Escape backslashes
+      -U              Escape all non-ASCII characters
+      -v, -V          Enable/disable visual mode
+      -d              Delete escapes
+      -.              Escape with `.`s
+      -x              Escape with hex bytes
+      -C              Escape with codepoints (UTF-8 only)
+      -c              Escape with C-style escapes
+      -P              Have "pictures" for some characters
+      -S              Have "pictures" for only spaces
+      -b, -a, -8, -L  Interpret input data as binary/ASCII/UTF-8/locale data
+    EOS
   end
 
   op.on '--version', 'Print the version and exit' do
