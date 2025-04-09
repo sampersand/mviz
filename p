@@ -428,9 +428,9 @@ def escape_sequence(character)
   when $pictures && character.match?(/[\x00-\x1F]/)
     (0x2400 + character.ord).chr(Encoding::UTF_8)
   when $pictures && character.match?(/[\x7F]/)      then "\u{2421}"
-  when character == '\\' && $escape_how != :hex_all then '\\\\'
+  when character == '\\' && $escape_how != :hex_all && $escape_how != :codepoints then '\\\\'
   when character == ' '  && $space_picture          then "\u{2423}"
-  when character == ' '  && $escape_how != :hex_all then ' '
+  when character == ' '  && $escape_how != :hex_all && $escape_how != :codepoints then ' '
   when $escape_how == :codepoints || ($upper_codepoints && character.codepoints.sum >= 0x80)
     codepoints character
   else
