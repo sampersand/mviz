@@ -28,14 +28,14 @@ VISUAL_BEGIN     = ENV.fetch('P_VISUAL_BEGIN', "\e[7m")
 VISUAL_END       = ENV.fetch('P_VISUAL_END',   "\e[27m")
 VISUAL_ERR_BEGIN = ENV.fetch('P_VISUAL_ERR_BEGIN', "\e[37m\e[41m")
 VISUAL_ERR_END   = ENV.fetch('P_VISUAL_ERR_END',   "\e[49m\e[39m")
-BOLD_BEGIN       = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if $stdout.tty? || true)
-BOLD_END         = (ENV.fetch('P_BOLD_END',   "\e[0m") if $stdout.tty? || true)
+BOLD_BEGIN       = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if $__SHOULD_USE_COLOR = $stdout.tty? || ENV['P_COLOR'])
+BOLD_END         = (ENV.fetch('P_BOLD_END',   "\e[0m") if $__SHOULD_USE_COLOR)
 
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
   op.version = '0.8.1'
   op.banner = <<~BANNER
-  #{VISUAL_BEGIN}usage#{VISUAL_END}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
+  #{VISUAL_BEGIN if $__SHOULD_USE_COLOR}usage#{VISUAL_END if $__SHOULD_USE_COLOR}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
          #{BOLD_BEGIN}#{op.program_name} -f [options] [file ...]#{BOLD_END}  # Read from files
   When no args are given, first form is assumed if stdin is not a tty.
