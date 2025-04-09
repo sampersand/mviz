@@ -41,7 +41,8 @@ hello\^Dworld, how are you? \M-C\M-p\M^_\M^Q\M^M
 ## TODO
 - Should I add an `--highlight-means-error` flag (name subject to bikeshed)? I.e. if there's _any_ form of highlights, return an error. (done)
 - Should make `-l` not `--unescape='\n'` but instead act like `/\R/` (ie platform-indep line sep)?
-- `p -Ax` makes everything hex, except for spaces and backslashes. should we do this?
+- `p -ax` makes everything hex, except for spaces and backslashes. should we do this?
+- MAke `escape-options.txt` the actual escape options that are used. E.g., right now, it's not possible to have spaces escaped as `\x20`, but still have utf-8 chars escaped as `\u`
 
 ## Character class
 - There's a 
