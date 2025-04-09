@@ -33,7 +33,7 @@ BOLD_END         = (ENV.fetch('P_BOLD_END',   "\e[0m") if $__SHOULD_USE_COLOR)
 
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
-  op.version = '0.8.1'
+  op.version = '0.8.5'
   op.banner = <<~BANNER
   #{VISUAL_BEGIN if $__SHOULD_USE_COLOR}usage#{VISUAL_END if $__SHOULD_USE_COLOR}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
@@ -58,20 +58,20 @@ OptParse.new do |op|
     #{BOLD_BEGIN}usage: #{op.program_name} [options] [string ...]#{BOLD_END}
       --help          Print a longer help message, with more options
       -f              interpret args as files, not strings
-      -c              Exit nonzero if any escapes are encountered. ("check")
+      -c              Exit nonzero if any escapes are printed. ("check")
       -N, -n          Don't add prefixes/prefixes or newlines to output
     #{BOLD_BEGIN}WHAT TO ESCAPE#{BOLD_END}
       -e CHARSET      Escape chars matching /[CHARSET]/
+      -E              Escape all characters
       -u CHARSET      Don't escape chars matching /[CHARSET]/
-      -E              Don't use the default escapes
-      -a              Escape all characters
+      -U              Don't use the default escapes
       -l, -w          Unescape newlines/whitespace (space, tab, newline)
-      -s, -B, -U      Escape spaces/backslashes/all non-ASCII characters
+      -s, -B          Escape spaces/backslashes
+      -m              Escape all multibyte characters; implies -8
     #{BOLD_BEGIN}HOW TO ESCAPE#{BOLD_END}
       -v, -V          Enable/disable visual mode
       -d, -., -x, -X  Escape by deleting/with `.`/hex bytes/always hex bytes
-      -c              Escape with codepoints (implies -8)
-      -C              Escape with C-style escapes
+      -C              Escape with codepoints (implies -8)
       -P, -S          Have "pictures" for some characters/only spaces
     #{BOLD_BEGIN}ENCODINGS#{BOLD_END}
       -b, -A, -8, -L  Interpret input data as binary/ASCII/UTF-8/locale data
@@ -135,24 +135,25 @@ OptParse.new do |op|
     $escape_regexes.push "[#{rxp}]"
   end
 
+  # 'Same as --escape=\'\0-\u{10FFFF}\'', in utf-8
+  op.on '-E', '--escape-all', 'Escape all characters. Useful when combined with --unescape.' do
+    $escape_regexes.push '.'
+  end
+
   op.on '-u', '--unescape=CHARSET', 'Do not escape characters if they match /[CHARSET]/. If a char',
                                     'matches both an --escape and --unescape, it is unescaped.' do |rxp|
     $unescape_regexes.push "[#{rxp}]"
   end
 
   op.on '--default-escapes', "Implicitly include --escape='\\0-\\x1F\\x7F'; If not visual mode,",
-                             "also --escape='\\\\'. If --binary, also -e'\\x80-\\xFF' (default)" do
+                             "also --escape='\\\\'. If --binary, also -e'\\x80-\\xFF'. (default)" do
     $default_escapes = true
   end
 
-  op.on '-E', '--no-default-escapes', 'Dont include --default-escapes' do
+  op.on '-U', '--no-default-escapes', 'Dont include --default-escapes' do
     $default_escapes = false
   end
 
-  # 'Same as --escape=\'\0-\u{10FFFF}\'', in utf-8
-  op.on '-a', '--escape-all', 'Escape all characters. Useful when combined with --unescape.' do
-    $escape_regexes.push '.'
-  end
 
   op.on '-l', '--unescape-newline', "Same as --unescape='\\n'. (\"Line-oriented mode\")" do
     $unescape_regexes.push '[\n]'
@@ -175,8 +176,8 @@ OptParse.new do |op|
     $escape_regexes.push '\\\\'
   end
 
-  op.on '-U', '--escape-non-ascii', "Same as --upper-codepoints --escape='\\u{80}-\\u{10FFFF}'.",
-                                    '(Escapes all non-ascii codepoints.)' do
+  op.on '-m', '--escape-multibyte', "Same as --multibyte-codepoints --escape='\\u{80}-\\u{10FFFF}'.",
+                                    '(Escapes all multibyte codepoints.) Implies --utf-8.' do
     $upper_codepoints = true
     $encoding = Encoding::UTF_8
     $escape_regexes.push '[\u{80}-\u{10FFFF}]'
@@ -226,7 +227,7 @@ OptParse.new do |op|
     $encoding = Encoding::UTF_8
   end
 
-  op.on '--[no-]upper-codepoints', 'Like --codepoints, but only for values above 0x7F. (default)'  do |uc|
+  op.on '--[no-]multibyte-codepoints', 'Like --codepoints, but only for values above 0x80. (default)'  do |uc|
     $upper_codepoints = uc
     $encoding = Encoding::UTF_8
   end
@@ -350,7 +351,7 @@ unless $encoding == Encoding::UTF_8
   if $escape_how == :codepoints
     abort "cannot use --codepoints with non-UTF-8 encodings (encoding is #$encoding)"
   elsif $upper_codepoints
-    abort "cannot use --upper-codepoints with non-UTF-8 encodings (encoding is #$encoding)"
+    abort "cannot use --multibyte-codepoints with non-UTF-8 encodings (encoding is #$encoding)"
   end
 end
 
