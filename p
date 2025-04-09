@@ -58,7 +58,7 @@ OptParse.new do |op|
     #{BOLD_BEGIN}usage: #{op.program_name} [options] [string ...]#{BOLD_END}
       --help          Print a longer help message, with more options
       -f              interpret args as files, not strings
-      -M, -H          Exit nonzero if invalid/any escapes are encountered.
+      -c              Exit nonzero if any escapes are encountered. ("check")
       -N, -n          Don't add prefixes/prefixes or newlines to output
     #{BOLD_BEGIN}WHAT TO ESCAPE#{BOLD_END}
       -e CHARSET      Escape chars matching /[CHARSET]/
@@ -96,11 +96,11 @@ OptParse.new do |op|
     $files = f
   end
 
-  op.on '-M', '--[no-]malformed-error', 'Invalid chars for --encoding a cause nonzero exit. (default)' do |me|
+  op.on'--[no-]malformed-error', 'Invalid chars for --encoding a cause nonzero exit. (default)' do |me|
     $malformed_error = me
   end
 
-  op.on '-H', '--[no-]escape-error', 'Any escapes cause an error status' do |ee|
+  op.on '-c', '--[no-]check-escapes', 'Any escapes cause an error status' do |ee|
     $escape_error = ee
   end
 
@@ -109,7 +109,7 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator 'SEPARATING OUTPUTS'
 
-  op.on '--prefixes', 'Add prefixes to the output. (default if any args are given & stdout isnt a tty)' do
+  op.on '--prefixes', "Add \"prefixes\". (default if stdout's a tty, and args are given)" do
     $prefixes = true
   end
 
@@ -166,7 +166,7 @@ OptParse.new do |op|
     $escape_regexes.push ' '
   end
 
-  op.on '-S', 'Same as --escape-space --space-picture' do
+  op.on '-S', '--show-spaces', 'Same as --escape-space --space-picture' do
     $space_picture = true
     $escape_regexes.push ' '
   end
@@ -212,32 +212,31 @@ OptParse.new do |op|
     $escape_how = :hex
   end
 
+  op.on '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc). (default if -x and not -P)' do |ce|
+    $c_escapes = ce
+  end
+
   op.on '-X', '--hex-all', 'Like --hex, but applies to _all_ characters' do
     $escape_how = :hex_all
     $upper_codepoints = false
   end
 
-  op.on '-c', '--codepoints', 'Escape with \u{...}. Sets (and can only be used with) --utf-8.' do
+  op.on '-C', '--codepoints', 'Escape with \u{...}. Sets (and can only be used with) --utf-8.' do
     $escape_how = :codepoints
     $encoding = Encoding::UTF_8
   end
 
-  # op.on '--[no-]upper-codepoints', 'When --utf-8, escape codepoints above 0x7F with \u{...}. (default).', 'When disabled, their hex values are displayed instead'  do |uc|
-  op.on '--[no-]upper-codepoints', 'Like --codepoints, but only for values above 0x7F. See -U'  do |uc|
+  op.on '--[no-]upper-codepoints', 'Like --codepoints, but only for values above 0x7F. (default)'  do |uc|
     $upper_codepoints = uc
     $encoding = Encoding::UTF_8
   end
 
-  op.on '-C', '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc). (default if -x and not -P)' do |ce|
-    $c_escapes = ce
-  end
-
-  op.on '-P', '--[no-]pictures', 'Use "pictures" (U+240x-U+242x) for some escapes. Implies --space-picture' do |cp|
+  op.on '-P', '--[no-]pictures', 'Use "pictures" (U+240x-U+242x) for some escapes.' do |cp|
     $pictures = $space_picture = cp
   end
 
   # The reason this doesn't imply `-s` is because you may want to use it exclusively with `--escape-surrounding-space`
-  op.on '--[no-]space-picture', "Like --pictures, but only for spaces; Doesn't imply -s." do |sp|
+  op.on '--[no-]space-picture', "Like --pictures, but only enable for spaces; Doesn't imply -s." do |sp|
     $space_picture = sp
   end
 
@@ -246,8 +245,8 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator 'ENCODINGS', '(default based on POSIXLY_CORRECT; --utf-8 if unset, --locale if set)'
 
-  op.on '--encoding=ENCODING', "Specify the input's encoding. Case-insensitive.",
-                               "Non-ascii-compatible encodings (eg UTF-16) will not work" do |enc|
+  op.on '--encoding=ENCODING', "Specify the input's encoding. Case-insensitive. Encodings that",
+                               "aren't ASCII-compatible encodings (eg UTF-16) aren't accepted." do |enc|
     $encoding = Encoding.find enc rescue abort
     $encoding.ascii_compatible? or abort "Encoding #$encoding is not ASCII-compatible!"
   end
@@ -270,7 +269,7 @@ OptParse.new do |op|
     $encoding = Encoding::ASCII
   end
 
-  op.on '-8', '--utf-8', 'Same as --encoding=UTF-8. (See also the -U flag)' do
+  op.on '-8', '--utf-8', 'Same as --encoding=UTF-8. (default unless POSIXLY_CORRECT set)' do
     $encoding = Encoding::UTF_8
   end
 
