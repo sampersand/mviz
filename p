@@ -203,7 +203,7 @@ OptParse.new do |op|
     $escape_how = :delete
   end
 
-  op.on '-.', '--dot', "Use a '.' when escaping characters" do
+  op.on '-.', '--dot', "Replace escaped characters with a '.'" do
     $escape_how = :dot
   end
 
