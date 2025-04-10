@@ -53,11 +53,11 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator 'GENERIC OPTIONS'
 
-  op.on '-h', 'Shorter help usage' do
+  op.on '-h', 'Print a shorter help message and exit' do
     puts <<~EOS
     #{BOLD_BEGIN}usage: #{op.program_name} [options] [string ...]#{BOLD_END}
-      --help          Print a longer help message, with more options
-      -f              interpret args as files, not strings
+      --help          Print a longer help message with more options
+      -f              Interpret args as files, not strings
       -c              Exit nonzero if any escapes are printed. ("check")
       -N, -n          Don't add prefixes/prefixes or newlines to output
     #{BOLD_BEGIN}WHAT TO ESCAPE#{BOLD_END}
@@ -72,9 +72,9 @@ OptParse.new do |op|
       -v, -V          Enable/disable visual mode
       -d, -., -x, -X  Escape by deleting/with `.`/hex bytes/always hex bytes
       -C              Escape with codepoints (implies -8)
-      -P, -S          Have "pictures" for some characters/only spaces
+      -p, -S          Have "pictures" for some characters/only spaces
     #{BOLD_BEGIN}ENCODINGS#{BOLD_END}
-      -b, -A, -8, -L  Interpret input data as binary/ASCII/UTF-8/locale data
+      -b, -A, -8      Interpret input data as binary/ASCII/UTF-8
     EOS
   end
 
@@ -154,7 +154,6 @@ OptParse.new do |op|
     $default_escapes = false
   end
 
-
   op.on '-l', '--unescape-newline', "Same as --unescape='\\n'. (\"Line-oriented mode\")" do
     $unescape_regexes.push '[\n]'
   end
@@ -213,7 +212,7 @@ OptParse.new do |op|
     $escape_how = :hex
   end
 
-  op.on '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc). (default if -x and not -P)' do |ce|
+  op.on '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc). (default if -x and not -p)' do |ce|
     $c_escapes = ce
   end
 
@@ -232,7 +231,7 @@ OptParse.new do |op|
     $encoding = Encoding::UTF_8
   end
 
-  op.on '-P', '--[no-]pictures', 'Use "pictures" (U+240x-U+242x) for some escapes.' do |cp|
+  op.on '-p', '--[no-]pictures', 'Use "pictures" (U+240x-U+242x) for some escapes.' do |cp|
     $pictures = $space_picture = cp
   end
 
@@ -262,6 +261,7 @@ OptParse.new do |op|
     exit
   end
 
+  # op.on '-b', '--binary', '--bytes', 'Interpret input data as binary data (Same as --encoding=binary)' do
   op.on '-b', '--binary', '--bytes', 'Same as --encoding=binary. (Escapes high-bit bytes)' do
     $encoding = Encoding::BINARY
   end
@@ -274,7 +274,7 @@ OptParse.new do |op|
     $encoding = Encoding::UTF_8
   end
 
-  op.on '-L', '--locale', 'Same as --encoding=locale. (Uses LANG/LC_ALL/LC_CTYPE env vars)' do
+  op.on '--locale', 'Same as --encoding=locale. (Chooses encoding based on env vars)' do
     $encoding = Encoding.find('locale')
   end
 
@@ -290,6 +290,7 @@ OptParse.new do |op|
     POSIXLY_CORRECT       If present, changes default encoding to the locale's (cf locale(1).), and
                           also disables parsing switches after arguments (e.g. `p foo -x` will print
                           out `foo` and `-x`, and won't interpret `-x` as a switch.)
+    LC_ALL/LC_CTYPE/LANG  Checked (in that order) for encoding when --locale is used.
   EOS
 
   ##################################################################################################
@@ -364,12 +365,6 @@ at_exit do
     exit 1
   end
 end
-
-# ## Add the functionality in for `--malformed-error`: If the program is normally exiting (i.e.
-# # it's not exiting due to an exception), then exit based on whether an encoding failed.
-# $malformed_error and at_exit do
-#   exit !$ENCODING_FAILED unless $!
-# end
 
 ####################################################################################################
 #                                                                                                  #
