@@ -126,7 +126,60 @@ OptParse.new do |op|
   ##################################################################################################
   #                                         What To Escape                                         #
   ##################################################################################################
-  op.separator 'WHAT TO ESCAPE', '(You can specify multiple options; they are additive.)'
+  op.separator 'ESCAPING'
+
+  $DEFAULT_CHARSET = '[\0-\x1F\x7F]'
+  $ESCAPES = []
+
+  op.accept :charset do |charset|
+    case charset
+    when nil  then nil # each one handles itself
+    when '\A' then '.' # ie all characters. (TODO: is `\X` needed?)
+    when '\U' then '[\u{80}-\u{10FFFF}]'
+    else           "[#{charset}]"
+    end
+  end
+
+  op.on '--default-charset=CHARSET', :charset, 'Set the default charset for the remaining options to CHARSET' do |cs|
+    $default_charset = cs
+  end
+
+  op.on '--print[=CHARSET]', :charset, 'Simply print characters which match CHARSET' do |cs|
+    $ESCAPES.prepend [:print, cs || $DEFAULT_CHARSET]
+  end
+
+  op.on '--delete[=CHARSET]', :charset, 'Delete characters which match CHARSET' do |cs|
+    $ESCAPES.prepend [:delete, cs || $DEFAULT_CHARSET]
+  end
+
+  op.on '--dot[=CHARSET]', :charset, 'Replaces chars which match CHARSET with a `.`' do |cs|
+    $ESCAPES.prepend [:dot, cs || $DEFAULT_CHARSET]
+  end
+
+  op.on '--hex[=CHARSET]', :charset, 'Replaces chars which match CHARSET with \xHH' do |cs|
+    $ESCAPES.prepend [:hex, cs || $DEFAULT_CHARSET]
+  end
+
+  op.on '--codepoint[=CHARSET]', :charset, 'Replaces chars with their codepoints' do |cs|
+    # TODO: the default should probably be `\U`, ie all multibyte utf-8 chars, no?
+    $ESCAPES.prepend [:codepoint, cs || $DEFAULT_CHARSET]
+  end
+
+  op.on '--c-escapes[=CHARSET]', :charset, 'Replaces chars with their c escapes' do |cs|
+    $ESCAPES.prepend [:c_escape, cs || '[\0\a\b\t\n\v\f\r\e]']
+  end
+
+  op.on '--pictures[=CHARSET]', :charset, 'Replaces chars with their "pictures"' do |cs|
+    $ESCAPES.prepend [:pictures, cs || '[\0-\x1F\x7F]'] # TODO: ALSO ADD SPACE?
+  end
+
+  op.on '--default[=CHARSET]', :charset, 'Do the default cction for CHARSET' do |cs|
+    $ESCAPES.prepend [:default, cs || '[\0-\x1F\x7F]'] # TODO: ALSO ADD SPACE?
+  end
+=begin
+  op.parse! %w[--delete]
+  puts op.help
+  exit
   $unescape_regexes = []
   $escape_regexes = []
   $default_escapes = true
@@ -190,7 +243,7 @@ OptParse.new do |op|
   #                                         How to Escape                                          #
   ##################################################################################################
   op.separator 'HOW TO ESCAPE', '(-d, -., -x, -X, and -C are mutually exclusive)'
-
+=end
   op.on '-v', '--visual', 'Enable visual effects. (default only if stdout is tty)' do
     $visual = true
   end
@@ -198,7 +251,7 @@ OptParse.new do |op|
   op.on '-V', '--no-visual', 'Do not enable visual effects' do
     $visual = false
   end
-
+=begin
   op.on '-d', '--delete', 'Delete escaped characters instead of printing their escape' do
     $escape_how = :delete
   end
@@ -243,6 +296,7 @@ OptParse.new do |op|
   ##################################################################################################
   #                                        Input Encodings                                         #
   ##################################################################################################
+=end
   op.separator 'ENCODINGS', '(default based on POSIXLY_CORRECT; --utf-8 if unset, --locale if set)'
 
   op.on '--encoding=ENCODING', "Specify the input's encoding. Case-insensitive. Encodings that",
