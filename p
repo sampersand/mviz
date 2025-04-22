@@ -59,7 +59,8 @@ OptParse.new do |op|
       --help          Print a longer help message with more options
       -f              Interpret args as files, not strings
       -c              Exit nonzero if any escapes are printed. ("check")
-      -N, -n          Don't add prefixes/prefixes or newlines to output
+      -1              Print out arguments once per line, and add a trailing newline
+      -n              Print out arguments with nothing separating them
     #{BOLD_BEGIN}WHAT TO ESCAPE#{BOLD_END}
       -e CHARSET      Escape chars matching /[CHARSET]/
       -E              Escape all characters
@@ -113,7 +114,7 @@ OptParse.new do |op|
     $prefixes = true
   end
 
-  op.on '-N', '--no-prefixes', 'Do not add prefixes to the output' do
+  op.on '-1', '--no-prefixes', 'Do not add prefixes to the output' do
     $prefixes = false
   end
 

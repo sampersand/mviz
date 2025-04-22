@@ -464,30 +464,13 @@ def escape(char, what)
               return escape char, case char
                                   when /[\0-\x1F\x7F]/ then :hex
                                   when ' '  then :print
-                                  when '\\' then $visual ? :print : return '\\'
+                                  when '\\' then $visual ? :print : (return '\\')
                                   when /[\u{80}-\u{10FFFF}]/ then :codepoints
                                   else :print
                                   end
             else
               raise "unknown what: #{what}"
             end
-end
-
-    $ESCAPES.prepend [:print, cs || $DEFAULT_CHARSET]
-
-    $ESCAPES.prepend [:delete, cs || $DEFAULT_CHARSET]
-
-    $ESCAPES.prepend [:dot, cs || $DEFAULT_CHARSET]
-
-    $ESCAPES.prepend [:hex, cs || $DEFAULT_CHARSET]
-
-    $ESCAPES.prepend [:codepoint, cs || $DEFAULT_CHARSET]
-
-    $ESCAPES.prepend [:c_escape, cs || /[\0\a\b\t\n\v\f\r\e]/]
-
-    $ESCAPES.prepend [:pictures, cs || /[\0-\x1F\x7F]/] # TODO: ALSO ADD SPACE?
-
-    $ESCAPES.prepend [:default, cs || $DEFAULT_CHARSET]
 end
 
 
