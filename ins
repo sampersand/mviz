@@ -138,6 +138,7 @@ OptParse.new do |op|
     case charset
     when nil  then nil # each one handles itself
     when '\A' then "." # ie all characters. (TODO: is `\X` needed?)
+    when '\@' then "[\0-\x1F\x7F]"
     when '\m' then LAMBDA_FOR_MULTIBYTE
     when '\M' then LAMBDA_FOR_SINGLEBYTE
     else           "[#{charset}]"
@@ -235,6 +236,13 @@ OptParse.new do |op|
     $escapes.prepend [cs, ESCAPES.fetch(:default)]
   end
 
+  op.on <<~'EOS'
+    CHARSET is a regex character set; the braces can be omitted. For example `--delete=a-z` will
+    cause all lower-case latin letters to be removed. Note that sequences like `\w` and `\d` are
+    supported. In addition, there are some special cases for a charset of just: `\A` (all chars),
+    `\m` (all multibyte chars), and `\M` (all non-multibyte chars)
+  EOS
+
   ## =====
   ## =====
   ## =====
@@ -265,75 +273,10 @@ OptParse.new do |op|
     $escape_surronding_spaces = ess
   end
 
-=begin
-  ##################################################################################################
-  #                                         What To Escape                                         #
-  ##################################################################################################
-  op.separator 'WHAT TO ESCAPE', '(You can specify multiple options; they are additive.)'
-  $unescape_regexes = []
-  $escape_regexes = []
-  $default_escapes = true
-
-  op.on '-e', '--escape=CHARSET', 'Escape characters that match the regex /[CHARSET]/' do |rxp|
-    $escape_regexes.push "[#{rxp}]"
-  end
-
-  # 'Same as --escape=\'\0-\u{10FFFF}\'', in utf-8
-  op.on '-E', '--escape-all', 'Escape all characters. Useful when combined with --unescape.' do
-    $escape_regexes.push '.'
-  end
-
-  op.on '-u', '--unescape=CHARSET', 'Do not escape characters if they match /[CHARSET]/. If a char',
-                                    'matches both an --escape and --unescape, it is unescaped.' do |rxp|
-    $unescape_regexes.push "[#{rxp}]"
-  end
-
-  op.on '--default-escapes', "Implicitly include --escape='\\0-\\x1F\\x7F'; If not visual mode,",
-                             "also --escape='\\\\'. If --binary, also -e'\\x80-\\xFF'. (default)" do
-    $default_escapes = true
-  end
-
-  op.on '-U', '--no-default-escapes', 'Dont include --default-escapes' do
-    $default_escapes = false
-  end
-
-  op.on '-l', '--unescape-newline', "Same as --unescape='\\n'. (\"Line-oriented mode\")" do
-    $unescape_regexes.push '[\n]'
-  end
-
-  op.on '-w', '--unescape-whitespace', "Same as --unescape='\\n\\t '" do
-    $unescape_regexes.push '[\n\t ]'
-  end
-
-  op.on '-s', '--escape-space', "Same as --escape=' '" do
-    $escape_regexes.push ' '
-  end
-
-  op.on '-S', '--show-spaces', 'Same as --escape-space --space-picture' do
-    $space_picture = true
-    $escape_regexes.push ' '
-  end
-
-  op.on '-B', '--escape-backslash', "Same as --escape='\\\\' (default if not visual mode)" do |eb|
-    $escape_regexes.push '\\\\'
-  end
-
-  op.on '-m', '--escape-multibyte', "Same as --multibyte-codepoints --escape='\\u{80}-\\u{10FFFF}'.",
-                                    '(Escapes all multibyte codepoints.) Implies --utf-8.' do
-    $upper_codepoints = true
-    $encoding = Encoding::UTF_8
-    $escape_regexes.push '[\u{80}-\u{10FFFF}]'
-  end
-
-  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
-    $escape_surronding_spaces = ess
-  end
-
   ##################################################################################################
   #                                         How to Escape                                          #
   ##################################################################################################
   op.separator 'HOW TO ESCAPE', '(-d, -., -x, -X, and -C are mutually exclusive)'
-=end
   op.on '-v', '--visual', 'Enable visual effects. (default only if stdout is tty)' do
     $visual = true
   end
