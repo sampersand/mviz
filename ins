@@ -129,14 +129,17 @@ OptParse.new do |op|
 
   op.separator 'ESCAPING'
 
-  $DEFAULT_CHARSET = /[\0-\x1F\x7F]/u
+  $DEFAULT_CHARSET = '[\0-\x1F\x7F]'
   $escapes = []
 
+  LAMBDA_FOR_MULTIBYTE = ->char{char.bytesize > 1}
+  LAMBDA_FOR_SINGLEBYTE = ->char{char.bytesize == 1}
   op.accept :charset do |charset|
     case charset
     when nil  then nil # each one handles itself
-    when '\A' then +"." # ie all characters. (TODO: is `\X` needed?)
-    when '\U' then +"[\u{80}-\u{10FFFF}]" # I.e. all of upper unicode
+    when '\A' then "." # ie all characters. (TODO: is `\X` needed?)
+    when '\m' then LAMBDA_FOR_MULTIBYTE
+    when '\M' then LAMBDA_FOR_SINGLEBYTE
     else           "[#{charset}]"
     end
   end
@@ -151,6 +154,7 @@ OptParse.new do |op|
     "\f" => '\f',
     "\r" => '\r',
     "\e" => '\e',
+    "\\" => '\\\\',
   }
 
   ESCAPES = {
@@ -160,6 +164,7 @@ OptParse.new do |op|
     hex: ->char{ visualize hex_bytes char },
     codepoint: ->char{ visualize codepoints char },
     c_escapes: ->char{ visualize C_ESCAPES.fetch(char) },
+    standout: ->char{ visualize char },
     pictures: ->char{
       case char
       when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
@@ -169,9 +174,11 @@ OptParse.new do |op|
       end
     },
     default: ->char{
-      if ce = C_ESCAPES[char]
+      if char == '\\' && !$visualize
+        '\\'
+      elsif ce = C_ESCAPES[char]
         visualize ce
-      elsif (char == "\x7F" || char <= "\x1F") or ($encoding == Encoding::BINARY && ("\x80".."\xFF").include?(char))
+      elsif (char == "\x7F" || char <= "\x1F") or ($encoding == Encoding::BINARY && char >= "\x7F")
         visualize hex_bytes char
       else
         char
@@ -191,37 +198,71 @@ OptParse.new do |op|
     $DEFAULT_CHARSET = cs
   end
 
-  op.on '--print[=CHARSET]', :charset, 'Simply print characters which match CHARSET' do |cs|
-    $escapes.prepend [cs, ESCAPES.fetch(:print)]
+  op.on '--print=CHARSET', :charset, 'Simply print characters which match CHARSET' do |cs|
+    $escapes.prepend [cs || fail, ESCAPES.fetch(:print)]
   end
 
-  op.on '--delete[=CHARSET]', :charset, 'Delete characters which match CHARSET' do |cs|
+  op.on '--delete=CHARSET', :charset, 'Delete characters which match CHARSET' do |cs|
     $escapes.prepend [cs || $DEFAULT_CHARSET, ESCAPES.fetch(:delete)]
   end
 
-  op.on '--dot[=CHARSET]', :charset, 'Replaces chars which match CHARSET with a `.`' do |cs|
-    $escapes.prepend [cs, ESCAPES.fetch(:dot)]
+  op.on '--dot=CHARSET', :charset, 'Replaces chars which match CHARSET with a `.`' do |cs|
+    $escapes.prepend [cs || fail, ESCAPES.fetch(:dot)]
   end
 
-  op.on '--hex[=CHARSET]', :charset, 'Replaces chars which match CHARSET with \xHH' do |cs|
-    $escapes.prepend [cs, ESCAPES.fetch(:hex)]
+  op.on '--hex=CHARSET', :charset, 'Replaces chars which match CHARSET with \xHH' do |cs|
+    $escapes.prepend [cs || fail, ESCAPES.fetch(:hex)]
   end
 
-  op.on '--codepoint[=CHARSET]', :charset, 'Replaces chars with their codepoints' do |cs|
-    # TODO: the default should probably be `\U`, ie all multibyte utf-8 chars, no?
-    $escapes.prepend [cs, ESCAPES.fetch(:codepoint)]
+  op.on '--codepoint=CHARSET', :charset, 'Replaces chars with their codepoints' do |cs|
+    # TODO: the default should probably be `\m`, ie all multibyte utf-8 chars, no?
+    $escapes.prepend [cs || fail, ESCAPES.fetch(:codepoint)]
   end
 
-  op.on '--c-escapes[=CHARSET]', :charset, 'Replaces chars with their c escapes' do |cs|
-    $escapes.prepend [cs || +"[\0\a\b\t\n\v\f\r\e]", ESCAPES.fetch(:c_escapes)]
+  op.on '--c-escapes=CHARSET', :charset, 'Replaces chars with their c escapes' do |cs|
+    $escapes.prepend [cs || "[\0\a\b\t\n\v\f\r\e]", ESCAPES.fetch(:c_escapes)] # NOTE the default doesnt include `\\`.
   end
 
-  op.on '--pictures[=CHARSET]', :charset, 'Replaces chars with their "pictures"' do |cs|
-    $escapes.prepend [cs || +"[\0-\x20\x7F]", ESCAPES.fetch(:pictures)]
+  op.on '--pictures=CHARSET', :charset, 'Replaces chars with their "pictures"' do |cs|
+    $escapes.prepend [cs || "[\0-\x20\x7F]", ESCAPES.fetch(:pictures)]
   end
 
-  op.on '--default[=CHARSET]', :charset, 'Do the default action for CHARSET' do |cs|
+  op.on '--standout=CHARSET', :charset, 'Print the character, but use visual effects around it' do |cs|
+    $escapes.prepend [cs || fail, ESCAPES.fetch(:standout)]
+  end
+
+  op.on '--default=CHARSET', :charset, 'Do the default action for CHARSET' do |cs|
     $escapes.prepend [cs, ESCAPES.fetch(:default)]
+  end
+
+  ## =====
+  ## =====
+  ## =====
+
+  op.separator 'SHORTHANDS'
+  op.on '-l', '--print-newlines', "Same as --print='\\n'" do
+    $escapes.prepend ["\n", ESCAPES.fetch(:print)]
+  end
+
+  op.on '-w', '--print-whitespace', "Same as --print='\\n\\t '" do
+    $escapes.prepend ["[\n\t ]", ESCAPES.fetch(:print)]
+  end
+
+  op.on '-s', '--standout-space', "Same as --standout=' '" do
+    $escapes.prepend [' ', ESCAPES.fetch(:standout)]
+  end
+
+  op.on '-B', '-\\', '--escape-backslashes', "Same as --c-escapes='\\' (default if not visual mode)" do |eb|
+    $escapes.prepend ['\\', ESCAPES.fetch(:c_escapes)]
+  end
+
+  op.on '-m', '--codepoint-multibyte', "Same as --codepoints='\\m'; Implies --utf-8" do # TODO: do we wan that implication?
+    $encoding = Encoding::UTF_8
+    $escapes.prepend [LAMBDA_FOR_MULTIBYTE, ESCAPES.fetch(:codepoint)]
+  end
+
+  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
+    $escape_surronding_spaces = ess
   end
 
 =begin
@@ -426,9 +467,16 @@ defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? 
 defined? $upper_codepoints         or $upper_codepoints = $encoding == Encoding::UTF_8
 # ^ Escape things above `\x80` by replacing them with their codepoints if in utf-8 mode, and "make everything hex" wasn't requested
 
-$escapes.map! do |charset, block|
-  [Regexp.new(charset.force_encoding($encoding)), block]
+PATTERNS = $escapes.map do |charset, block|
+  charset = case charset
+            when String then Regexp.new((+charset).force_encoding($encoding))
+            when Regexp then charset
+            when Proc then charset
+            else raise "fail: bad charset '#{charset}'"
+            end
+  [charset, block]
 end
+
 
 ## Force `$trailing_newline` to be set if `$prefixes` are set, as otherwise there wouldn't be a
 # newline between each header, which is weird.
@@ -485,9 +533,9 @@ end
 ####################################################################################################
 
 def __do_escape(char)
-  $escapes.each do |charset, escape_method|
+  PATTERNS.each do |condition, escape_method|
     # p [charset.encoding, char.encoding]
-    return escape_method.call(char) if charset === char
+    return escape_method.call(char) if condition === char
   end
 
   ESCAPES.fetch(:default).call char
