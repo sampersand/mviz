@@ -171,7 +171,7 @@ OptParse.new do |op|
     default: ->char{
       if ce = C_ESCAPES[char]
         visualize ce
-      elsif char == "\x7F" || char <= "\x1F" then
+      elsif (char == "\x7F" || char <= "\x1F") or ($encoding == Encoding::BINARY && ("\x80".."\xFF").include?(char))
         visualize hex_bytes char
       else
         char
@@ -181,6 +181,10 @@ OptParse.new do |op|
 
   def add_escape(charset, &block)
     $escapes.push [charset, block]
+  end
+
+  op.on '--clear-escapes', 'Undo all escapes that have been added, resetting it to the default' do
+    $escapes.clear
   end
 
   op.on '--default-charset=CHARSET', :charset, 'Set the default charset for the remaining options to CHARSET' do |cs|
