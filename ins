@@ -62,13 +62,13 @@ OptParse.new do |op|
       -1              Print out arguments once per line, and add a trailing newline
       -n              Print out arguments with nothing separating them
     #{BOLD_BEGIN}WHAT TO ESCAPE#{BOLD_END}
-      -e CHARSET      Escape chars matching /[CHARSET]/
-      -E              Escape all characters
-      -u CHARSET      Don't escape chars matching /[CHARSET]/
-      -U              Don't use the default escapes
-      -l, -w          Unescape newlines/whitespace (space, tab, newline)
-      -s, -B          Escape spaces/backslashes
-      -m              Escape all multibyte characters; implies -8
+      --default-charset=CHARSET    Explicitly sets the default charset
+      -P              Print characters in the default charset
+      -d              Delete characters in the default charset
+      -.              Replace characters with periods
+      -x              Replace characters with their hex value
+      -p              Replace characters with their pictures
+
     #{BOLD_BEGIN}HOW TO ESCAPE#{BOLD_END}
       -v, -V          Enable/disable visual mode
       -d, -., -x, -X  Escape by deleting/with `.`/hex bytes/always hex bytes
@@ -77,6 +77,30 @@ OptParse.new do |op|
     #{BOLD_BEGIN}ENCODINGS#{BOLD_END}
       -b, -A, -8      Interpret input data as binary/ASCII/UTF-8
     EOS
+    exit
+    # puts <<~EOS
+    # #{BOLD_BEGIN}usage: #{op.program_name} [options] [string ...]#{BOLD_END}
+    #   --help          Print a longer help message with more options
+    #   -f              Interpret args as files, not strings
+    #   -c              Exit nonzero if any escapes are printed. ("check")
+    #   -1              Print out arguments once per line, and add a trailing newline
+    #   -n              Print out arguments with nothing separating them
+    # #{BOLD_BEGIN}WHAT TO ESCAPE#{BOLD_END}
+    #   -e CHARSET      Escape chars matching /[CHARSET]/
+    #   -E              Escape all characters
+    #   -u CHARSET      Don't escape chars matching /[CHARSET]/
+    #   -U              Don't use the default escapes
+    #   -l, -w          Unescape newlines/whitespace (space, tab, newline)
+    #   -s, -B          Escape spaces/backslashes
+    #   -m              Escape all multibyte characters; implies -8
+    # #{BOLD_BEGIN}HOW TO ESCAPE#{BOLD_END}
+    #   -v, -V          Enable/disable visual mode
+    #   -d, -., -x, -X  Escape by deleting/with `.`/hex bytes/always hex bytes
+    #   -C              Escape with codepoints (implies -8)
+    #   -p, -S          Have "pictures" for some characters/only spaces
+    # #{BOLD_BEGIN}ENCODINGS#{BOLD_END}
+    #   -b, -A, -8      Interpret input data as binary/ASCII/UTF-8
+    # EOS
   end
 
   op.on '--help', 'Print a longer usage message and exit' do
@@ -103,6 +127,14 @@ OptParse.new do |op|
 
   op.on '-c', '--[no-]check-escapes', 'Any escapes cause an error status' do |ee|
     $escape_error = ee
+  end
+
+  op.on '-v', '--visual', 'Enable visual effects. (default only if stdout is tty)' do
+    $visual = true
+  end
+
+  op.on '-V', '--no-visual', 'Do not enable visual effects' do
+    $visual = false
   end
 
   ##################################################################################################
@@ -147,7 +179,7 @@ OptParse.new do |op|
 
   ESCAPES = {
     print: ->char{ char },
-    delete: ->_char{ '' },
+    delete: ->_char{ $SOMETHING_ESCAPED = true; '' },
     dot: ->_char{ visualize '.' },
     hex: ->char{ visualize hex_bytes char },
     codepoint: ->char{ visualize codepoints char },
@@ -190,28 +222,16 @@ OptParse.new do |op|
     $escapes.prepend [cs || fail, ESCAPES.fetch(:print)]
   end
 
-  op.on '--delete[=CHARSET]', 'Delete characters which match CHARSET' do |cs|
+  op.on '-d', '--delete[=CHARSET]', 'Delete characters which match CHARSET' do |cs|
     $escapes.prepend [cs || :default, ESCAPES.fetch(:delete)]
   end
 
-  op.on '-d', 'Same as --delete with no argument (ie uses default set)' do
-    $escapes.prepend [:default, ESCAPES.fetch(:delete)]
-  end
-
-  op.on '--dot[=CHARSET]', 'Replaces chars which match CHARSET with a `.`' do |cs|
+  op.on '-.', '--dot[=CHARSET]', 'Replaces chars which match CHARSET with a `.`' do |cs|
     $escapes.prepend [cs || :default, ESCAPES.fetch(:dot)]
   end
 
-  op.on '-.', 'Same as --dot with no argument (ie uses default set)' do
-    $escapes.prepend [:default, ESCAPES.fetch(:dot)]
-  end
-
-  op.on '--hex[=CHARSET]', 'Replaces chars which match CHARSET with \xHH' do |cs|
+  op.on '-x', '--hex[=CHARSET]', 'Replaces chars which match CHARSET with \xHH' do |cs|
     $escapes.prepend [cs || :default, ESCAPES.fetch(:hex)]
-  end
-
-  op.on '-x', 'Same as --hex with no argument (ie uses default set)' do
-    $escapes.prepend [:default, ESCAPES.fetch(:hex)]
   end
 
   op.on '--codepoint=CHARSET', 'Replaces chars with their codepoints' do |cs|
@@ -223,12 +243,8 @@ OptParse.new do |op|
     $escapes.prepend [cs || /[\0\a\b\t\n\v\f\r\e]/, ESCAPES.fetch(:c_escapes)] # NOTE the default doesnt include `\\`.
   end
 
-  op.on '--pictures[=CHARSET]', 'Replaces chars with their "pictures"' do |cs|
+  op.on '-p', '--pictures[=CHARSET]', 'Replaces chars with their "pictures"' do |cs|
     $escapes.prepend [cs || /[\0-\x20\x7F]/, ESCAPES.fetch(:pictures)]
-  end
-
-  op.on '-p', 'Same as --pictures with no argument (ie uses default set)' do
-    $escapes.prepend [:default, ESCAPES.fetch(:pictures)]
   end
 
   op.on '--standout=CHARSET', 'Print the character, but use visual effects around it' do |cs|
@@ -237,6 +253,11 @@ OptParse.new do |op|
 
   op.on '--default=CHARSET', 'Do the default action for CHARSET' do |cs|
     $escapes.prepend [cs, ESCAPES.fetch(:default)]
+  end
+
+
+  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
+    $escape_surronding_spaces = ess
   end
 
   op.on <<~'EOS'
@@ -271,20 +292,8 @@ OptParse.new do |op|
     $escapes.prepend [LAMBDA_FOR_MULTIBYTE, ESCAPES.fetch(:codepoint)]
   end
 
-  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
-    $escape_surronding_spaces = ess
-  end
-
-  ##################################################################################################
-  #                                         How to Escape                                          #
-  ##################################################################################################
-  op.separator 'HOW TO ESCAPE', '(-d, -., -x, -X, and -C are mutually exclusive)'
-  op.on '-v', '--visual', 'Enable visual effects. (default only if stdout is tty)' do
-    $visual = true
-  end
-
-  op.on '-V', '--no-visual', 'Do not enable visual effects' do
-    $visual = false
+  op.on '-P', 'Same as --print with no argument (ie uses default set)' do
+    $escapes.prepend [:default, ESCAPES.fetch(:print)]
   end
 
   ##################################################################################################
@@ -432,6 +441,7 @@ def codepoints(string) '\u{%04X}' % string.ord end
 # - if `$visual` is specified, then `start` and `stop` surround `string`
 # - else, `string` is returned.
 def visualize(string, start=VISUAL_BEGIN, stop=VISUAL_END)
+  $SOMETHING_ESCAPED = true
   string = '.' if $escape_how == :dot
 
   case
