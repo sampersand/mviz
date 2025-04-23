@@ -132,19 +132,6 @@ OptParse.new do |op|
   $DEFAULT_CHARSET = '[\0-\x1F\x7F]'
   $escapes = []
 
-  LAMBDA_FOR_MULTIBYTE = ->char{char.bytesize > 1}
-  LAMBDA_FOR_SINGLEBYTE = ->char{char.bytesize == 1}
-  op.accept :charset do |charset|
-    case charset
-    when nil  then nil # each one handles itself
-    when '\A' then "." # ie all characters. (TODO: is `\X` needed?)
-    when '\@' then "[\0-\x1F\x7F]"
-    when '\m' then LAMBDA_FOR_MULTIBYTE
-    when '\M' then LAMBDA_FOR_SINGLEBYTE
-    else           "[#{charset}]"
-    end
-  end
-
   C_ESCAPES = {
     "\0" => '\0',
     "\a" => '\a',
@@ -195,44 +182,44 @@ OptParse.new do |op|
     $escapes.clear
   end
 
-  op.on '--default-charset=CHARSET', :charset, 'Set the default charset for the remaining options to CHARSET' do |cs|
+  op.on '--default-charset=CHARSET', 'Set the default charset for the remaining options to CHARSET' do |cs|
     $DEFAULT_CHARSET = cs
   end
 
-  op.on '--print=CHARSET', :charset, 'Simply print characters which match CHARSET' do |cs|
+  op.on '--print=CHARSET', 'Simply print characters which match CHARSET' do |cs|
     $escapes.prepend [cs || fail, ESCAPES.fetch(:print)]
   end
 
-  op.on '--delete=CHARSET', :charset, 'Delete characters which match CHARSET' do |cs|
-    $escapes.prepend [cs || $DEFAULT_CHARSET, ESCAPES.fetch(:delete)]
+  op.on '--delete[=CHARSET]', 'Delete characters which match CHARSET' do |cs|
+    $escapes.prepend [cs || :default, ESCAPES.fetch(:delete)]
   end
 
-  op.on '--dot=CHARSET', :charset, 'Replaces chars which match CHARSET with a `.`' do |cs|
-    $escapes.prepend [cs || fail, ESCAPES.fetch(:dot)]
+  op.on '--dot[=CHARSET]', 'Replaces chars which match CHARSET with a `.`' do |cs|
+    $escapes.prepend [cs || :default, ESCAPES.fetch(:dot)]
   end
 
-  op.on '--hex=CHARSET', :charset, 'Replaces chars which match CHARSET with \xHH' do |cs|
-    $escapes.prepend [cs || fail, ESCAPES.fetch(:hex)]
+  op.on '--hex[=CHARSET]', 'Replaces chars which match CHARSET with \xHH' do |cs|
+    $escapes.prepend [cs || :default, ESCAPES.fetch(:hex)]
   end
 
-  op.on '--codepoint=CHARSET', :charset, 'Replaces chars with their codepoints' do |cs|
+  op.on '--codepoint=CHARSET', 'Replaces chars with their codepoints' do |cs|
     # TODO: the default should probably be `\m`, ie all multibyte utf-8 chars, no?
     $escapes.prepend [cs || fail, ESCAPES.fetch(:codepoint)]
   end
 
-  op.on '--c-escapes=CHARSET', :charset, 'Replaces chars with their c escapes' do |cs|
+  op.on '--c-escapes=CHARSET', 'Replaces chars with their c escapes' do |cs|
     $escapes.prepend [cs || "[\0\a\b\t\n\v\f\r\e]", ESCAPES.fetch(:c_escapes)] # NOTE the default doesnt include `\\`.
   end
 
-  op.on '--pictures=CHARSET', :charset, 'Replaces chars with their "pictures"' do |cs|
-    $escapes.prepend [cs || "[\0-\x20\x7F]", ESCAPES.fetch(:pictures)]
+  op.on '--pictures[=CHARSET]', 'Replaces chars with their "pictures"' do |cs|
+    $escapes.prepend [cs || /[\0-\x20\x7F]/, ESCAPES.fetch(:pictures)]
   end
 
-  op.on '--standout=CHARSET', :charset, 'Print the character, but use visual effects around it' do |cs|
+  op.on '--standout=CHARSET', 'Print the character, but use visual effects around it' do |cs|
     $escapes.prepend [cs || fail, ESCAPES.fetch(:standout)]
   end
 
-  op.on '--default=CHARSET', :charset, 'Do the default action for CHARSET' do |cs|
+  op.on '--default=CHARSET', 'Do the default action for CHARSET' do |cs|
     $escapes.prepend [cs, ESCAPES.fetch(:default)]
   end
 
@@ -409,14 +396,27 @@ defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? 
 defined? $upper_codepoints         or $upper_codepoints = $encoding == Encoding::UTF_8
 # ^ Escape things above `\x80` by replacing them with their codepoints if in utf-8 mode, and "make everything hex" wasn't requested
 
-PATTERNS = $escapes.map do |charset, block|
-  charset = case charset
-            when String then Regexp.new((+charset).force_encoding($encoding))
-            when Regexp then charset
-            when Proc then charset
-            else raise "fail: bad charset '#{charset}'"
+DEFAULT_CHARSET = if $encoding == Encoding::BINARY
+  Regexp.new((+"[\0-\x1F\x7F-\xFF]").force_encoding(Encoding::BINARY))
+else
+  /[\0-\x1F\x7F]/
+end
+
+LAMBDA_FOR_MULTIBYTE = ->char{char.bytesize > 1}
+LAMBDA_FOR_SINGLEBYTE = ->char{char.bytesize == 1}
+PATTERNS = $escapes.map do |selector, block|
+  selector = case selector
+            when '\A' then /./m
+            when '\@' then DEFAULT_CHARSET
+            when '\m' then LAMBDA_FOR_MULTIBYTE
+            when '\M' then LAMBDA_FOR_SINGLEBYTE
+            when String then Regexp.new("[#{selector}]".force_encoding($encoding))
+            when :default then DEFAULT_CHARSET
+            when Regexp then selector
+            when Proc then selector
+            else raise "fail: bad charset '#{selector}'"
             end
-  [charset, block]
+  [selector, block]
 end
 
 

@@ -59,3 +59,7 @@ You can also `LC_ALL=en_US-iso8859-1"
 If a character is to be escaped, it goes through the following steps:
 1. If `--delete` is given, nothing is printed
 2. If `--dot` is given, a `.` is used
+
+
+---
+allenc=( $(i --list-encodings | awk '{$1=$2=""; print}' | tr ',' '\n' | tr -d ' ') )
