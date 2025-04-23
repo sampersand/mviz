@@ -194,12 +194,24 @@ OptParse.new do |op|
     $escapes.prepend [cs || :default, ESCAPES.fetch(:delete)]
   end
 
+  op.on '-d', 'Same as --delete with no argument (ie uses default set)' do
+    $escapes.prepend [:default, ESCAPES.fetch(:delete)]
+  end
+
   op.on '--dot[=CHARSET]', 'Replaces chars which match CHARSET with a `.`' do |cs|
     $escapes.prepend [cs || :default, ESCAPES.fetch(:dot)]
   end
 
+  op.on '-.', 'Same as --dot with no argument (ie uses default set)' do
+    $escapes.prepend [:default, ESCAPES.fetch(:dot)]
+  end
+
   op.on '--hex[=CHARSET]', 'Replaces chars which match CHARSET with \xHH' do |cs|
     $escapes.prepend [cs || :default, ESCAPES.fetch(:hex)]
+  end
+
+  op.on '-x', 'Same as --hex with no argument (ie uses default set)' do
+    $escapes.prepend [:default, ESCAPES.fetch(:hex)]
   end
 
   op.on '--codepoint=CHARSET', 'Replaces chars with their codepoints' do |cs|
@@ -207,12 +219,16 @@ OptParse.new do |op|
     $escapes.prepend [cs || fail, ESCAPES.fetch(:codepoint)]
   end
 
-  op.on '--c-escapes=CHARSET', 'Replaces chars with their c escapes' do |cs|
-    $escapes.prepend [cs || "[\0\a\b\t\n\v\f\r\e]", ESCAPES.fetch(:c_escapes)] # NOTE the default doesnt include `\\`.
+  op.on '--c-escapes[=CHARSET]', 'Replaces chars with their c escapes' do |cs|
+    $escapes.prepend [cs || /[\0\a\b\t\n\v\f\r\e]/, ESCAPES.fetch(:c_escapes)] # NOTE the default doesnt include `\\`.
   end
 
   op.on '--pictures[=CHARSET]', 'Replaces chars with their "pictures"' do |cs|
     $escapes.prepend [cs || /[\0-\x20\x7F]/, ESCAPES.fetch(:pictures)]
+  end
+
+  op.on '-p', 'Same as --pictures with no argument (ie uses default set)' do
+    $escapes.prepend [:default, ESCAPES.fetch(:pictures)]
   end
 
   op.on '--standout=CHARSET', 'Print the character, but use visual effects around it' do |cs|
@@ -270,49 +286,6 @@ OptParse.new do |op|
   op.on '-V', '--no-visual', 'Do not enable visual effects' do
     $visual = false
   end
-=begin
-
-  op.on '-d', '--delete', 'Delete escaped characters instead of printing their escape' do
-    $escape_how = :delete
-  end
-
-  op.on '-.', '--dot', "Replace escaped characters with a '.'" do
-    $escape_how = :dot
-  end
-
-  # Note: this applies only to characters without any other values
-  op.on '-x', '--hex', 'Escape with hex bytes, \xHH (default)' do
-    $escape_how = :hex
-  end
-
-  op.on '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc). (default if -x and not -p)' do |ce|
-    $c_escapes = ce
-  end
-
-  op.on '-X', '--hex-all', 'Like --hex, but applies to _all_ characters' do
-    $escape_how = :hex_all
-    $upper_codepoints = false
-  end
-
-  op.on '-C', '--codepoints', 'Escape with \u{...}. Sets (and can only be used with) --utf-8.' do
-    $escape_how = :codepoints
-    $encoding = Encoding::UTF_8
-  end
-
-  op.on '--[no-]multibyte-codepoints', 'Like --codepoints, but only for values above 0x80. (default)'  do |uc|
-    $upper_codepoints = uc
-    $encoding = Encoding::UTF_8
-  end
-
-  op.on '-p', '--[no-]pictures', 'Use "pictures" (U+240x-U+242x) for some escapes.' do |cp|
-    $pictures = $space_picture = cp
-  end
-
-  # The reason this doesn't imply `-s` is because you may want to use it exclusively with `--escape-surrounding-space`
-  op.on '--[no-]space-picture', "Like --pictures, but only enable for spaces; Doesn't imply -s." do |sp|
-    $space_picture = sp
-  end
-=end
 
   ##################################################################################################
   #                                        Input Encodings                                         #
