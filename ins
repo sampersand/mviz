@@ -1,5 +1,5 @@
 #!/usr/bin/env -S ruby -Ebinary
-# -*- encoding: binary; frozen-string-literal: true -*-
+# -*- encoding: UTF-8; frozen-string-literal: true -*-
 # ^ Force all strings in this file to be utf-8, regardless of what the environment says
 # NOTE: we needthe `-Ebinary` up top to force `$*` arguments to be binary. otherwise, optparse's
 # regexes will die. We could fix it by `$*.replace $*.map { (+_1).force_encoding 'binary' }` but ew.
@@ -129,15 +129,15 @@ OptParse.new do |op|
 
   op.separator 'ESCAPING'
 
-  $DEFAULT_CHARSET = /[\0-\x1F\x7F]/
+  $DEFAULT_CHARSET = /[\0-\x1F\x7F]/u
   $escapes = []
 
   op.accept :charset do |charset|
     case charset
     when nil  then nil # each one handles itself
-    when '\A' then /./ # ie all characters. (TODO: is `\X` needed?)
-    when '\U' then /[\u{80}-\u{10FFFF}]/ # I.e. all of upper unicode
-    else           /[#{charset}]/
+    when '\A' then +"." # ie all characters. (TODO: is `\X` needed?)
+    when '\U' then +"[\u{80}-\u{10FFFF}]" # I.e. all of upper unicode
+    else           "[#{charset}]"
     end
   end
 
@@ -180,7 +180,7 @@ OptParse.new do |op|
   }
 
   def add_escape(charset, &block)
-    $escapes.push [charset, block]
+    $escapes.prepend [charset, block]
   end
 
   op.on '--clear-escapes', 'Undo all escapes that have been added, resetting it to the default' do
@@ -192,36 +192,36 @@ OptParse.new do |op|
   end
 
   op.on '--print[=CHARSET]', :charset, 'Simply print characters which match CHARSET' do |cs|
-    $escapes.push [cs, ESCAPES.fetch(:print)]
+    $escapes.prepend [cs, ESCAPES.fetch(:print)]
   end
 
   op.on '--delete[=CHARSET]', :charset, 'Delete characters which match CHARSET' do |cs|
-    $escapes.push [cs || $DEFAULT_CHARSET, ESCAPES.fetch(:delete)]
+    $escapes.prepend [cs || $DEFAULT_CHARSET, ESCAPES.fetch(:delete)]
   end
 
   op.on '--dot[=CHARSET]', :charset, 'Replaces chars which match CHARSET with a `.`' do |cs|
-    $escapes.push [cs, ESCAPES.fetch(:dot)]
+    $escapes.prepend [cs, ESCAPES.fetch(:dot)]
   end
 
   op.on '--hex[=CHARSET]', :charset, 'Replaces chars which match CHARSET with \xHH' do |cs|
-    $escapes.push [cs, ESCAPES.fetch(:hex)]
+    $escapes.prepend [cs, ESCAPES.fetch(:hex)]
   end
 
   op.on '--codepoint[=CHARSET]', :charset, 'Replaces chars with their codepoints' do |cs|
     # TODO: the default should probably be `\U`, ie all multibyte utf-8 chars, no?
-    $escapes.push [cs, ESCAPES.fetch(:codepoint)]
+    $escapes.prepend [cs, ESCAPES.fetch(:codepoint)]
   end
 
   op.on '--c-escapes[=CHARSET]', :charset, 'Replaces chars with their c escapes' do |cs|
-    $escapes.push [cs || /[\0\a\b\t\n\v\f\r\e]/, ESCAPES.fetch(:c_escapes)]
+    $escapes.prepend [cs || +"[\0\a\b\t\n\v\f\r\e]", ESCAPES.fetch(:c_escapes)]
   end
 
   op.on '--pictures[=CHARSET]', :charset, 'Replaces chars with their "pictures"' do |cs|
-    $escapes.push [cs || /[\0-\x1F \x7F]/, ESCAPES.fetch(:pictures)]
+    $escapes.prepend [cs || +"[\0-\x20\x7F]", ESCAPES.fetch(:pictures)]
   end
 
   op.on '--default[=CHARSET]', :charset, 'Do the default action for CHARSET' do |cs|
-    $escapes.push [cs, ESCAPES.fetch(:default)]
+    $escapes.prepend [cs, ESCAPES.fetch(:default)]
   end
 
 =begin
@@ -426,6 +426,10 @@ defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? 
 defined? $upper_codepoints         or $upper_codepoints = $encoding == Encoding::UTF_8
 # ^ Escape things above `\x80` by replacing them with their codepoints if in utf-8 mode, and "make everything hex" wasn't requested
 
+$escapes.map! do |charset, block|
+  [Regexp.new(charset.force_encoding($encoding)), block]
+end
+
 ## Force `$trailing_newline` to be set if `$prefixes` are set, as otherwise there wouldn't be a
 # newline between each header, which is weird.
 $trailing_newline ||= $prefixes
@@ -482,6 +486,7 @@ end
 
 def __do_escape(char)
   $escapes.each do |charset, escape_method|
+    # p [charset.encoding, char.encoding]
     return escape_method.call(char) if charset === char
   end
 
