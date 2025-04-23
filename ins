@@ -159,20 +159,28 @@ OptParse.new do |op|
     dot: ->_char{ visualize '.' },
     hex: ->char{ visualize hex_bytes char },
     codepoint: ->char{ visualize codepoints char },
-    c_escape: ->char{ visualize C_ESCAPES.fetch(char) },
+    c_escapes: ->char{ visualize C_ESCAPES.fetch(char) },
     pictures: ->char{
       case char
-      when /[\x00-\x1F]/ then (0x2400 + char.ord).chr(Encoding::UTF_8)
-      when "\x7F" then "\u{2421}"
-      when ' '    then "\u{2423}"
+      when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
+      when "\x7F" then visualize "\u{2421}"
+      when ' '    then visualize "\u{2423}"
       else fail
       end
     },
-    default: ->char{ fail 'todo' }
+    default: ->char{
+      if ce = C_ESCAPES[char]
+        visualize ce
+      elsif char == "\x7F" || char <= "\x1F" then
+        visualize hex_bytes char
+      else
+        char
+      end
+    }
   }
 
   def add_escape(charset, &block)
-    $escapes.prepend [charset, block]
+    $escapes.push [charset, block]
   end
 
   op.on '--default-charset=CHARSET', :charset, 'Set the default charset for the remaining options to CHARSET' do |cs|
@@ -180,38 +188,38 @@ OptParse.new do |op|
   end
 
   op.on '--print[=CHARSET]', :charset, 'Simply print characters which match CHARSET' do |cs|
-    $ESCAPES.prepend [cs, ESCAPES.fetch(:print)]
+    $escapes.push [cs, ESCAPES.fetch(:print)]
   end
 
   op.on '--delete[=CHARSET]', :charset, 'Delete characters which match CHARSET' do |cs|
-    $ESCAPES.prepend [cs, ESCAPES.fetch(:delete)]
+    $escapes.push [cs, ESCAPES.fetch(:delete)]
   end
 
   op.on '--dot[=CHARSET]', :charset, 'Replaces chars which match CHARSET with a `.`' do |cs|
-    $ESCAPES.prepend [cs, ESCAPES.fetch(:dot)]
+    $escapes.push [cs, ESCAPES.fetch(:dot)]
   end
 
   op.on '--hex[=CHARSET]', :charset, 'Replaces chars which match CHARSET with \xHH' do |cs|
-    $ESCAPES.prepend [cs, ESCAPES.fetch(:hex)]
+    $escapes.push [cs, ESCAPES.fetch(:hex)]
   end
 
   op.on '--codepoint[=CHARSET]', :charset, 'Replaces chars with their codepoints' do |cs|
     # TODO: the default should probably be `\U`, ie all multibyte utf-8 chars, no?
-    $ESCAPES.prepend [cs, ESCAPES.fetch(:codepoint)]
+    $escapes.push [cs, ESCAPES.fetch(:codepoint)]
   end
 
   op.on '--c-escapes[=CHARSET]', :charset, 'Replaces chars with their c escapes' do |cs|
-    # $escapes.prepend [:c_escape, cs || /[\0\a\b\t\n\v\f\r\e]/]
-    $ESCAPES.prepend [cs, ESCAPES.fetch(:c_escapes)]
+    # $escapes.push [:c_escape, cs || /[\0\a\b\t\n\v\f\r\e]/]
+    $escapes.push [cs, ESCAPES.fetch(:c_escapes)]
   end
 
   op.on '--pictures[=CHARSET]', :charset, 'Replaces chars with their "pictures"' do |cs|
-    $escapes.prepend [cs, ESCAPES.fetch(:pictures)]
-    # $escapes.prepend [:pictures, cs || /[\0-\x1F\x7F]/] # TODO: ALSO ADD SPACE?
+    $escapes.push [cs, ESCAPES.fetch(:pictures)]
+    # $escapes.push [:pictures, cs || /[\0-\x1F\x7F]/] # TODO: ALSO ADD SPACE?
   end
 
   op.on '--default[=CHARSET]', :charset, 'Do the default action for CHARSET' do |cs|
-    $escapes.prepend [cs, ESCAPES.fetch(:default)]
+    $escapes.push [cs, ESCAPES.fetch(:default)]
   end
 
 =begin
@@ -282,7 +290,7 @@ OptParse.new do |op|
   #                                         How to Escape                                          #
   ##################################################################################################
   op.separator 'HOW TO ESCAPE', '(-d, -., -x, -X, and -C are mutually exclusive)'
-
+=end
   op.on '-v', '--visual', 'Enable visual effects. (default only if stdout is tty)' do
     $visual = true
   end
@@ -290,6 +298,7 @@ OptParse.new do |op|
   op.on '-V', '--no-visual', 'Do not enable visual effects' do
     $visual = false
   end
+=begin
 
   op.on '-d', '--delete', 'Delete escaped characters instead of printing their escape' do
     $escape_how = :delete
@@ -415,29 +424,6 @@ defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? 
 defined? $upper_codepoints         or $upper_codepoints = $encoding == Encoding::UTF_8
 # ^ Escape things above `\x80` by replacing them with their codepoints if in utf-8 mode, and "make everything hex" wasn't requested
 
-=begin
-## Union all the regexes we've been given
-if $default_escapes
-  $escape_regexes.push '[\x00-\x1F\x7F]'
-  $escape_regexes.push '[\x80-\xFF]' if $encoding == Encoding::BINARY
-end
-
-def make_regexp(regex_array, flag)
-  Regexp.union regex_array.map{|re| Regexp.new (+re).force_encoding($encoding), Regexp::FIXEDENCODING }
-rescue RegexpError => err
-  abort "issue with --#{flag} (encoding: #$encoding): #{err}"
-end
-
-$escape_regex   = make_regexp($escape_regexes, 'escape')
-$unescape_regex = make_regexp($unescape_regexes, 'unescape')
-
-# Default for backslashes: If visual is disabled, and was given to neither `-e` or `-u`, then
-# escape backslashes too.
-if $default_escapes && !$visual && !$unescape_regex.match?('\\') && !$escape_regex.match?('\\')
-  $escape_regex = Regexp.union '\\'.encode($encoding), $escape_regex
-end
-=end
-
 ## Force `$trailing_newline` to be set if `$prefixes` are set, as otherwise there wouldn't be a
 # newline between each header, which is weird.
 $trailing_newline ||= $prefixes
@@ -467,10 +453,6 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-def should_escape?(char)
-  $escape_regex.match?(char) && !$unescape_regex.match?(char)
-end
-
 # Converts a string's bytes to their `\xHH` escaped version, and joins them
 def hex_bytes(string) string.each_byte.map { |byte| '\x%02X' % byte }.join end
 def codepoints(string) '\u{%04X}' % string.ord end
@@ -496,35 +478,14 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-# Returns the escape sequence for a character, depending on the flags given to the program. It does
-# not actually add any visualizations, however; that's `escape`'s job
-def escape_sequence(character)
-  $SOMETHING_ESCAPED = true
-
-  case
-  when $c_escapes && (esc = C_ESCAPES[character])   then esc
-  when $pictures && character.match?(/[\x00-\x1F]/)
-    (0x2400 + character.ord).chr(Encoding::UTF_8)
-  when $pictures && character.match?(/[\x7F]/)      then "\u{2421}"
-  when character == '\\' && $escape_how != :hex_all && $escape_how != :codepoints then '\\\\'
-  when character == ' '  && $space_picture          then "\u{2423}"
-  when character == ' '  && $escape_how != :hex_all && $escape_how != :codepoints then ' '
-  when $escape_how == :codepoints || ($upper_codepoints && character.codepoints.sum >= 0x80)
-    codepoints character
-  else
-    hex_bytes character
+def __do_escape(char)
+  $escapes.each do |charset, escape_method|
+    return escape_method.call(char) if charset.match?(char)
   end
+
+  ESCAPES.fetch(:default).call char
 end
 
-# Return the escape sequence associated with `character`, and visual effects (if there are any). It
-# does not actually verify if a character _should_ be escaped; `should_escape?` is used for that.
-def escape(character)
-  case $escape_how
-  when :dot    then visualize '.'
-  when :delete then ''
-  else              visualize escape_sequence character
-  end
-end
 
 ## Construct the `CHARACTERS` hash, whose keys are characters, and values are the corresponding
 # sequences to be printed.
@@ -532,9 +493,10 @@ CHARACTERS = Hash.new do |hash, key|
   hash[key] =
     if !key.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$malformed_error`.
-      visualize hex_bytes(key), VISUAL_ERR_BEGIN, VISUAL_ERR_END
+      visualize(hex_bytes(key), VISUAL_ERR_BEGIN, VISUAL_ERR_END)
     else
-      should_escape?(key) ? escape(key) : key
+      __do_escape(key)
+      # should_escape?(key) ? escape(key) : key
     end
 end
 
