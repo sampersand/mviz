@@ -136,7 +136,7 @@ OptParse.new do |op|
     case charset
     when nil  then nil # each one handles itself
     when '\A' then /./ # ie all characters. (TODO: is `\X` needed?)
-    when '\U' then /[\u{80}-\u{10FFFF}]/
+    when '\U' then /[\u{80}-\u{10FFFF}]/ # I.e. all of upper unicode
     else           /[#{charset}]/
     end
   end
@@ -188,7 +188,7 @@ OptParse.new do |op|
   end
 
   op.on '--default-charset=CHARSET', :charset, 'Set the default charset for the remaining options to CHARSET' do |cs|
-    $default_charset = cs
+    $DEFAULT_CHARSET = cs
   end
 
   op.on '--print[=CHARSET]', :charset, 'Simply print characters which match CHARSET' do |cs|
@@ -196,7 +196,7 @@ OptParse.new do |op|
   end
 
   op.on '--delete[=CHARSET]', :charset, 'Delete characters which match CHARSET' do |cs|
-    $escapes.push [cs, ESCAPES.fetch(:delete)]
+    $escapes.push [cs || $DEFAULT_CHARSET, ESCAPES.fetch(:delete)]
   end
 
   op.on '--dot[=CHARSET]', :charset, 'Replaces chars which match CHARSET with a `.`' do |cs|
@@ -213,13 +213,11 @@ OptParse.new do |op|
   end
 
   op.on '--c-escapes[=CHARSET]', :charset, 'Replaces chars with their c escapes' do |cs|
-    # $escapes.push [:c_escape, cs || /[\0\a\b\t\n\v\f\r\e]/]
-    $escapes.push [cs, ESCAPES.fetch(:c_escapes)]
+    $escapes.push [cs || /[\0\a\b\t\n\v\f\r\e]/, ESCAPES.fetch(:c_escapes)]
   end
 
   op.on '--pictures[=CHARSET]', :charset, 'Replaces chars with their "pictures"' do |cs|
-    $escapes.push [cs, ESCAPES.fetch(:pictures)]
-    # $escapes.push [:pictures, cs || /[\0-\x1F\x7F]/] # TODO: ALSO ADD SPACE?
+    $escapes.push [cs || /[\0-\x1F \x7F]/, ESCAPES.fetch(:pictures)]
   end
 
   op.on '--default[=CHARSET]', :charset, 'Do the default action for CHARSET' do |cs|
@@ -484,7 +482,7 @@ end
 
 def __do_escape(char)
   $escapes.each do |charset, escape_method|
-    return escape_method.call(char) if charset.match?(char)
+    return escape_method.call(char) if charset === char
   end
 
   ESCAPES.fetch(:default).call char
@@ -565,8 +563,8 @@ unless $files
       # beforehand), this should be changed to use `byteslice`.The method used here is more convenient,
       # but is destructive. ALSO. It doesn't work wtih non-utf8 characters
       string.force_encoding Encoding::BINARY
-      leading_spaces  = string.slice!(/\A +/) and print visualize escape_sequence(' ') * $&.length
-      trailing_spaces = string.slice!(/ +\z/) && visualize(escape_sequence(' ') * $&.length)
+      leading_spaces  = string.slice!(/\A +/) and print visualize(CHARACTERS[' '] * $&.length)
+      trailing_spaces = string.slice!(/ +\z/) && visualize(CHARACTERS[' '] * $&.length)
     end
 
     # handle the input string
