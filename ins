@@ -111,13 +111,14 @@ module Patterns
                  when '\@' then default_charset
                  when '\m' then LAMBDA_FOR_MULTIBYTE
                  when '\M' then LAMBDA_FOR_SINGLEBYTE
+                 when ''   then next # If it's empty, don't register it
                  when String then Regexp.new("[#{selector}]".force_encoding($encoding))
                  when :default then default_charset
                  when Regexp, Proc then selector
                  else raise "fail: bad charset '#{selector.inspect}'"
                  end
       [selector, block]
-    end
+    end.compact
   end
 
   def handle(char)
@@ -153,7 +154,7 @@ BOLD_END         = (ENV.fetch('P_BOLD_END',   "\e[0m") if $__SHOULD_USE_COLOR)
 
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
-  op.version = '0.8.5'
+  op.version = '0.8.7'
   op.banner = <<~BANNER
   #{VISUAL_BEGIN if $__SHOULD_USE_COLOR}usage#{VISUAL_END if $__SHOULD_USE_COLOR}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
@@ -218,6 +219,7 @@ OptParse.new do |op|
     $files = f
   end
 
+  $malformed_error = true
   op.on'--[no-]malformed-error', 'Invalid chars for --encoding a cause nonzero exit. (default)' do |me|
     $malformed_error = me
   end
@@ -414,7 +416,6 @@ defined? $visual                   or $visual = $stdout.tty?
 defined? $prefixes                 or $prefixes = $stdout.tty? && (!$*.empty? || (defined?($files) && $files))
 defined? $files                    or $files = !$stdin.tty? && $*.empty?
 defined? $trailing_newline         or $trailing_newline = true
-defined? $malformed_error          or $malformed_error = true
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 # ^ Escape things above `\x80` by replacing them with their codepoints if in utf-8 mode, and "make everything hex" wasn't requested
