@@ -113,6 +113,13 @@ module Patterns
   end
 
   def handle(char)
+    if $DEBUG
+      pats = @built.select { |condition, _| condition === char }
+      if pats.length > 1
+        abort "character #{char} (#{char.inspect}, #{char.encoding}) matched multiple:\n\t#{pats.map(&:inspect).join("\n\t")}"
+      end
+    end
+
     @built.each do |condition, escape_method|
       return escape_method.call(char) if condition === char
     end
@@ -207,6 +214,7 @@ OptParse.new do |op|
     $malformed_error = me
   end
 
+  $escape_error = false
   op.on '-c', '--[no-]check-escapes', 'Any escapes cause an error status' do |ee|
     $escape_error = ee
   end
@@ -405,7 +413,7 @@ end
 
 # Specify defaults
 defined? $visual                   or $visual = $stdout.tty?
-defined? $prefixes                 or $prefixes = $stdout.tty? && (!$*.empty? || $files)
+defined? $prefixes                 or $prefixes = $stdout.tty? && (!$*.empty? || (defined?($files) && $files))
 defined? $files                    or $files = !$stdin.tty? && $*.empty?
 defined? $trailing_newline         or $trailing_newline = true
 defined? $malformed_error          or $malformed_error = true
@@ -422,9 +430,9 @@ $trailing_newline ||= $prefixes
 at_exit do
   next if $! # If there's an exception, then just yield that
 
-  if $malformed_error && $ENCODING_FAILED
+  if $malformed_error && ($ENCODING_FAILED ||= false)
     exit 1
-  elsif $escape_error && $SOMETHING_ESCAPED
+  elsif $escape_error && ($SOMETHING_ESCAPED ||= false)
     exit 1
   end
 end
@@ -596,7 +604,7 @@ rescue => err
   # we're given (like `cat`), reporting errors along the way, and then exiting with a non-zero exit
   # status if there's a problem.
   warn err       # Warn of the problem
-  $FILE_ERROR = true # For use when we're exiting
+  @FILE_ERROR = true # For use when we're exiting
 ensure
   ## Regardless of whether an exception occurred, attempt to close the file after each execution.
   # However, do not close `$stdin` (which occurs when `-` is passed in as a filename), as we might
@@ -608,6 +616,6 @@ ensure
 end
 
 ## If there was a problem reading a file, exit with a non-zero exit status. Note that we do this
-# instead of `exit !$FILE_ERROR`, as the `--invalid-bytes-failure` flag sets an `at_exit` earlier in
+# instead of `exit !@FILE_ERROR`, as the `--invalid-bytes-failure` flag sets an `at_exit` earlier in
 # this file which checks for the exiting exception, which `exit false` would still raise.
-exit 1 if $FILE_ERROR
+exit 1 if @FILE_ERROR
