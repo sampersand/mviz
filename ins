@@ -351,7 +351,6 @@ was_escape_how_defined = defined?($escape_how)
 defined? $escape_how               or $escape_how = :hex
 defined? $c_escapes                or $c_escapes = $escape_how == :hex && !$pictures
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
-defined? $upper_codepoints         or $upper_codepoints = $encoding == Encoding::UTF_8
 # ^ Escape things above `\x80` by replacing them with their codepoints if in utf-8 mode, and "make everything hex" wasn't requested
 
 DEFAULT_CHARSET = if $encoding == Encoding::BINARY
@@ -381,15 +380,6 @@ end
 ## Force `$trailing_newline` to be set if `$prefixes` are set, as otherwise there wouldn't be a
 # newline between each header, which is weird.
 $trailing_newline ||= $prefixes
-
-## Validate options
-unless $encoding == Encoding::UTF_8
-  if $escape_how == :codepoints
-    abort "cannot use --codepoints with non-UTF-8 encodings (encoding is #$encoding)"
-  elsif $upper_codepoints
-    abort "cannot use --multibyte-codepoints with non-UTF-8 encodings (encoding is #$encoding)"
-  end
-end
 
 at_exit do
   next if $! # If there's an exception, then just yield that
