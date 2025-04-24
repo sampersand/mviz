@@ -17,6 +17,110 @@ PROGRAM_NAME = File.basename($0, '.*')
 def abort(msg = $!) super "#{PROGRAM_NAME}: #{msg}" end
 def warn(msg = $!)  super "#{PROGRAM_NAME}: #{msg}" end
 
+
+module Patterns
+  module_function
+  @patterns = []
+
+  def print(charset)
+    @patterns.push [charset, ->char{ char }]
+  end
+
+  def delete(charset)
+    @patterns.push [charset, ->_char{ $SOMETHING_ESCAPED = true; '' }]
+  end
+
+  def dot(charset)
+    @patterns.push [charset, ->_char{ visualize '.' }]
+  end
+
+  def hex(charset)
+    @patterns.push [charset, ->char{ visualize hex_bytes char }]
+  end
+
+  def codepoints(charset)
+    @patterns.push [charset, ->char{ visualize '\u{%04X}' % char.ord }]
+  end
+
+  C_ESCAPES = {
+    "\0" => '\0',
+    "\a" => '\a',
+    "\b" => '\b',
+    "\t" => '\t',
+    "\n" => '\n',
+    "\v" => '\v',
+    "\f" => '\f',
+    "\r" => '\r',
+    "\e" => '\e',
+    "\\" => '\\\\',
+  }
+  C_ESCAPES_DEFAULT = /[#{C_ESCAPES.keys.map{_1.inspect[1..-2]}.join}]/
+
+  def c_escapes(charset)
+    @patterns.push [charset, ->char{ visualize C_ESCAPES.fetch(char) }]
+  end
+
+  def standout(charset)
+    @patterns.push [charset, ->char{ visualize char }]
+  end
+
+  def pictures(charset)
+    @patterns.push [charset, ->char{
+      case char
+      when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
+      when "\x7F" then visualize "\u{2421}"
+      when ' '    then visualize "\u{2423}"
+      else fail
+      end
+    }]
+  end
+
+  DEFAULT_PROC = ->char{
+      if char == '\\' && !$visualize
+        '\\'
+      elsif ce = C_ESCAPES[char]
+        visualize ce
+      elsif (char == "\x7F" || char <= "\x1F") or ($encoding == Encoding::BINARY && char >= "\x7F")
+        visualize hex_bytes char
+      else
+        char
+      end
+    }
+
+  def default(charset)
+    @patterns.push [charset, DEFAULT_PROC]
+  end
+
+  # ---
+  def default_charset
+    @default_charset ||= if $encoding == Encoding::BINARY
+      Regexp.new((+"[\0-\x1F\x7F-\xFF]").force_encoding(Encoding::BINARY))
+    else
+      /[\0-\x1F\x7F]/
+    end
+  end
+
+  LAMBDA_FOR_MULTIBYTE = ->char{char.bytesize > 1}
+  LAMBDA_FOR_SINGLEBYTE = ->char{char.bytesize == 1}
+
+  def build!
+    @patterns.map do |selector, block|
+      selector = case selector
+                 when '\A' then /./m
+                 when '\@' then default_charset
+                 when '\m' then LAMBDA_FOR_MULTIBYTE
+                 when '\M' then LAMBDA_FOR_SINGLEBYTE
+                 when String then Regexp.new("[#{selector}]".force_encoding($encoding))
+                 when :default then default_charset
+                 when Regexp, Proc then selector
+                 else raise "fail: bad charset '#{selector}'"
+                 end
+      [selector, block]
+    end
+  end
+end
+
+
 ####################################################################################################
 #                                                                                                  #
 #                                         Parse Arguments                                          #
@@ -141,48 +245,6 @@ OptParse.new do |op|
   $DEFAULT_CHARSET = '[\0-\x1F\x7F]'
   $escapes = []
 
-  C_ESCAPES = {
-    "\0" => '\0',
-    "\a" => '\a',
-    "\b" => '\b',
-    "\t" => '\t',
-    "\n" => '\n',
-    "\v" => '\v',
-    "\f" => '\f',
-    "\r" => '\r',
-    "\e" => '\e',
-    "\\" => '\\\\',
-  }
-
-  ESCAPES = {
-    print: ->char{ char },
-    delete: ->_char{ $SOMETHING_ESCAPED = true; '' },
-    dot: ->_char{ visualize '.' },
-    hex: ->char{ visualize hex_bytes char },
-    codepoint: ->char{ visualize '\u{%04X}' % char.ord },
-    c_escapes: ->char{ visualize C_ESCAPES.fetch(char) },
-    standout: ->char{ visualize char },
-    pictures: ->char{
-      case char
-      when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
-      when "\x7F" then visualize "\u{2421}"
-      when ' '    then visualize "\u{2423}"
-      else fail
-      end
-    },
-    default: ->char{
-      if char == '\\' && !$visualize
-        '\\'
-      elsif ce = C_ESCAPES[char]
-        visualize ce
-      elsif (char == "\x7F" || char <= "\x1F") or ($encoding == Encoding::BINARY && char >= "\x7F")
-        visualize hex_bytes char
-      else
-        char
-      end
-    }
-  }
-
   def add_escape(charset, &block)
     $escapes.push [charset, block]
   end
@@ -196,39 +258,40 @@ OptParse.new do |op|
   end
 
   op.on '--print=CHARSET', 'Simply print characters which match CHARSET' do |cs|
-    $escapes.push [cs || fail, ESCAPES.fetch(:print)]
+    Patterns.print(cs || fail)
   end
 
   op.on '-d', '--delete[=CHARSET]', 'Delete characters which match CHARSET' do |cs|
-    $escapes.push [cs || :default, ESCAPES.fetch(:delete)]
+    Patterns.delete(cs || :default)
   end
 
   op.on '-.', '--dot[=CHARSET]', 'Replaces chars which match CHARSET with a `.`' do |cs|
-    $escapes.push [cs || :default, ESCAPES.fetch(:dot)]
+    Patterns.dot(cs || :default)
   end
 
   op.on '-x', '--hex[=CHARSET]', 'Replaces chars which match CHARSET with \xHH' do |cs|
-    $escapes.push [cs || :default, ESCAPES.fetch(:hex)]
+    Patterns.hex(cs || :default)
   end
 
   op.on '--codepoints[=CHARSET]', 'Replaces chars with their codepoints' do |cs|
-    $escapes.push [cs || LAMBDA_FOR_MULTIBYTE, ESCAPES.fetch(:codepoint)]
+    Patterns.codepoints(cs || LAMBDA_FOR_MULTIBYTE)
   end
 
-  op.on '--c-escapes[=CHARSET]', 'Replaces chars with their c escapes' do |cs|
-    $escapes.push [cs || /[\0\a\b\t\n\v\f\r\e]/, ESCAPES.fetch(:c_escapes)] # NOTE the default doesnt include `\\`.
+  op.on '--c-escapes[=CHARSET]', 'Replaces chars with their c escapes' do |cs|e
+    # NOTE: this intentionally doesn't have `\\` even though that's a c escape
+    Patterns.c_escapes(cs || Patterns::C_ESCAPES_DEFAULT)
   end
 
   op.on '-p', '--pictures[=CHARSET]', 'Replaces chars with their "pictures"' do |cs|
-    $escapes.push [cs || /[\0-\x20\x7F]/, ESCAPES.fetch(:pictures)]
+    Patterns.pictures(cs || /[\0-\x20\x7F]/)
   end
 
   op.on '--standout=CHARSET', 'Print the character, but use visual effects around it' do |cs|
-    $escapes.push [cs || fail, ESCAPES.fetch(:standout)]
+    Patterns.standout(cs || fail)
   end
 
   op.on '--default=CHARSET', 'Do the default action for CHARSET' do |cs|
-    $escapes.push [cs, ESCAPES.fetch(:default)]
+    Patterns.default(cs || fail)
   end
 
 
@@ -249,27 +312,27 @@ OptParse.new do |op|
 
   op.separator 'SHORTHANDS'
   op.on '-l', '--print-newlines', "Same as --print='\\n'" do
-    $escapes.push ["\n", ESCAPES.fetch(:print)]
+    Patterns.print(/\n/)
   end
 
   op.on '-w', '--print-whitespace', "Same as --print='\\n\\t '" do
-    $escapes.push [/[\n\t ]/, ESCAPES.fetch(:print)]
+    Patterns.print(/[\n\t ]/)
   end
 
   op.on '-s', '--standout-space', "Same as --standout=' '" do
-    $escapes.push [/ /, ESCAPES.fetch(:standout)]
+    Patterns.standout(/ /)
   end
 
   op.on '-B', '-\\', '--escape-backslashes', "Same as --c-escapes='\\' (default if not visual mode)" do |eb|
-    $escapes.push ['\\', ESCAPES.fetch(:c_escapes)]
+    Patterns.c_escapes(/\\/)
   end
 
   op.on '-m', '--codepoint-multibyte', "Same as --codepoints='\\m'" do
-    $escapes.push [LAMBDA_FOR_MULTIBYTE, ESCAPES.fetch(:codepoint)]
+    Patterns.codepoint(Pattern::LAMBDA_FOR_MULTIBYTE)
   end
 
   op.on '-P', 'Same as --print with no argument (ie uses default set)' do
-    $escapes.push [:default, ESCAPES.fetch(:print)]
+    Patterns.print(:default)
   end
 
   ##################################################################################################
@@ -350,29 +413,7 @@ defined? $escape_surronding_spaces or $escape_surronding_spaces = true
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 # ^ Escape things above `\x80` by replacing them with their codepoints if in utf-8 mode, and "make everything hex" wasn't requested
 
-DEFAULT_CHARSET = if $encoding == Encoding::BINARY
-  Regexp.new((+"[\0-\x1F\x7F-\xFF]").force_encoding(Encoding::BINARY))
-else
-  /[\0-\x1F\x7F]/
-end
-
-LAMBDA_FOR_MULTIBYTE = ->char{char.bytesize > 1}
-LAMBDA_FOR_SINGLEBYTE = ->char{char.bytesize == 1}
-PATTERNS = $escapes.map do |selector, block|
-  selector = case selector
-            when '\A' then /./m
-            when '\@' then DEFAULT_CHARSET
-            when '\m' then LAMBDA_FOR_MULTIBYTE
-            when '\M' then LAMBDA_FOR_SINGLEBYTE
-            when String then Regexp.new("[#{selector}]".force_encoding($encoding))
-            when :default then DEFAULT_CHARSET
-            when Regexp then selector
-            when Proc then selector
-            else raise "fail: bad charset '#{selector}'"
-            end
-  [selector, block]
-end
-
+PATTERNS = Patterns.build!
 
 ## Force `$trailing_newline` to be set if `$prefixes` are set, as otherwise there wouldn't be a
 # newline between each header, which is weird.
@@ -424,7 +465,7 @@ def __do_escape(char)
     return escape_method.call(char) if condition === char
   end
 
-  ESCAPES.fetch(:default).call char
+  Patterns::DEFAULT_PROC.call char
 end
 
 
