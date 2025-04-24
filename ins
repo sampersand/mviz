@@ -17,37 +17,6 @@ PROGRAM_NAME = File.basename($0, '.*')
 def abort(msg = $!) super "#{PROGRAM_NAME}: #{msg}" end
 def warn(msg = $!)  super "#{PROGRAM_NAME}: #{msg}" end
 
-
-module Escapes
-  PRINT     = ->char { char }
-  DELETE    = ->_char{ $SOMETHING_ESCAPED = true; '' }
-  HEX       = ->char{ visualize hex_bytes char }
-  CODEPOINT = ->char{ visualize codepoints char }
-  C_ESCAPES = ->char{ visualize C_ESCAPES.fetch(char) }
-  STANDOUT  = ->char{ visualize char }
-  PICTURES  = ->char{
-    case char
-    when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
-    when "\x7F"       then visualize "\u{2421}"
-    when ' '          then visualize "\u{2423}"
-    else fail
-    end
-  }
-
-  DEFAULT = ->char do
-    if char == '\\' && !$visualize
-      '\\'
-    elsif ce = C_ESCAPES[char]
-      visualize ce
-    elsif (char == "\x7F" || char <= "\x1F") or ($encoding == Encoding::BINARY && char >= "\x7F")
-      visualize hex_bytes char
-    else
-      char
-    end
-  end
-end
-
-
 ####################################################################################################
 #                                                                                                  #
 #                                         Parse Arguments                                          #
@@ -239,12 +208,11 @@ OptParse.new do |op|
   end
 
   op.on '-x', '--hex[=CHARSET]', 'Replaces chars which match CHARSET with \xHH' do |cs|
-    $escapes.push [cs || :default, Escapes::HEX]
+    $escapes.push [cs || :default, ESCAPES.fetch(:hex)]
   end
 
-  op.on '--codepoint=CHARSET', 'Replaces chars with their codepoints' do |cs|
-    # TODO: the default should probably be `\m`, ie all multibyte utf-8 chars, no?
-    $escapes.push [cs || fail, ESCAPES.fetch(:codepoint)]
+  op.on '--codepoints[=CHARSET]', 'Replaces chars with their codepoints' do |cs|
+    $escapes.push [cs || LAMBDA_FOR_MULTIBYTE, ESCAPES.fetch(:codepoint)]
   end
 
   op.on '--c-escapes[=CHARSET]', 'Replaces chars with their c escapes' do |cs|
