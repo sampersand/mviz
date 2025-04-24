@@ -145,12 +145,12 @@ end
 ####################################################################################################
 
 # Fetch standout constants (regardless of whether we're using them, as they're used as defaults)
-VISUAL_BEGIN     = ENV.fetch('INSPECT_VISUAL_BEGIN', "\e[7m")
-VISUAL_END       = ENV.fetch('INSPECT_VISUAL_END',   "\e[27m")
-VISUAL_ERR_BEGIN = ENV.fetch('INSPECT_VISUAL_ERR_BEGIN', "\e[37m\e[41m")
-VISUAL_ERR_END   = ENV.fetch('INSPECT_VISUAL_ERR_END',   "\e[49m\e[39m")
-BOLD_BEGIN       = (ENV.fetch('INSPECT_BOLD_BEGIN', "\e[1m") if $__SHOULD_USE_COLOR = $stdout.tty? || ENV['INSPECT_COLOR'])
-BOLD_END         = (ENV.fetch('INSPECT_BOLD_END',   "\e[0m") if $__SHOULD_USE_COLOR)
+VISUAL_BEGIN     = ENV.fetch('P_VISUAL_BEGIN', "\e[7m")
+VISUAL_END       = ENV.fetch('P_VISUAL_END',   "\e[27m")
+VISUAL_ERR_BEGIN = ENV.fetch('P_VISUAL_ERR_BEGIN', "\e[37m\e[41m")
+VISUAL_ERR_END   = ENV.fetch('P_VISUAL_ERR_END',   "\e[49m\e[39m")
+BOLD_BEGIN       = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if $__SHOULD_USE_COLOR = $stdout.tty? || ENV['P_COLOR'])
+BOLD_END         = (ENV.fetch('P_BOLD_END',   "\e[0m") if $__SHOULD_USE_COLOR)
 
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
@@ -196,7 +196,7 @@ OptParse.new do |op|
       -1              Print out arguments once per line, and add a trailing newline
       -n              Print out arguments with nothing separating them
       -v, -V          Enable/disable visual effects
-    #{BOLD_BEGIN}CHANGE OUTPUTS OF CHARACTERS#{BOLD_END}
+    #{BOLD_BEGIN}CHANGE OUTPUTS OF CHARACTERS#{BOLD_END}.
       -p [CHARSET]    Print chars in CHARSET unchanged
       -d [CHARSET]    Deletes chars in CHARSET
       -. [CHARSET]    Replace chars in CHARSET with a period
@@ -392,10 +392,10 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator 'ENVIRONMENT VARIABLES'
   op.on <<-EOS # Note: `-EOS` not `~EOS` to keep leading spaces
-    INSPECT_VISUAL_BEGIN        Beginning escape sequence for --visual
-    INSPECT_VISUAL_END          Ending escape sequence for --visual
-    INSPECT_VISUAL_ERR_BEGIN    Beginning escape sequence for invalid bytes with --visual
-    INSPECT_VISUAL_ERR_END      Ending escape sequence for invalid bytes with --visual
+    P_VISUAL_BEGIN        Beginning escape sequence for --visual
+    P_VISUAL_END          Ending escape sequence for --visual
+    P_VISUAL_ERR_BEGIN    Beginning escape sequence for invalid bytes with --visual
+    P_VISUAL_ERR_END      Ending escape sequence for invalid bytes with --visual
     POSIXLY_CORRECT       If present, changes default encoding to the locale's (cf locale(1).), and
                           also disables parsing switches after arguments (e.g. `p foo -x` will print
                           out `foo` and `-x`, and won't interpret `-x` as a switch.)
