@@ -452,7 +452,6 @@ CHARACTERS = Hash.new do |hash, key|
       visualize(hex_bytes(key), VISUAL_ERR_BEGIN, VISUAL_ERR_END)
     else
       __do_escape(key)
-      # should_escape?(key) ? escape(key) : key
     end
 end
 
