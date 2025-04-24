@@ -17,6 +17,37 @@ PROGRAM_NAME = File.basename($0, '.*')
 def abort(msg = $!) super "#{PROGRAM_NAME}: #{msg}" end
 def warn(msg = $!)  super "#{PROGRAM_NAME}: #{msg}" end
 
+
+module Escapes
+  PRINT     = ->char { char }
+  DELETE    = ->_char{ $SOMETHING_ESCAPED = true; '' }
+  HEX       = ->char{ visualize hex_bytes char }
+  CODEPOINT = ->char{ visualize codepoints char }
+  C_ESCAPES = ->char{ visualize C_ESCAPES.fetch(char) }
+  STANDOUT  = ->char{ visualize char }
+  PICTURES  = ->char{
+    case char
+    when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
+    when "\x7F"       then visualize "\u{2421}"
+    when ' '          then visualize "\u{2423}"
+    else fail
+    end
+  }
+
+  DEFAULT = ->char do
+    if char == '\\' && !$visualize
+      '\\'
+    elsif ce = C_ESCAPES[char]
+      visualize ce
+    elsif (char == "\x7F" || char <= "\x1F") or ($encoding == Encoding::BINARY && char >= "\x7F")
+      visualize hex_bytes char
+    else
+      char
+    end
+  end
+end
+
+
 ####################################################################################################
 #                                                                                                  #
 #                                         Parse Arguments                                          #
@@ -61,46 +92,23 @@ OptParse.new do |op|
       -c              Exit nonzero if any escapes are printed. ("check")
       -1              Print out arguments once per line, and add a trailing newline
       -n              Print out arguments with nothing separating them
-    #{BOLD_BEGIN}WHAT TO ESCAPE#{BOLD_END}
+      -v              Enable visual mode
+      -V              Disable visual mode
+    #{BOLD_BEGIN}ESCAPING#{BOLD_END}
       --default-charset=CHARSET    Explicitly sets the default charset
-      -P              Print characters in the default charset
-      -d              Delete characters in the default charset
-      -.              Replace characters with periods
-      -x              Replace characters with their hex value
-      -p              Replace characters with their pictures
-
-    #{BOLD_BEGIN}HOW TO ESCAPE#{BOLD_END}
-      -v, -V          Enable/disable visual mode
-      -d, -., -x, -X  Escape by deleting/with `.`/hex bytes/always hex bytes
-      -C              Escape with codepoints (implies -8)
-      -p, -S          Have "pictures" for some characters/only spaces
+      -d [CHARSET]    Deletes chars in CHARSET
+      -. [CHARSET]    Replace escaped chars with a period
+      -x [CHARSET]    Escape chars with their hexadecimal value of their bytes
+      -p [CHARSET]    Escape some chars with their "pictures"
+      -l              Don't escape newlines
+      -w              Don't escape newlines, tabs, or spaces
+      -s              Escape spaces
+      -B              Escape backslashes
+      -m              Escape multibyte characters with their Unicode codepoint.
     #{BOLD_BEGIN}ENCODINGS#{BOLD_END}
       -b, -A, -8      Interpret input data as binary/ASCII/UTF-8
     EOS
     exit
-    # puts <<~EOS
-    # #{BOLD_BEGIN}usage: #{op.program_name} [options] [string ...]#{BOLD_END}
-    #   --help          Print a longer help message with more options
-    #   -f              Interpret args as files, not strings
-    #   -c              Exit nonzero if any escapes are printed. ("check")
-    #   -1              Print out arguments once per line, and add a trailing newline
-    #   -n              Print out arguments with nothing separating them
-    # #{BOLD_BEGIN}WHAT TO ESCAPE#{BOLD_END}
-    #   -e CHARSET      Escape chars matching /[CHARSET]/
-    #   -E              Escape all characters
-    #   -u CHARSET      Don't escape chars matching /[CHARSET]/
-    #   -U              Don't use the default escapes
-    #   -l, -w          Unescape newlines/whitespace (space, tab, newline)
-    #   -s, -B          Escape spaces/backslashes
-    #   -m              Escape all multibyte characters; implies -8
-    # #{BOLD_BEGIN}HOW TO ESCAPE#{BOLD_END}
-    #   -v, -V          Enable/disable visual mode
-    #   -d, -., -x, -X  Escape by deleting/with `.`/hex bytes/always hex bytes
-    #   -C              Escape with codepoints (implies -8)
-    #   -p, -S          Have "pictures" for some characters/only spaces
-    # #{BOLD_BEGIN}ENCODINGS#{BOLD_END}
-    #   -b, -A, -8      Interpret input data as binary/ASCII/UTF-8
-    # EOS
   end
 
   op.on '--help', 'Print a longer usage message and exit' do
@@ -207,7 +215,7 @@ OptParse.new do |op|
   }
 
   def add_escape(charset, &block)
-    $escapes.prepend [charset, block]
+    $escapes.push [charset, block]
   end
 
   op.on '--clear-escapes', 'Undo all escapes that have been added, resetting it to the default' do
@@ -219,40 +227,40 @@ OptParse.new do |op|
   end
 
   op.on '--print=CHARSET', 'Simply print characters which match CHARSET' do |cs|
-    $escapes.prepend [cs || fail, ESCAPES.fetch(:print)]
+    $escapes.push [cs || fail, ESCAPES.fetch(:print)]
   end
 
   op.on '-d', '--delete[=CHARSET]', 'Delete characters which match CHARSET' do |cs|
-    $escapes.prepend [cs || :default, ESCAPES.fetch(:delete)]
+    $escapes.push [cs || :default, ESCAPES.fetch(:delete)]
   end
 
   op.on '-.', '--dot[=CHARSET]', 'Replaces chars which match CHARSET with a `.`' do |cs|
-    $escapes.prepend [cs || :default, ESCAPES.fetch(:dot)]
+    $escapes.push [cs || :default, ESCAPES.fetch(:dot)]
   end
 
   op.on '-x', '--hex[=CHARSET]', 'Replaces chars which match CHARSET with \xHH' do |cs|
-    $escapes.prepend [cs || :default, ESCAPES.fetch(:hex)]
+    $escapes.push [cs || :default, Escapes::HEX]
   end
 
   op.on '--codepoint=CHARSET', 'Replaces chars with their codepoints' do |cs|
     # TODO: the default should probably be `\m`, ie all multibyte utf-8 chars, no?
-    $escapes.prepend [cs || fail, ESCAPES.fetch(:codepoint)]
+    $escapes.push [cs || fail, ESCAPES.fetch(:codepoint)]
   end
 
   op.on '--c-escapes[=CHARSET]', 'Replaces chars with their c escapes' do |cs|
-    $escapes.prepend [cs || /[\0\a\b\t\n\v\f\r\e]/, ESCAPES.fetch(:c_escapes)] # NOTE the default doesnt include `\\`.
+    $escapes.push [cs || /[\0\a\b\t\n\v\f\r\e]/, ESCAPES.fetch(:c_escapes)] # NOTE the default doesnt include `\\`.
   end
 
   op.on '-p', '--pictures[=CHARSET]', 'Replaces chars with their "pictures"' do |cs|
-    $escapes.prepend [cs || /[\0-\x20\x7F]/, ESCAPES.fetch(:pictures)]
+    $escapes.push [cs || /[\0-\x20\x7F]/, ESCAPES.fetch(:pictures)]
   end
 
   op.on '--standout=CHARSET', 'Print the character, but use visual effects around it' do |cs|
-    $escapes.prepend [cs || fail, ESCAPES.fetch(:standout)]
+    $escapes.push [cs || fail, ESCAPES.fetch(:standout)]
   end
 
   op.on '--default=CHARSET', 'Do the default action for CHARSET' do |cs|
-    $escapes.prepend [cs, ESCAPES.fetch(:default)]
+    $escapes.push [cs, ESCAPES.fetch(:default)]
   end
 
 
@@ -273,27 +281,27 @@ OptParse.new do |op|
 
   op.separator 'SHORTHANDS'
   op.on '-l', '--print-newlines', "Same as --print='\\n'" do
-    $escapes.prepend ["\n", ESCAPES.fetch(:print)]
+    $escapes.push ["\n", ESCAPES.fetch(:print)]
   end
 
   op.on '-w', '--print-whitespace', "Same as --print='\\n\\t '" do
-    $escapes.prepend ["[\n\t ]", ESCAPES.fetch(:print)]
+    $escapes.push ["[\n\t ]", ESCAPES.fetch(:print)]
   end
 
   op.on '-s', '--standout-space', "Same as --standout=' '" do
-    $escapes.prepend [' ', ESCAPES.fetch(:standout)]
+    $escapes.push [' ', ESCAPES.fetch(:standout)]
   end
 
   op.on '-B', '-\\', '--escape-backslashes', "Same as --c-escapes='\\' (default if not visual mode)" do |eb|
-    $escapes.prepend ['\\', ESCAPES.fetch(:c_escapes)]
+    $escapes.push ['\\', ESCAPES.fetch(:c_escapes)]
   end
 
   op.on '-m', '--codepoint-multibyte', "Same as --codepoints='\\m'" do
-    $escapes.prepend [LAMBDA_FOR_MULTIBYTE, ESCAPES.fetch(:codepoint)]
+    $escapes.push [LAMBDA_FOR_MULTIBYTE, ESCAPES.fetch(:codepoint)]
   end
 
   op.on '-P', 'Same as --print with no argument (ie uses default set)' do
-    $escapes.prepend [:default, ESCAPES.fetch(:print)]
+    $escapes.push [:default, ESCAPES.fetch(:print)]
   end
 
   ##################################################################################################
