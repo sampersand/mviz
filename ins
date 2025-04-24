@@ -43,16 +43,9 @@ module Patterns
   end
 
   C_ESCAPES = {
-    "\0" => '\0',
-    "\a" => '\a',
-    "\b" => '\b',
-    "\t" => '\t',
-    "\n" => '\n',
-    "\v" => '\v',
-    "\f" => '\f',
-    "\r" => '\r',
-    "\e" => '\e',
-    "\\" => '\\\\',
+    "\0" => '\0', "\a" => '\a', "\b" => '\b', "\t" => '\t',
+    "\n" => '\n', "\v" => '\v', "\f" => '\f', "\r" => '\r',
+    "\e" => '\e', "\\" => '\\\\',
   }
   C_ESCAPES_DEFAULT = /[#{C_ESCAPES.keys.map{_1.inspect[1..-2]}.join}]/
 
@@ -104,7 +97,7 @@ module Patterns
   LAMBDA_FOR_SINGLEBYTE = ->char{char.bytesize == 1}
 
   def build!
-    @patterns.map do |selector, block|
+    @built = @patterns.map do |selector, block|
       selector = case selector
                  when '\A' then /./m
                  when '\@' then default_charset
@@ -117,6 +110,14 @@ module Patterns
                  end
       [selector, block]
     end
+  end
+
+  def handle(char)
+    @built.each do |condition, escape_method|
+      return escape_method.call(char) if condition === char
+    end
+
+    DEFAULT_PROC.call(char)
   end
 end
 
@@ -277,8 +278,7 @@ OptParse.new do |op|
     Patterns.codepoints(cs || LAMBDA_FOR_MULTIBYTE)
   end
 
-  op.on '--c-escapes[=CHARSET]', 'Replaces chars with their c escapes' do |cs|e
-    # NOTE: this intentionally doesn't have `\\` even though that's a c escape
+  op.on '--c-escapes[=CHARSET]', 'Replaces chars with their c escapes' do |cs|
     Patterns.c_escapes(cs || Patterns::C_ESCAPES_DEFAULT)
   end
 
@@ -459,15 +459,6 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-def __do_escape(char)
-  PATTERNS.each do |condition, escape_method|
-    # p [charset.encoding, char.encoding]
-    return escape_method.call(char) if condition === char
-  end
-
-  Patterns::DEFAULT_PROC.call char
-end
-
 
 ## Construct the `CHARACTERS` hash, whose keys are characters, and values are the corresponding
 # sequences to be printed.
@@ -477,7 +468,7 @@ CHARACTERS = Hash.new do |hash, key|
       $ENCODING_FAILED = true # for the exit status with `$malformed_error`.
       visualize(hex_bytes(key), VISUAL_ERR_BEGIN, VISUAL_ERR_END)
     else
-      __do_escape(key)
+      Patterns.handle(key)
     end
 end
 
