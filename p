@@ -1,5 +1,5 @@
 #!/usr/bin/env -S ruby -Ebinary
-# -*- encoding: binary; frozen-string-literal: true -*-
+# -*- encoding: UTF-8; frozen-string-literal: true -*-
 # ^ Force all strings in this file to be utf-8, regardless of what the environment says
 # NOTE: we needthe `-Ebinary` up top to force `$*` arguments to be binary. otherwise, optparse's
 # regexes will die. We could fix it by `$*.replace $*.map { (+_1).force_encoding 'binary' }` but ew.
@@ -17,6 +17,127 @@ PROGRAM_NAME = File.basename($0, '.*')
 def abort(msg = $!) super "#{PROGRAM_NAME}: #{msg}" end
 def warn(msg = $!)  super "#{PROGRAM_NAME}: #{msg}" end
 
+
+module Patterns
+  module_function
+  @patterns = []
+  @default_charset = nil #'[\0-\x1F\x7F]'
+
+  class << self
+    attr_writer :default_charset
+  end
+
+  def default_charset
+    @default_charset ||= if $encoding == Encoding::BINARY
+      Regexp.new((+"[\0-\x1F\x7F-\xFF]").force_encoding(Encoding::BINARY))
+    else
+      /[\0-\x1F\x7F]/
+    end
+  end
+
+  def reset!
+    @patterns.clear
+  end
+
+  def print(charset)
+    @patterns.push [charset || :default, ->char{ char }]
+  end
+
+  def delete(charset)
+    @patterns.push [charset || :default, ->_char{ $SOMETHING_ESCAPED = true; '' }]
+  end
+
+  def dot(charset)
+    @patterns.push [charset || :default, ->_char{ visualize '.' }]
+  end
+
+  def hex(charset)
+    @patterns.push [charset || :default, ->char{ visualize hex_bytes char }]
+  end
+
+  def codepoints(charset)
+    @patterns.push [charset, ->char{ visualize '\u{%04X}' % char.ord }]
+  end
+
+  C_ESCAPES = {
+    "\0" => '\0', "\a" => '\a', "\b" => '\b', "\t" => '\t',
+    "\n" => '\n', "\v" => '\v', "\f" => '\f', "\r" => '\r',
+    "\e" => '\e', "\\" => '\\\\',
+  }
+  C_ESCAPES_DEFAULT = /[#{C_ESCAPES.keys.map{_1.inspect[1..-2]}.join}]/
+
+  def c_escapes(charset)
+    @patterns.push [charset, ->char{ visualize C_ESCAPES.fetch(char) }]
+  end
+
+  def standout(charset)
+    @patterns.push [charset, ->char{ visualize char }]
+  end
+
+  def pictures(charset)
+    @patterns.push [charset, ->char{
+      case char
+      when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
+      when "\x7F" then visualize "\u{2421}"
+      when ' '    then visualize "\u{2423}"
+      else fail
+      end
+    }]
+  end
+
+  DEFAULT_PROC = ->char{
+      if char == '\\' && !$visualize
+        '\\'
+      elsif ce = C_ESCAPES[char]
+        visualize ce
+      elsif (char == "\x7F" || char <= "\x1F") or ($encoding == Encoding::BINARY && char >= "\x7F")
+        visualize hex_bytes char
+      else
+        char
+      end
+    }
+
+  def default(charset)
+    @patterns.push [charset, DEFAULT_PROC]
+  end
+
+  LAMBDA_FOR_MULTIBYTE = ->char{char.bytesize > 1}
+  LAMBDA_FOR_SINGLEBYTE = ->char{char.bytesize == 1}
+
+  def build!
+    @built = @patterns.map do |selector, block|
+      selector = case selector
+                 when '\A' then /./m
+                 when '\@' then default_charset
+                 when '\m' then LAMBDA_FOR_MULTIBYTE
+                 when '\M' then LAMBDA_FOR_SINGLEBYTE
+                 when ''   then next # If it's empty, don't register it
+                 when String then Regexp.new("[#{selector}]".force_encoding($encoding))
+                 when :default then default_charset
+                 when Regexp, Proc then selector
+                 else raise "fail: bad charset '#{selector.inspect}'"
+                 end
+      [selector, block]
+    end.compact
+  end
+
+  def handle(char)
+    if $DEBUG
+      pats = @built.select { |condition, _| condition === char }
+      if pats.length > 1
+        abort "character #{char} (#{char.inspect}, #{char.encoding}) matched multiple:\n\t#{pats.map(&:inspect).join("\n\t")}"
+      end
+    end
+
+    @built.each do |condition, escape_method|
+      return escape_method.call(char) if condition === char
+    end
+
+    DEFAULT_PROC.call(char)
+  end
+end
+
+
 ####################################################################################################
 #                                                                                                  #
 #                                         Parse Arguments                                          #
@@ -33,7 +154,7 @@ BOLD_END         = (ENV.fetch('P_BOLD_END',   "\e[0m") if $__SHOULD_USE_COLOR)
 
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
-  op.version = '0.8.5'
+  op.version = '0.8.7'
   op.banner = <<~BANNER
   #{VISUAL_BEGIN if $__SHOULD_USE_COLOR}usage#{VISUAL_END if $__SHOULD_USE_COLOR}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
@@ -53,6 +174,19 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator 'GENERIC OPTIONS'
 
+  op.accept :CHARSET do |selector|
+    case selector
+    when '\A'   then /./m
+    when '\@'   then :default
+    when '\m'   then Patterns::LAMBDA_FOR_MULTIBYTE
+    when '\M'   then Patterns::LAMBDA_FOR_SINGLEBYTE
+    when ''     then nil # Ie a value was given, but it's empty.
+    when nil    then :default
+    when String then selector.to_s
+    else        fail "bad selector?: #{selector}"
+    end
+  end
+
   op.on '-h', 'Print a shorter help message and exit' do
     puts <<~EOS
     #{BOLD_BEGIN}usage: #{op.program_name} [options] [string ...]#{BOLD_END}
@@ -61,22 +195,23 @@ OptParse.new do |op|
       -c              Exit nonzero if any escapes are printed. ("check")
       -1              Print out arguments once per line, and add a trailing newline
       -n              Print out arguments with nothing separating them
-    #{BOLD_BEGIN}WHAT TO ESCAPE#{BOLD_END}
-      -e CHARSET      Escape chars matching /[CHARSET]/
-      -E              Escape all characters
-      -u CHARSET      Don't escape chars matching /[CHARSET]/
-      -U              Don't use the default escapes
-      -l, -w          Unescape newlines/whitespace (space, tab, newline)
-      -s, -B          Escape spaces/backslashes
-      -m              Escape all multibyte characters; implies -8
-    #{BOLD_BEGIN}HOW TO ESCAPE#{BOLD_END}
-      -v, -V          Enable/disable visual mode
-      -d, -., -x, -X  Escape by deleting/with `.`/hex bytes/always hex bytes
-      -C              Escape with codepoints (implies -8)
-      -p, -S          Have "pictures" for some characters/only spaces
+      -v, -V          Enable/disable visual effects
+    #{BOLD_BEGIN}CHANGE OUTPUTS OF CHARACTERS#{BOLD_END}
+      -p [CHARSET]    Print chars in CHARSET unchanged
+      -d [CHARSET]    Deletes chars in CHARSET
+      -. [CHARSET]    Replace chars in CHARSET with a period
+      -x [CHARSET]    Escape chars with their hexadecimal value of their bytes
+      -P [CHARSET]    Escape some chars with their "pictures"
+    #{BOLD_BEGIN}SHORTHANDS#{BOLD_END}
+      -l              Don't escape newlines
+      -w              Don't escape newlines, tabs, or spaces
+      -s              Escape spaces
+      -B              Escape backslashes
+      -m              Escape multibyte characters with their Unicode codepoint.
     #{BOLD_BEGIN}ENCODINGS#{BOLD_END}
       -b, -A, -8      Interpret input data as binary/ASCII/UTF-8
     EOS
+    exit
   end
 
   op.on '--help', 'Print a longer usage message and exit' do
@@ -97,100 +232,15 @@ OptParse.new do |op|
     $files = f
   end
 
+  $malformed_error = true
   op.on'--[no-]malformed-error', 'Invalid chars for --encoding a cause nonzero exit. (default)' do |me|
     $malformed_error = me
   end
 
+  $escape_error = false
   op.on '-c', '--[no-]check-escapes', 'Any escapes cause an error status' do |ee|
     $escape_error = ee
   end
-
-  ##################################################################################################
-  #                                       Separating Outputs                                       #
-  ##################################################################################################
-  op.separator 'SEPARATING OUTPUTS'
-
-  op.on '--prefixes', "Add \"prefixes\". (default if stdout's a tty, and args are given)" do
-    $prefixes = true
-  end
-
-  op.on '-1', '--no-prefixes', 'Do not add prefixes to the output' do
-    $prefixes = false
-  end
-
-  # No need to have an option to set `$trailing_newline` on its own to false, as it's useless
-  # when `$prefixes` is truthy.
-  op.on '-n', '--no-prefixes-or-newline', 'Disables both prefixes and trailing newlines' do
-    $prefixes = $trailing_newline = false
-  end
-
-  ##################################################################################################
-  #                                         What To Escape                                         #
-  ##################################################################################################
-  op.separator 'WHAT TO ESCAPE', '(You can specify multiple options; they are additive.)'
-  $unescape_regexes = []
-  $escape_regexes = []
-  $default_escapes = true
-
-  op.on '-e', '--escape=CHARSET', 'Escape characters that match the regex /[CHARSET]/' do |rxp|
-    $escape_regexes.push "[#{rxp}]"
-  end
-
-  # 'Same as --escape=\'\0-\u{10FFFF}\'', in utf-8
-  op.on '-E', '--escape-all', 'Escape all characters. Useful when combined with --unescape.' do
-    $escape_regexes.push '.'
-  end
-
-  op.on '-u', '--unescape=CHARSET', 'Do not escape characters if they match /[CHARSET]/. If a char',
-                                    'matches both an --escape and --unescape, it is unescaped.' do |rxp|
-    $unescape_regexes.push "[#{rxp}]"
-  end
-
-  op.on '--default-escapes', "Implicitly include --escape='\\0-\\x1F\\x7F'; If not visual mode,",
-                             "also --escape='\\\\'. If --binary, also -e'\\x80-\\xFF'. (default)" do
-    $default_escapes = true
-  end
-
-  op.on '-U', '--no-default-escapes', 'Dont include --default-escapes' do
-    $default_escapes = false
-  end
-
-  op.on '-l', '--unescape-newline', "Same as --unescape='\\n'. (\"Line-oriented mode\")" do
-    $unescape_regexes.push '[\n]'
-  end
-
-  op.on '-w', '--unescape-whitespace', "Same as --unescape='\\n\\t '" do
-    $unescape_regexes.push '[\n\t ]'
-  end
-
-  op.on '-s', '--escape-space', "Same as --escape=' '" do
-    $escape_regexes.push ' '
-  end
-
-  op.on '-S', '--show-spaces', 'Same as --escape-space --space-picture' do
-    $space_picture = true
-    $escape_regexes.push ' '
-  end
-
-  op.on '-B', '--escape-backslash', "Same as --escape='\\\\' (default if not visual mode)" do |eb|
-    $escape_regexes.push '\\\\'
-  end
-
-  op.on '-m', '--escape-multibyte', "Same as --multibyte-codepoints --escape='\\u{80}-\\u{10FFFF}'.",
-                                    '(Escapes all multibyte codepoints.) Implies --utf-8.' do
-    $upper_codepoints = true
-    $encoding = Encoding::UTF_8
-    $escape_regexes.push '[\u{80}-\u{10FFFF}]'
-  end
-
-  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
-    $escape_surronding_spaces = ess
-  end
-
-  ##################################################################################################
-  #                                         How to Escape                                          #
-  ##################################################################################################
-  op.separator 'HOW TO ESCAPE', '(-d, -., -x, -X, and -C are mutually exclusive)'
 
   op.on '-v', '--visual', 'Enable visual effects. (default only if stdout is tty)' do
     $visual = true
@@ -200,45 +250,105 @@ OptParse.new do |op|
     $visual = false
   end
 
-  op.on '-d', '--delete', 'Delete escaped characters instead of printing their escape' do
-    $escape_how = :delete
+  ##################################################################################################
+  #                                       Separating Outputs                                       #
+  ##################################################################################################
+  op.separator 'OUTPUT FORMAT', '(each is mutually exclusive)'
+
+  op.on '--prefixes', "Add \"prefixes\". (default if stdout's a tty, and args are given)" do
+    $prefixes = true
   end
 
-  op.on '-.', '--dot', "Replace escaped characters with a '.'" do
-    $escape_how = :dot
+  op.on '-1', '--one-per-line', 'Print each argument on its own line. (adds a newline after)' do
+    $prefixes = false
   end
 
-  # Note: this applies only to characters without any other values
-  op.on '-x', '--hex', 'Escape with hex bytes, \xHH (default)' do
-    $escape_how = :hex
+  # No need to have an option to set `$trailing_newline` on its own to false, as it's useless
+  # when `$prefixes` is truthy.
+  op.on '-n', '--no-prefixes-or-newline', 'Disables both prefixes and trailing newlines' do
+    $prefixes = $trailing_newline = false
+  end
+  ##################################################################################################
+  #                                            Escaping                                            #
+  ##################################################################################################
+
+  op.separator 'ESCAPE PATTERNS', '(if something matches more than one, it currently is an error, as idk which one to pick)'
+
+  op.on '--reset-patterns', 'Clear all patterns that have been specified so far' do
+    Patterns.reset!
   end
 
-  op.on '--[no-]c-escapes', 'Use C-style escapes (\n, \t, etc). (default if -x and not -p)' do |ce|
-    $c_escapes = ce
+  op.on '--default-charset=CHARSET', :CHARSET, 'Set the default charset for --print, --delete, --dot, and --hex.' do |cs|
+    Patterns.default_charset = cs
   end
 
-  op.on '-X', '--hex-all', 'Like --hex, but applies to _all_ characters' do
-    $escape_how = :hex_all
-    $upper_codepoints = false
+  op.on '-p', '--print[=CHARSET]', 'Print characters, unchanged, which match CHARSET',
+    Patterns.method(:print)
+
+  op.on '-d', '--delete[=CHARSET]', :CHARSET, 'Delete characters which match CHARSET from the output.',
+    Patterns.method(:delete)
+
+  op.on '-.', '--dot[=CHARSET]', :CHARSET, "Replaces CHARSET with a period ('.')",
+    Patterns.method(:dot)
+
+  op.on '-x', '--hex[=CHARSET]', :CHARSET, 'Replaces characters with their hex value (\xHH)',
+    Patterns.method(:hex)
+
+  op.on '--codepoints[=CHARSET]', 'Replaces chars with their codepoints' do |cs|
+    Patterns.codepoints(cs || LAMBDA_FOR_MULTIBYTE)
   end
 
-  op.on '-C', '--codepoints', 'Escape with \u{...}. Sets (and can only be used with) --utf-8.' do
-    $escape_how = :codepoints
-    $encoding = Encoding::UTF_8
+  op.on '--c-escapes[=CHARSET]', 'Replaces chars with their c escapes' do |cs|
+    Patterns.c_escapes(cs || Patterns::C_ESCAPES_DEFAULT)
   end
 
-  op.on '--[no-]multibyte-codepoints', 'Like --codepoints, but only for values above 0x80. (default)'  do |uc|
-    $upper_codepoints = uc
-    $encoding = Encoding::UTF_8
+  op.on '-P', '--pictures[=CHARSET]', 'Replaces chars with their "pictures"' do |cs|
+    Patterns.pictures(cs || /[\0-\x20\x7F]/)
   end
 
-  op.on '-p', '--[no-]pictures', 'Use "pictures" (U+240x-U+242x) for some escapes.' do |cp|
-    $pictures = $space_picture = cp
+  op.on '--standout=CHARSET', 'Print the character, but use visual effects around it' do |cs|
+    Patterns.standout(cs || fail)
   end
 
-  # The reason this doesn't imply `-s` is because you may want to use it exclusively with `--escape-surrounding-space`
-  op.on '--[no-]space-picture', "Like --pictures, but only enable for spaces; Doesn't imply -s." do |sp|
-    $space_picture = sp
+  op.on '--default=CHARSET', 'Do the default action for CHARSET' do |cs|
+    Patterns.default(cs || fail)
+  end
+
+
+  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
+    $escape_surronding_spaces = ess
+  end
+
+  op.on <<~'EOS'
+    CHARSET is a regex character set; the braces can be omitted. For example `--delete=a-z` will
+    cause all lower-case latin letters to be removed. Note that sequences like `\w` and `\d` are
+    supported. In addition, there are some special cases for a charset of just: `\A` (all chars),
+    `\m` (all multibyte chars), and `\M` (all non-multibyte chars)
+  EOS
+
+  ## =====
+  ## =====
+  ## =====
+
+  op.separator 'SHORTHANDS'
+  op.on '-l', '--print-newlines', "Same as --print='\\n'" do
+    Patterns.print(/\n/)
+  end
+
+  op.on '-w', '--print-whitespace', "Same as --print='\\n\\t '" do
+    Patterns.print(/[\n\t ]/)
+  end
+
+  op.on '-s', '--standout-space', "Same as --standout=' '" do
+    Patterns.standout(/ /)
+  end
+
+  op.on '-B', '-\\', '--escape-backslashes', "Same as --c-escapes='\\' (default if not visual mode)" do |eb|
+    Patterns.c_escapes(/\\/)
+  end
+
+  op.on '-m', '--codepoint-multibyte', "Same as --codepoints='\\m'" do
+    Patterns.codepoint(Pattern::LAMBDA_FOR_MULTIBYTE)
   end
 
   ##################################################################################################
@@ -311,58 +421,25 @@ end
 
 # Specify defaults
 defined? $visual                   or $visual = $stdout.tty?
-defined? $prefixes                 or $prefixes = $stdout.tty? && (!$*.empty? || $files)
+defined? $prefixes                 or $prefixes = $stdout.tty? && (!$*.empty? || (defined?($files) && $files))
 defined? $files                    or $files = !$stdin.tty? && $*.empty?
 defined? $trailing_newline         or $trailing_newline = true
-defined? $malformed_error          or $malformed_error = true
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
-was_escape_how_defined = defined?($escape_how)
-defined? $escape_how               or $escape_how = :hex
-defined? $c_escapes                or $c_escapes = $escape_how == :hex && !$pictures
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
-defined? $upper_codepoints         or $upper_codepoints = $encoding == Encoding::UTF_8
 # ^ Escape things above `\x80` by replacing them with their codepoints if in utf-8 mode, and "make everything hex" wasn't requested
 
-## Union all the regexes we've been given
-if $default_escapes
-  $escape_regexes.push '[\x00-\x1F\x7F]'
-  $escape_regexes.push '[\x80-\xFF]' if $encoding == Encoding::BINARY
-end
-
-def make_regexp(regex_array, flag)
-  Regexp.union regex_array.map{|re| Regexp.new (+re).force_encoding($encoding), Regexp::FIXEDENCODING }
-rescue RegexpError => err
-  abort "issue with --#{flag} (encoding: #$encoding): #{err}"
-end
-
-$escape_regex   = make_regexp($escape_regexes, 'escape')
-$unescape_regex = make_regexp($unescape_regexes, 'unescape')
-
-# Default for backslashes: If visual is disabled, and was given to neither `-e` or `-u`, then
-# escape backslashes too.
-if $default_escapes && !$visual && !$unescape_regex.match?('\\') && !$escape_regex.match?('\\')
-  $escape_regex = Regexp.union '\\'.encode($encoding), $escape_regex
-end
+PATTERNS = Patterns.build!
 
 ## Force `$trailing_newline` to be set if `$prefixes` are set, as otherwise there wouldn't be a
 # newline between each header, which is weird.
 $trailing_newline ||= $prefixes
 
-## Validate options
-unless $encoding == Encoding::UTF_8
-  if $escape_how == :codepoints
-    abort "cannot use --codepoints with non-UTF-8 encodings (encoding is #$encoding)"
-  elsif $upper_codepoints
-    abort "cannot use --multibyte-codepoints with non-UTF-8 encodings (encoding is #$encoding)"
-  end
-end
-
 at_exit do
   next if $! # If there's an exception, then just yield that
 
-  if $malformed_error && $ENCODING_FAILED
+  if $malformed_error && ($ENCODING_FAILED ||= false)
     exit 1
-  elsif $escape_error && $SOMETHING_ESCAPED
+  elsif $escape_error && ($SOMETHING_ESCAPED ||= false)
     exit 1
   end
 end
@@ -373,13 +450,8 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-def should_escape?(char)
-  $escape_regex.match?(char) && !$unescape_regex.match?(char)
-end
-
 # Converts a string's bytes to their `\xHH` escaped version, and joins them
 def hex_bytes(string) string.each_byte.map { |byte| '\x%02X' % byte }.join end
-def codepoints(string) '\u{%04X}' % string.ord end
 
 # Add "visualize" escape sequences to a string; all escaped characters should be passed to this, as
 # visual effects are the whole purpose of the `p` program.
@@ -387,12 +459,12 @@ def codepoints(string) '\u{%04X}' % string.ord end
 # - if `$visual` is specified, then `start` and `stop` surround `string`
 # - else, `string` is returned.
 def visualize(string, start=VISUAL_BEGIN, stop=VISUAL_END)
-  string = '.' if $escape_how == :dot
+  $SOMETHING_ESCAPED = true
 
-  case
-  when $escape_how == :delete then ''
-  when $visual then "#{start}#{string}#{stop}"
-  else              string
+  if $visual
+    "#{start}#{string}#{stop}"
+  else
+    string
   end
 end
 
@@ -402,47 +474,6 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-C_ESCAPES = {
-  "\0" => '\0',
-  "\a" => '\a',
-  "\b" => '\b',
-  "\t" => '\t',
-  "\n" => '\n',
-  "\v" => '\v',
-  "\f" => '\f',
-  "\r" => '\r',
-  "\e" => '\e',
-}
-
-# Returns the escape sequence for a character, depending on the flags given to the program. It does
-# not actually add any visualizations, however; that's `escape`'s job
-def escape_sequence(character)
-  $SOMETHING_ESCAPED = true
-
-  case
-  when $c_escapes && (esc = C_ESCAPES[character])   then esc
-  when $pictures && character.match?(/[\x00-\x1F]/)
-    (0x2400 + character.ord).chr(Encoding::UTF_8)
-  when $pictures && character.match?(/[\x7F]/)      then "\u{2421}"
-  when character == '\\' && $escape_how != :hex_all && $escape_how != :codepoints then '\\\\'
-  when character == ' '  && $space_picture          then "\u{2423}"
-  when character == ' '  && $escape_how != :hex_all && $escape_how != :codepoints then ' '
-  when $escape_how == :codepoints || ($upper_codepoints && character.codepoints.sum >= 0x80)
-    codepoints character
-  else
-    hex_bytes character
-  end
-end
-
-# Return the escape sequence associated with `character`, and visual effects (if there are any). It
-# does not actually verify if a character _should_ be escaped; `should_escape?` is used for that.
-def escape(character)
-  case $escape_how
-  when :dot    then visualize '.'
-  when :delete then ''
-  else              visualize escape_sequence character
-  end
-end
 
 ## Construct the `CHARACTERS` hash, whose keys are characters, and values are the corresponding
 # sequences to be printed.
@@ -450,9 +481,9 @@ CHARACTERS = Hash.new do |hash, key|
   hash[key] =
     if !key.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$malformed_error`.
-      visualize hex_bytes(key), VISUAL_ERR_BEGIN, VISUAL_ERR_END
+      visualize(hex_bytes(key), VISUAL_ERR_BEGIN, VISUAL_ERR_END)
     else
-      should_escape?(key) ? escape(key) : key
+      Patterns.handle(key)
     end
 end
 
@@ -517,8 +548,8 @@ unless $files
       # beforehand), this should be changed to use `byteslice`.The method used here is more convenient,
       # but is destructive. ALSO. It doesn't work wtih non-utf8 characters
       string.force_encoding Encoding::BINARY
-      leading_spaces  = string.slice!(/\A +/) and print visualize escape_sequence(' ') * $&.length
-      trailing_spaces = string.slice!(/ +\z/) && visualize(escape_sequence(' ') * $&.length)
+      leading_spaces  = string.slice!(/\A +/) and print visualize(CHARACTERS[' '] * $&.length)
+      trailing_spaces = string.slice!(/ +\z/) && visualize(CHARACTERS[' '] * $&.length)
     end
 
     # handle the input string
@@ -580,7 +611,7 @@ rescue => err
   # we're given (like `cat`), reporting errors along the way, and then exiting with a non-zero exit
   # status if there's a problem.
   warn err       # Warn of the problem
-  $FILE_ERROR = true # For use when we're exiting
+  @FILE_ERROR = true # For use when we're exiting
 ensure
   ## Regardless of whether an exception occurred, attempt to close the file after each execution.
   # However, do not close `$stdin` (which occurs when `-` is passed in as a filename), as we might
@@ -592,6 +623,6 @@ ensure
 end
 
 ## If there was a problem reading a file, exit with a non-zero exit status. Note that we do this
-# instead of `exit !$FILE_ERROR`, as the `--invalid-bytes-failure` flag sets an `at_exit` earlier in
+# instead of `exit !@FILE_ERROR`, as the `--invalid-bytes-failure` flag sets an `at_exit` earlier in
 # this file which checks for the exiting exception, which `exit false` would still raise.
-exit 1 if $FILE_ERROR
+exit 1 if @FILE_ERROR
