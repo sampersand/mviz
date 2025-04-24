@@ -35,9 +35,9 @@ module Patterns
     end
   end
 
-  def reset!
-    @patterns.clear
-  end
+  # def reset!
+  #   @patterns.clear
+  # end
 
   def print(charset)
     @patterns.prepend [charset, ->char{ char }]
@@ -70,7 +70,7 @@ module Patterns
     @patterns.prepend [charset || C_ESCAPES_DEFAULT, ->char{ visualize C_ESCAPES.fetch(char) }]
   end
 
-  def standout(charset)
+  def highlight(charset)
     @patterns.prepend [charset, ->char{ visualize char }]
   end
 
@@ -268,9 +268,9 @@ OptParse.new do |op|
 
   op.separator 'ESCAPE PATTERNS', '(If something matches multiple, the last one wins.)'
 
-  op.on '--reset-patterns', 'Clear all patterns that have been specified so far' do
-    Patterns.reset!
-  end
+  # op.on '--reset-patterns', 'Clear all patterns that have been specified so far' do
+  #   Patterns.reset!
+  # end
 
   op.on '--default-charset=CHARSET', :CHARSET, 'Set the default charset for --print, --delete, --dot, and --hex' do |cs|
     Patterns.default_charset = cs
@@ -307,12 +307,12 @@ OptParse.new do |op|
     Patterns.c_escapes(cs || fail)
   end
 
-  op.on '--standout=CHARSET', 'Like --print, except the --visualize effects are added' do |cs|
-    Patterns.standout(cs || fail)
+  op.on '--highlight=CHARSET', 'Prints the char unchanged, but visual effects are added to it.' do |cs|
+    Patterns.highlight(cs || fail)
   end
 
   op.on '--default=CHARSET', 'Output whatever the default is for chars in CHARSET. (Note: You',
-                             "can \"undo\" previous patterns via --default='\\A')" do |cs|
+                             "can \"undo\" all previous patterns via --default='\\A')" do |cs|
     Patterns.default(cs || fail)
   end
 
@@ -341,8 +341,8 @@ OptParse.new do |op|
     Patterns.print(/[\n\t ]/)
   end
 
-  op.on '-s', '--standout-space', "Same as --standout=' '" do
-    Patterns.standout(/ /)
+  op.on '-s', '--highlight-space', "Same as --highlight=' '" do
+    Patterns.highlight(/ /)
   end
 
   op.on '-B', '-\\', '--escape-backslashes', "Same as --c-escapes='\\\\' (default if not visual mode)" do |eb|
