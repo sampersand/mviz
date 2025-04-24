@@ -278,9 +278,8 @@ OptParse.new do |op|
     Patterns.dot(cs || :default)
   end
 
-  op.on '-x', '--hex[=CHARSET]', 'Replaces chars which match CHARSET with \xHH' do |cs|
-    Patterns.hex(cs || :default)
-  end
+  op.on '-x', '--hex[=CHARSET]', 'Replaces chars which match CHARSET with \xHH',
+    Patterns.method(:hex)
 
   op.on '--codepoints[=CHARSET]', 'Replaces chars with their codepoints' do |cs|
     Patterns.codepoints(cs || LAMBDA_FOR_MULTIBYTE)
