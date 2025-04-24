@@ -86,16 +86,16 @@ module Patterns
   end
 
   DEFAULT_PROC = ->char{
-      if char == '\\' && !$visualize
-        '\\'
-      elsif ce = C_ESCAPES[char]
-        visualize ce
-      elsif (char == "\x7F" || char <= "\x1F") or ($encoding == Encoding::BINARY && char >= "\x7F")
-        visualize hex_bytes char
-      else
-        char
-      end
-    }
+    if char == '\\'
+      $visual ? '\\' : '\\\\'
+    elsif ce = C_ESCAPES[char]
+      visualize ce
+    elsif (char == "\x7F" || char <= "\x1F") or ($encoding == Encoding::BINARY && char >= "\x7F")
+      visualize hex_bytes char
+    else
+      char
+    end
+  }
 
   def default(charset)
     @patterns.push [charset, DEFAULT_PROC]
@@ -228,17 +228,17 @@ OptParse.new do |op|
     $DEBUG = $VERBOSE = true
   end
 
-  op.on '-f', '--[no-]files', 'Interpret trailing options as filenames to read' do |f|
+  op.on '-f', '--files', 'Interpret trailing options as filenames to read' do |f|
     $files = f
   end
 
   $malformed_error = true
-  op.on'--[no-]malformed-error', 'Invalid chars for --encoding a cause nonzero exit. (default)' do |me|
+  op.on'--[no-]malformed-error', 'Invalid chars in the --encoding a cause nonzero exit. (default)' do |me|
     $malformed_error = me
   end
 
   $escape_error = false
-  op.on '-c', '--[no-]check-escapes', 'Any escapes cause an error status' do |ee|
+  op.on '-c', '--[no-]check-escapes', 'Return nonzero if _any_ character is escaped' do |ee|
     $escape_error = ee
   end
 
@@ -253,13 +253,13 @@ OptParse.new do |op|
   ##################################################################################################
   #                                       Separating Outputs                                       #
   ##################################################################################################
-  op.separator 'OUTPUT FORMAT', '(each is mutually exclusive)'
+  op.separator 'OUTPUT FORMAT', "(They're all mutually exclusive; last one wins.)"
 
   op.on '--prefixes', "Add \"prefixes\". (default if stdout's a tty, and args are given)" do
     $prefixes = true
   end
 
-  op.on '-1', '--one-per-line', 'Print each argument on its own line. (adds a newline after)' do
+  op.on '-1', '--one-per-line', "Print each arg on its own line. (default when --prefixes isn't)" do
     $prefixes = false
   end
 
@@ -268,6 +268,7 @@ OptParse.new do |op|
   op.on '-n', '--no-prefixes-or-newline', 'Disables both prefixes and trailing newlines' do
     $prefixes = $trailing_newline = false
   end
+
   ##################################################################################################
   #                                            Escaping                                            #
   ##################################################################################################
@@ -282,7 +283,7 @@ OptParse.new do |op|
     Patterns.default_charset = cs
   end
 
-  op.on '-p', '--print[=CHARSET]', 'Print characters, unchanged, which match CHARSET',
+  op.on '-p', '--print[=CHARSET]', :CHARSET, 'Print characters, unchanged, which match CHARSET',
     Patterns.method(:print)
 
   op.on '-d', '--delete[=CHARSET]', :CHARSET, 'Delete characters which match CHARSET from the output.',
@@ -297,21 +298,20 @@ OptParse.new do |op|
   op.on '-P', '--pictures[=CHARSET]', 'Replaces chars with their "pictures"',
     Patterns.method(:pictures)
 
-  op.on '--codepoints[=CHARSET]', 'Replaces chars with their codepoints',
+  op.on '--codepoints=CHARSET', 'Replaces chars with their UTF-8 codepoints',
     Patterns.method(:codepoints)
 
-  op.on '--c-escapes[=CHARSET]', 'Replaces chars with their C escapes; It is an error to use',
+  op.on '--c-escapes=CHARSET', 'Replaces chars with their C escapes; It is an error to use',
   'non-c-escape chars with this.',
     Patterns.method(:c_escapes)
 
-  op.on '--standout=CHARSET', 'Print the character, but use visual effects around it' do |cs|
+  op.on '--standout=CHARSET', 'Like --print, except the --visualize effects are added' do |cs|
     Patterns.standout(cs || fail)
   end
 
   op.on '--default=CHARSET', 'Do the default action for chars in CHARSET' do |cs|
     Patterns.default(cs || fail)
   end
-
 
   op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
     $escape_surronding_spaces = ess
@@ -370,7 +370,6 @@ OptParse.new do |op|
     exit
   end
 
-  # op.on '-b', '--binary', '--bytes', 'Interpret input data as binary data (Same as --encoding=binary)' do
   op.on '-b', '--binary', '--bytes', 'Same as --encoding=binary. (Escapes high-bit bytes)' do
     $encoding = Encoding::BINARY
   end
