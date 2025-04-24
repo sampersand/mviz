@@ -122,12 +122,12 @@ module Patterns
   end
 
   def handle(char)
-    if $DEBUG
-      pats = @built.select { |condition, _| condition === char }
-      if pats.length > 1
-        abort "character #{char} (#{char.inspect}, #{char.encoding}) matched multiple:\n\t#{pats.map(&:inspect).join("\n\t")}"
-      end
-    end
+    # if $DEBUG no longer needed, as 
+    #   pats = @built.select { |condition, _| condition === char }
+    #   if pats.length > 1
+    #     abort "character #{char} (#{char.inspect}, #{char.encoding}) matched multiple:\n\t#{pats.map(&:inspect).join("\n\t")}"
+    #   end
+    # end
 
     @built.each do |condition, escape_method|
       return escape_method.call(char) if condition === char
@@ -273,7 +273,7 @@ OptParse.new do |op|
   #                                            Escaping                                            #
   ##################################################################################################
 
-  op.separator 'ESCAPE PATTERNS', '(if something matches more than one, it currently is an error, as idk which one to pick)'
+  op.separator 'ESCAPE PATTERNS', '(If something matches multiple, the last one wins.)'
 
   op.on '--reset-patterns', 'Clear all patterns that have been specified so far' do
     Patterns.reset!
@@ -299,23 +299,27 @@ OptParse.new do |op|
     Patterns.hex(cs || :default)
   end
 
-  op.on '-P', '--pictures[=CHARSET]', 'Replaces chars with their "pictures"' do |cs|
+  op.on '-P', '--pictures[=CHARSET]', 'Use "pictures" (U+240x-U+242x). CHARSET defaults to \0-\x20\x7F',
+                                      'Attempts to generate pictures for other chars is an error.' do |cs|
     Patterns.pictures(charset || /[\0-\x20\x7F]/)
   end
 
-  op.on '--codepoints=CHARSET', 'Replaces chars with their UTF-8 codepoints' do |cs|
-    Patterns.codepoints(cs || Patterns::LAMBDA_FOR_MULTIBYTE)
+  op.on '--codepoints=CHARSET', 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
+    Patterns.codepoints(cs || fail)
   end
 
-  op.on '--c-escapes=CHARSET', 'Replaces chars with their C escapes; It is an error to use',
-  'non-c-escape chars with this.',
-    Patterns.method(:c_escapes)
+  op.on '--c-escapes=CHARSET', 'Replaces chars with their C escapes; Attempts to generate',
+                               "c-escapes for non-'#{Patterns::C_ESCAPES_DEFAULT.source[1..-2]
+                                  .sub('u0000', '0')}' is an error" do |cs|
+    Patterns.c_escapes(cs || fail)
+  end
 
   op.on '--standout=CHARSET', 'Like --print, except the --visualize effects are added' do |cs|
     Patterns.standout(cs || fail)
   end
 
-  op.on '--default=CHARSET', 'Do the default action for chars in CHARSET' do |cs|
+  op.on '--default=CHARSET', 'Output whatever the default is for chars in CHARSET. (Note: You',
+                             "can \"undo\" previous patterns via --default='\\A')" do |cs|
     Patterns.default(cs || fail)
   end
 
@@ -351,7 +355,7 @@ OptParse.new do |op|
     Patterns.c_escapes(/\\/)
   end
 
-  op.on '-m', '--codepoint-multibyte', "Same as --codepoints='\\m'" do
+  op.on '-m', '--multibyte-codepoints', "Same as --codepoints='\\m'" do
     Patterns.codepoints(Patterns::LAMBDA_FOR_MULTIBYTE)
   end
 
