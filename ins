@@ -40,7 +40,7 @@ module Patterns
   end
 
   def print(charset)
-    @patterns.push [charset, ->char{ char }]
+    @patterns.push [charset || :default, ->char{ char }]
   end
 
   def delete(charset)
@@ -195,14 +195,14 @@ OptParse.new do |op|
       -c              Exit nonzero if any escapes are printed. ("check")
       -1              Print out arguments once per line, and add a trailing newline
       -n              Print out arguments with nothing separating them
-      -v              Enable visual mode
-      -V              Disable visual mode
-    #{BOLD_BEGIN}ESCAPING#{BOLD_END}
-      --default-charset=CHARSET    Explicitly sets the default charset
+      -v, -V          Enable/disable visual effects
+    #{BOLD_BEGIN}CHANGE OUTPUTS OF CHARACTERS#{BOLD_END}
+      -p [CHARSET]    Print chars in CHARSET unchanged
       -d [CHARSET]    Deletes chars in CHARSET
-      -. [CHARSET]    Replace escaped chars with a period
+      -. [CHARSET]    Replace chars in CHARSET with a period
       -x [CHARSET]    Escape chars with their hexadecimal value of their bytes
-      -p [CHARSET]    Escape some chars with their "pictures"
+      -P [CHARSET]    Escape some chars with their "pictures"
+    #{BOLD_BEGIN}SHORTHANDS#{BOLD_END}
       -l              Don't escape newlines
       -w              Don't escape newlines, tabs, or spaces
       -s              Escape spaces
@@ -278,13 +278,12 @@ OptParse.new do |op|
     Patterns.reset!
   end
 
-  op.on '--default-charset=CHARSET', :CHARSET, 'Set the default charset for --delete, --dot, and --hex.' do |cs|
+  op.on '--default-charset=CHARSET', :CHARSET, 'Set the default charset for --print, --delete, --dot, and --hex.' do |cs|
     Patterns.default_charset = cs
   end
 
-  op.on '--print=CHARSET', 'Print characters, unchanged, which match CHARSET' do |cs|
-    Patterns.print(cs || fail)
-  end
+  op.on '-p', '--print[=CHARSET]', 'Print characters, unchanged, which match CHARSET',
+    Patterns.method(:print)
 
   op.on '-d', '--delete[=CHARSET]', :CHARSET, 'Delete characters which match CHARSET from the output.',
     Patterns.method(:delete)
@@ -303,7 +302,7 @@ OptParse.new do |op|
     Patterns.c_escapes(cs || Patterns::C_ESCAPES_DEFAULT)
   end
 
-  op.on '-p', '--pictures[=CHARSET]', 'Replaces chars with their "pictures"' do |cs|
+  op.on '-P', '--pictures[=CHARSET]', 'Replaces chars with their "pictures"' do |cs|
     Patterns.pictures(cs || /[\0-\x20\x7F]/)
   end
 
@@ -350,10 +349,6 @@ OptParse.new do |op|
 
   op.on '-m', '--codepoint-multibyte', "Same as --codepoints='\\m'" do
     Patterns.codepoint(Pattern::LAMBDA_FOR_MULTIBYTE)
-  end
-
-  op.on '-P', 'Same as --print with no argument (ie uses default set)' do
-    Patterns.print(:default)
   end
 
   ##################################################################################################
