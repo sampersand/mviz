@@ -348,7 +348,7 @@ OptParse.new do |op|
   end
 
   op.on '-m', '--codepoint-multibyte', "Same as --codepoints='\\m'" do
-    Patterns.codepoint(Pattern::LAMBDA_FOR_MULTIBYTE)
+    Patterns.codepoints(Patterns::LAMBDA_FOR_MULTIBYTE)
   end
 
   ##################################################################################################
