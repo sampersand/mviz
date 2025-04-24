@@ -196,7 +196,7 @@ OptParse.new do |op|
       -d [CHARSET]    Deletes chars in CHARSET
       -. [CHARSET]    Replace chars in CHARSET with a period
       -x [CHARSET]    Escape chars with their hexadecimal value of their bytes
-      -P [CHARSET]    Escape some chars with their "pictures"
+      -P [CHARSET]    Escape some chars with their "pictures"; does not use default charset.
     #{BOLD_BEGIN}SHORTHANDS#{BOLD_END}
       -l              Don't escape newlines.
       -w              Don't escape newlines, tabs, or spaces
@@ -303,7 +303,7 @@ OptParse.new do |op|
 
   op.on '--c-escapes=CHARSET', 'Replaces chars with their C escapes; Attempts to generate',
                                "c-escapes for non-'#{Patterns::C_ESCAPES_DEFAULT.source[1..-2]
-                                  .sub('u0000', '0')}' is an error" do |cs|
+                                                      .sub('u0000', '0')}' is an error" do |cs|
     Patterns.c_escapes(cs || fail)
   end
 
@@ -316,6 +316,7 @@ OptParse.new do |op|
     Patterns.default(cs || fail)
   end
 
+  $escape_surronding_spaces = true
   op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
     $escape_surronding_spaces = ess
   end
@@ -424,12 +425,11 @@ end
 ####################################################################################################
 
 # Specify defaults
-defined? $visual                   or $visual = $stdout.tty?
-defined? $prefixes                 or $prefixes = $stdout.tty? && (!$*.empty? || (defined?($files) && $files))
-defined? $files                    or $files = !$stdin.tty? && $*.empty?
-defined? $trailing_newline         or $trailing_newline = true
-defined? $escape_surronding_spaces or $escape_surronding_spaces = true
-defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
+defined? $visual           or $visual = $stdout.tty?
+defined? $prefixes         or $prefixes = $stdout.tty? && (!$*.empty? || (defined?($files) && $files))
+defined? $files            or $files = !$stdin.tty? && $*.empty?
+defined? $trailing_newline or $trailing_newline = true
+defined? $encoding         or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 # ^ Escape things above `\x80` by replacing them with their codepoints if in utf-8 mode, and "make everything hex" wasn't requested
 
 PATTERNS = Patterns.build!
