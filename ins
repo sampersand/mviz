@@ -174,6 +174,19 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator 'GENERIC OPTIONS'
 
+  op.accept :CHARSET do |selector|
+    case selector
+    when '\A'   then /./m
+    when '\@'   then :default
+    when '\m'   then Patterns::LAMBDA_FOR_MULTIBYTE
+    when '\M'   then Patterns::LAMBDA_FOR_SINGLEBYTE
+    when ''     then nil # Ie a value was given, but it's empty.
+    when nil    then :default
+    when String then selector.to_s
+    else        fail "bad selector?: #{selector}"
+    end
+  end
+
   op.on '-h', 'Print a shorter help message and exit' do
     puts <<~EOS
     #{BOLD_BEGIN}usage: #{op.program_name} [options] [string ...]#{BOLD_END}
@@ -240,7 +253,7 @@ OptParse.new do |op|
   ##################################################################################################
   #                                       Separating Outputs                                       #
   ##################################################################################################
-  op.separator 'SEPARATING OUTPUTS'
+  op.separator 'OUTPUT FORMAT', '(each is mutually exclusive)'
 
   op.on '--prefixes', "Add \"prefixes\". (default if stdout's a tty, and args are given)" do
     $prefixes = true
@@ -259,27 +272,27 @@ OptParse.new do |op|
   #                                            Escaping                                            #
   ##################################################################################################
 
-  op.separator 'ESCAPING'
+  op.separator 'ESCAPE PATTERNS', '(if something matches more than one, it currently is an error, as idk which one to pick)'
 
-  op.on '--clear-escapes', 'Undo all escapes that have been added, resetting it to the default' do
+  op.on '--reset-patterns', 'Clear all patterns that have been specified so far' do
     Patterns.reset!
   end
 
-  op.on '--default-charset=CHARSET', 'Set the default charset for the remaining options to CHARSET' do |cs|
-    Patterns.default_charset = /[#{cs}]/ # TODO: do we have to be worried about this and binary?
+  op.on '--default-charset=CHARSET', :CHARSET, 'Set the default charset for --delete, --dot, and --hex.' do |cs|
+    Patterns.default_charset = cs
   end
 
-  op.on '--print=CHARSET', 'Simply print characters which match CHARSET' do |cs|
+  op.on '--print=CHARSET', 'Print characters, unchanged, which match CHARSET' do |cs|
     Patterns.print(cs || fail)
   end
 
-  op.on '-d', '--delete[=CHARSET]', 'Delete characters which match CHARSET',
+  op.on '-d', '--delete[=CHARSET]', :CHARSET, 'Delete characters which match CHARSET from the output.',
     Patterns.method(:delete)
 
-  op.on '-.', '--dot[=CHARSET]', 'Replaces chars which match CHARSET with a `.`',
+  op.on '-.', '--dot[=CHARSET]', :CHARSET, "Replaces CHARSET with a period ('.')",
     Patterns.method(:dot)
 
-  op.on '-x', '--hex[=CHARSET]', 'Replaces chars which match CHARSET with \xHH',
+  op.on '-x', '--hex[=CHARSET]', :CHARSET, 'Replaces characters with their hex value (\xHH)',
     Patterns.method(:hex)
 
   op.on '--codepoints[=CHARSET]', 'Replaces chars with their codepoints' do |cs|
