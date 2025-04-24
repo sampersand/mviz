@@ -173,7 +173,7 @@ OptParse.new do |op|
     when '\@'   then :default
     when '\m'   then Patterns::LAMBDA_FOR_MULTIBYTE
     when '\M'   then Patterns::LAMBDA_FOR_SINGLEBYTE
-    when ''     then throw :oops # Ie a value was given, but it's empty.
+    when ''     then nil # Ie a value was given, but it's empty.
     when nil    then :default
     when String then selector.to_s
     else        fail "bad selector?: #{selector}"
@@ -277,19 +277,19 @@ OptParse.new do |op|
   end
 
   op.on '-p', '--print[=CHARSET]', :CHARSET, 'Print characters, unchanged, which match CHARSET' do |cs|
-    Patterns.print(cs || :default)
+    Patterns.print(cs || next)
   end
 
   op.on '-d', '--delete[=CHARSET]', :CHARSET, 'Delete characters which match CHARSET from the output.' do |cs|
-    Patterns.delete(cs || :default)
+    Patterns.delete(cs || next)
   end
 
   op.on '-.', '--dot[=CHARSET]', :CHARSET, "Replaces CHARSET with a period ('.')" do |cs|
-    Patterns.dot(cs || :default)
+    Patterns.dot(cs || next)
   end
 
   op.on '-x', '--hex[=CHARSET]', :CHARSET, 'Replaces characters with their hex value (\xHH)' do |cs|
-    Patterns.hex(cs || :default)
+    Patterns.hex(cs || next)
   end
 
   op.on '-P', '--pictures[=CHARSET]', 'Use "pictures" (U+240x-U+242x). CHARSET defaults to \0-\x20\x7F',
