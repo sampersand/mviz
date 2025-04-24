@@ -56,7 +56,7 @@ module Patterns
   end
 
   def codepoints(charset)
-    @patterns.push [charset, ->char{ visualize '\u{%04X}' % char.ord }]
+    @patterns.push [charset || LAMBDA_FOR_MULTIBYTE, ->char{ visualize '\u{%04X}' % char.ord }]
   end
 
   C_ESCAPES = {
@@ -67,7 +67,7 @@ module Patterns
   C_ESCAPES_DEFAULT = /[#{C_ESCAPES.keys.map{_1.inspect[1..-2]}.join}]/
 
   def c_escapes(charset)
-    @patterns.push [charset, ->char{ visualize C_ESCAPES.fetch(char) }]
+    @patterns.push [charset || C_ESCAPES_DEFAULT, ->char{ visualize C_ESCAPES.fetch(char) }]
   end
 
   def standout(charset)
@@ -75,7 +75,7 @@ module Patterns
   end
 
   def pictures(charset)
-    @patterns.push [charset, ->char{
+    @patterns.push [charset || /[\0-\x20\x7F]/, ->char{
       case char
       when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
       when "\x7F" then visualize "\u{2421}"
@@ -294,23 +294,21 @@ OptParse.new do |op|
   op.on '-x', '--hex[=CHARSET]', :CHARSET, 'Replaces characters with their hex value (\xHH)',
     Patterns.method(:hex)
 
-  op.on '--codepoints[=CHARSET]', 'Replaces chars with their codepoints' do |cs|
-    Patterns.codepoints(cs || LAMBDA_FOR_MULTIBYTE)
-  end
+  op.on '-P', '--pictures[=CHARSET]', 'Replaces chars with their "pictures"',
+    Patterns.method(:pictures)
 
-  op.on '--c-escapes[=CHARSET]', 'Replaces chars with their c escapes' do |cs|
-    Patterns.c_escapes(cs || Patterns::C_ESCAPES_DEFAULT)
-  end
+  op.on '--codepoints[=CHARSET]', 'Replaces chars with their codepoints',
+    Patterns.method(:codepoints)
 
-  op.on '-P', '--pictures[=CHARSET]', 'Replaces chars with their "pictures"' do |cs|
-    Patterns.pictures(cs || /[\0-\x20\x7F]/)
-  end
+  op.on '--c-escapes[=CHARSET]', 'Replaces chars with their C escapes; It is an error to use',
+  'non-c-escape chars with this.',
+    Patterns.method(:c_escapes)
 
   op.on '--standout=CHARSET', 'Print the character, but use visual effects around it' do |cs|
     Patterns.standout(cs || fail)
   end
 
-  op.on '--default=CHARSET', 'Do the default action for CHARSET' do |cs|
+  op.on '--default=CHARSET', 'Do the default action for chars in CHARSET' do |cs|
     Patterns.default(cs || fail)
   end
 
