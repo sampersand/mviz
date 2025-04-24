@@ -253,11 +253,11 @@ OptParse.new do |op|
   end
 
   op.on '-w', '--print-whitespace', "Same as --print='\\n\\t '" do
-    $escapes.push ["[\n\t ]", ESCAPES.fetch(:print)]
+    $escapes.push [/[\n\t ]/, ESCAPES.fetch(:print)]
   end
 
   op.on '-s', '--standout-space', "Same as --standout=' '" do
-    $escapes.push [' ', ESCAPES.fetch(:standout)]
+    $escapes.push [/ /, ESCAPES.fetch(:standout)]
   end
 
   op.on '-B', '-\\', '--escape-backslashes', "Same as --c-escapes='\\' (default if not visual mode)" do |eb|
