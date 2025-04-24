@@ -40,23 +40,23 @@ module Patterns
   end
 
   def print(charset)
-    @patterns.push [charset || :default, ->char{ char }]
+    @patterns.prepend [charset, ->char{ char }]
   end
 
   def delete(charset)
-    @patterns.push [charset || :default, ->_char{ $SOMETHING_ESCAPED = true; '' }]
+    @patterns.prepend [charset, ->_char{ $SOMETHING_ESCAPED = true; '' }]
   end
 
   def dot(charset)
-    @patterns.push [charset || :default, ->_char{ visualize '.' }]
+    @patterns.prepend [charset, ->_char{ visualize '.' }]
   end
 
   def hex(charset)
-    @patterns.push [charset || :default, ->char{ visualize hex_bytes char }]
+    @patterns.prepend [charset, ->char{ visualize hex_bytes char }]
   end
 
   def codepoints(charset)
-    @patterns.push [charset || LAMBDA_FOR_MULTIBYTE, ->char{ visualize '\u{%04X}' % char.ord }]
+    @patterns.prepend [charset, ->char{ visualize '\u{%04X}' % char.ord }]
   end
 
   C_ESCAPES = {
@@ -67,15 +67,15 @@ module Patterns
   C_ESCAPES_DEFAULT = /[#{C_ESCAPES.keys.map{_1.inspect[1..-2]}.join}]/
 
   def c_escapes(charset)
-    @patterns.push [charset || C_ESCAPES_DEFAULT, ->char{ visualize C_ESCAPES.fetch(char) }]
+    @patterns.prepend [charset || C_ESCAPES_DEFAULT, ->char{ visualize C_ESCAPES.fetch(char) }]
   end
 
   def standout(charset)
-    @patterns.push [charset, ->char{ visualize char }]
+    @patterns.prepend [charset, ->char{ visualize char }]
   end
 
   def pictures(charset)
-    @patterns.push [charset || /[\0-\x20\x7F]/, ->char{
+    @patterns.prepend [charset, ->char{
       case char
       when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
       when "\x7F" then visualize "\u{2421}"
@@ -98,7 +98,7 @@ module Patterns
   }
 
   def default(charset)
-    @patterns.push [charset, DEFAULT_PROC]
+    @patterns.prepend [charset, DEFAULT_PROC]
   end
 
   LAMBDA_FOR_MULTIBYTE = ->char{char.bytesize > 1}
@@ -180,7 +180,7 @@ OptParse.new do |op|
     when '\@'   then :default
     when '\m'   then Patterns::LAMBDA_FOR_MULTIBYTE
     when '\M'   then Patterns::LAMBDA_FOR_SINGLEBYTE
-    when ''     then nil # Ie a value was given, but it's empty.
+    when ''     then throw :oops # Ie a value was given, but it's empty.
     when nil    then :default
     when String then selector.to_s
     else        fail "bad selector?: #{selector}"
@@ -196,20 +196,20 @@ OptParse.new do |op|
       -1              Print out arguments once per line, and add a trailing newline
       -n              Print out arguments with nothing separating them
       -v, -V          Enable/disable visual effects
-    #{BOLD_BEGIN}CHANGE OUTPUTS OF CHARACTERS#{BOLD_END}.
+    #{BOLD_BEGIN}INPUT DATA#{BOLD_END}
+      -b, -A, -8      Interpret the input bytes as binary/ASCII/UTF-8
+    #{BOLD_BEGIN}CHANGE HOW CHARACTERS ARE OUTPUT#{BOLD_END}
       -p [CHARSET]    Print chars in CHARSET unchanged
       -d [CHARSET]    Deletes chars in CHARSET
       -. [CHARSET]    Replace chars in CHARSET with a period
       -x [CHARSET]    Escape chars with their hexadecimal value of their bytes
       -P [CHARSET]    Escape some chars with their "pictures"
     #{BOLD_BEGIN}SHORTHANDS#{BOLD_END}
-      -l              Don't escape newlines
+      -l              Don't escape newlines.
       -w              Don't escape newlines, tabs, or spaces
       -s              Escape spaces
       -B              Escape backslashes
       -m              Escape multibyte characters with their Unicode codepoint.
-    #{BOLD_BEGIN}ENCODINGS#{BOLD_END}
-      -b, -A, -8      Interpret input data as binary/ASCII/UTF-8
     EOS
     exit
   end
@@ -279,27 +279,33 @@ OptParse.new do |op|
     Patterns.reset!
   end
 
-  op.on '--default-charset=CHARSET', :CHARSET, 'Set the default charset for --print, --delete, --dot, and --hex.' do |cs|
+  op.on '--default-charset=CHARSET', :CHARSET, 'Set the default charset for --print, --delete, --dot, and --hex' do |cs|
     Patterns.default_charset = cs
   end
 
-  op.on '-p', '--print[=CHARSET]', :CHARSET, 'Print characters, unchanged, which match CHARSET',
-    Patterns.method(:print)
+  op.on '-p', '--print[=CHARSET]', :CHARSET, 'Print characters, unchanged, which match CHARSET' do |cs|
+    Patterns.print(cs || :default)
+  end
 
-  op.on '-d', '--delete[=CHARSET]', :CHARSET, 'Delete characters which match CHARSET from the output.',
-    Patterns.method(:delete)
+  op.on '-d', '--delete[=CHARSET]', :CHARSET, 'Delete characters which match CHARSET from the output.' do |cs|
+    Patterns.delete(cs || :default)
+  end
 
-  op.on '-.', '--dot[=CHARSET]', :CHARSET, "Replaces CHARSET with a period ('.')",
-    Patterns.method(:dot)
+  op.on '-.', '--dot[=CHARSET]', :CHARSET, "Replaces CHARSET with a period ('.')" do |cs|
+    Patterns.dot(cs || :default)
+  end
 
-  op.on '-x', '--hex[=CHARSET]', :CHARSET, 'Replaces characters with their hex value (\xHH)',
-    Patterns.method(:hex)
+  op.on '-x', '--hex[=CHARSET]', :CHARSET, 'Replaces characters with their hex value (\xHH)' do |cs|
+    Patterns.hex(cs || :default)
+  end
 
-  op.on '-P', '--pictures[=CHARSET]', 'Replaces chars with their "pictures"',
-    Patterns.method(:pictures)
+  op.on '-P', '--pictures[=CHARSET]', 'Replaces chars with their "pictures"' do |cs|
+    Patterns.pictures(charset || /[\0-\x20\x7F]/)
+  end
 
-  op.on '--codepoints=CHARSET', 'Replaces chars with their UTF-8 codepoints',
-    Patterns.method(:codepoints)
+  op.on '--codepoints=CHARSET', 'Replaces chars with their UTF-8 codepoints' do |cs|
+    Patterns.codepoints(cs || Patterns::LAMBDA_FOR_MULTIBYTE)
+  end
 
   op.on '--c-escapes=CHARSET', 'Replaces chars with their C escapes; It is an error to use',
   'non-c-escape chars with this.',
@@ -341,7 +347,7 @@ OptParse.new do |op|
     Patterns.standout(/ /)
   end
 
-  op.on '-B', '-\\', '--escape-backslashes', "Same as --c-escapes='\\' (default if not visual mode)" do |eb|
+  op.on '-B', '-\\', '--escape-backslashes', "Same as --c-escapes='\\\\' (default if not visual mode)" do |eb|
     Patterns.c_escapes(/\\/)
   end
 
@@ -407,7 +413,11 @@ OptParse.new do |op|
 
   # Parse the options; Note that `op.parse!` handles `POSIXLY_CORRECT` internally to determine if
   # flags should be allowed to come after arguments.
-  op.parse! rescue abort
+  begin
+    op.parse!
+  rescue OptionParser::ParseError => err # Only gracefully exit with optparse errors.
+    abort err
+  end
 end
 
 ####################################################################################################
