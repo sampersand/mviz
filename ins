@@ -159,7 +159,7 @@ OptParse.new do |op|
     delete: ->_char{ $SOMETHING_ESCAPED = true; '' },
     dot: ->_char{ visualize '.' },
     hex: ->char{ visualize hex_bytes char },
-    codepoint: ->char{ visualize codepoints char },
+    codepoint: ->char{ visualize '\u{%04X}' % char.ord },
     c_escapes: ->char{ visualize C_ESCAPES.fetch(char) },
     standout: ->char{ visualize char },
     pictures: ->char{
@@ -347,9 +347,6 @@ defined? $files                    or $files = !$stdin.tty? && $*.empty?
 defined? $trailing_newline         or $trailing_newline = true
 defined? $malformed_error          or $malformed_error = true
 defined? $escape_surronding_spaces or $escape_surronding_spaces = true
-was_escape_how_defined = defined?($escape_how)
-defined? $escape_how               or $escape_how = :hex
-defined? $c_escapes                or $c_escapes = $escape_how == :hex && !$pictures
 defined? $encoding                 or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 # ^ Escape things above `\x80` by replacing them with their codepoints if in utf-8 mode, and "make everything hex" wasn't requested
 
@@ -399,7 +396,6 @@ end
 
 # Converts a string's bytes to their `\xHH` escaped version, and joins them
 def hex_bytes(string) string.each_byte.map { |byte| '\x%02X' % byte }.join end
-def codepoints(string) '\u{%04X}' % string.ord end
 
 # Add "visualize" escape sequences to a string; all escaped characters should be passed to this, as
 # visual effects are the whole purpose of the `p` program.
@@ -408,12 +404,11 @@ def codepoints(string) '\u{%04X}' % string.ord end
 # - else, `string` is returned.
 def visualize(string, start=VISUAL_BEGIN, stop=VISUAL_END)
   $SOMETHING_ESCAPED = true
-  string = '.' if $escape_how == :dot
 
-  case
-  when $escape_how == :delete then ''
-  when $visual then "#{start}#{string}#{stop}"
-  else              string
+  if $visual
+    "#{start}#{string}#{stop}"
+  else
+    string
   end
 end
 
