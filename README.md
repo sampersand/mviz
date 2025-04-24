@@ -1,22 +1,22 @@
-# The `p` command
+# The `inspect` command
 A program to print out invisible characters in strings or files.
 
 # "Impetus" example usages:
 (i.e. the usages that inspired this command)
 ```shell
-$ p "$variable"      # See the contents of `$variable`
-$ p $variable        # See how `$variable` word splits
-$ p *                # See what files are expanded by a glob
-$ some_command | p   # See if `some_command` outputs something weird
-$ p -f some-file.txt # see if `some-file.txt` is contains weird characters
+$ inspect "$variable"      # See the contents of `$variable`
+$ inspect $variable        # See how `$variable` word splits
+$ inspect *                # See what files are expanded by a glob
+$ some_command | inspect   # See if `some_command` outputs something weird
+$ inspect -f some-file.txt # see if `some-file.txt` is contains weird characters
 ```
 
-Try `p --help` for usage
+Try `inspect --help` for usage
 
 ## Why not use tool X (`xxd`, `hexdmp`, `vis`, `od`, etc)?
-The biggest difference between `p` and other tools is that `p` is intended for looking at text (not binary data) by default, and optimizes for that. (It doesn't change the output _unless_ weird characters exist.) For example:
+The biggest difference between `inspect` and other tools is that `inspect` is intended for looking at text (not binary data) by default, and optimizes for that. (It doesn't change the output _unless_ weird characters exist.) For example:
 ```bash
-% printf 'hello\x04world, how are you? \xC3👍\n' | p
+% printf 'hello\x04world, how are you? \xC3👍\n' | inspect
 hello\x04world, how are you? \xC3👍\n
 
 % printf 'hello\x04world, how are you? \xC3👍\n' | xxd
@@ -41,7 +41,7 @@ hello\^Dworld, how are you? \M-C\M-p\M^_\M^Q\M^M
 ## TODO
 - Should I add an `--highlight-means-error` flag (name subject to bikeshed)? I.e. if there's _any_ form of highlights, return an error. (done)
 - Should make `-l` not `--unescape='\n'` but instead act like `/\R/` (ie platform-indep line sep)?
-- `p -ax` makes everything hex, except for spaces and backslashes. should we do this?
+- `inspect -ax` makes everything hex, except for spaces and backslashes. should we do this?
 - MAke `escape-options.txt` the actual escape options that are used. E.g., right now, it's not possible to have spaces escaped as `\x20`, but still have utf-8 chars escaped as `\u`
 
 ## Character class
@@ -49,7 +49,7 @@ hello\^Dworld, how are you? \M-C\M-p\M^_\M^Q\M^M
 
 Oops:
 ```sh
-print '\xC3👍' | p --escape='\u{1F44D}' --escape='\xC3'
+print '\xC3👍' | inspect --escape='\u{1F44D}' --escape='\xC3'
 ```
 This isn't great, cause regexes can't be one or the other. so i have to figure out what to do...
 
