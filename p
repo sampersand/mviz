@@ -122,13 +122,6 @@ module Patterns
   end
 
   def handle(char)
-    # if $DEBUG no longer needed, as 
-    #   pats = @built.select { |condition, _| condition === char }
-    #   if pats.length > 1
-    #     abort "character #{char} (#{char.inspect}, #{char.encoding}) matched multiple:\n\t#{pats.map(&:inspect).join("\n\t")}"
-    #   end
-    # end
-
     @built.each do |condition, escape_method|
       return escape_method.call(char) if condition === char
     end
