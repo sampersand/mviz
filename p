@@ -34,9 +34,9 @@ module Patterns
     end
   end
 
-  def add_charset(charset, block)
+  def add_charset(charset, block, default: :default)
     return if charset == '' || charset == '^' # Ignore empty charsets
-    @patterns.prepend [charset, block]
+    @patterns.prepend [charset || default, block]
   end
 
   C_ESCAPES_MAP = {
@@ -251,7 +251,8 @@ OptParse.new do |op|
   end
 
   op.on '--default-charset=CHARSET', :charset, 'Set the default charset for --print, --delete, --dot, and --hex' do |cs|
-    Patterns.default_charset = p(cs)
+    cs = '' if cs == :empty # an empty charset is allowed for `default-charset`
+    Patterns.default_charset = cs || ''
   end
 
   op.on '-p', '--print[=CHARSET]', :charset, 'Print characters, unchanged, which match CHARSET' do |cs|
@@ -270,29 +271,28 @@ OptParse.new do |op|
     Patterns.add_charset(cs, Patterns::HEX)
   end
 
+  op.on '--codepoints=CHARSET', :charset, 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
+    Patterns.add_charset(cs, Patterns::CODEPOINTS)
+  end
+
+  op.on '--highlight=CHARSET', :charset, 'Prints the char unchanged, but visual effects are added to it.' do |cs|
+    Patterns.add_charset(cs, Patterns::HIGHLIGHT)
+  end
+
+  # (Note: You'"can \"undo\" all previous patterns via --default='\\A')
+  op.on '--default=CHARSET', :charset, 'Use the default patterns for chars in CHARSET' do |cs|
+    Patterns.add_charset(cs, Patterns::DEFAULT)
+  end
+
   op.on '-P', '--pictures[=CHARSET]', :charset, 'Use "pictures" (U+240x-U+242x). CHARSET defaults to \0-\x20\x7F',
                                       'Attempts to generate pictures for other chars is an error.' do |cs|
-    Patterns.add_charset(cs, Patterns::PICTURES)
-    Patterns.pictures(charset || /[\0-\x20\x7F]/)
+    Patterns.add_charset(cs, Patterns::PICTURES, default: /[\0-\x20\x7F]/)
   end
 
-  op.on '--codepoints=CHARSET', 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
-    Patterns.codepoints(cs || fail)
-  end
-
-  op.on '--c-escapes=CHARSET', 'Replaces chars with their C escapes; Attempts to generate',
+  op.on '--c-escapes[=CHARSET]', 'Replaces chars with their C escapes; Attempts to generate',
                                "c-escapes for non-'#{Patterns::C_ESCAPES_DEFAULT.source[1..-2]
-                                                      .sub('u0000', '0')}' is an error" do |cs|
-    Patterns.c_escapes(cs || fail)
-  end
-
-  op.on '--highlight=CHARSET', 'Prints the char unchanged, but visual effects are added to it.' do |cs|
-    Patterns.highlight(cs || fail)
-  end
-
-  op.on '--default=CHARSET', 'Output whatever the default is for chars in CHARSET. (Note: You',
-                             "can \"undo\" all previous patterns via --default='\\A')" do |cs|
-    Patterns.default(cs || fail)
+                                                      .sub('u0000', '0')}' is an error", 'Does not use default charset' do |cs|
+    Patterns.add_charset(cs, Patterns::C_ESCAPES, default: Patterns::C_ESCAPES_DEFAULT)
   end
 
   $escape_surronding_spaces = true
@@ -317,23 +317,23 @@ OptParse.new do |op|
 
   op.separator 'SHORTHANDS'
   op.on '-l', '--print-newlines', "Same as --print='\\n'" do
-    Patterns.print(/\n/)
+    Patterns.add_charset(/\n/, Patterns::PRINT)
   end
 
   op.on '-w', '--print-whitespace', "Same as --print='\\n\\t '" do
-    Patterns.print(/[\n\t ]/)
+    Patterns.add_charset(/[\n\t ]/, Patterns::PRINT)
   end
 
   op.on '-s', '--highlight-space', "Same as --highlight=' '" do
-    Patterns.highlight(/ /)
+    Patterns.add_charset(/ /, Patterns::HIGHLIGHT)
   end
 
   op.on '-B', '-\\', '--escape-backslashes', "Same as --c-escapes='\\\\' (default if not visual mode)" do |eb|
-    Patterns.c_escapes(/\\/)
+    Patterns.add_charset(/\\/, Patterns::C_ESCAPES)
   end
 
   op.on '-m', '--multibyte-codepoints', "Same as --codepoints='\\m'" do
-    Patterns.codepoints(Patterns::LAMBDA_FOR_MULTIBYTE)
+    Patterns.add_charset(Patterns::LAMBDA_FOR_MULTIBYTE, Patterns::CODEPOINTS)
   end
 
   ##################################################################################################
