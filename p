@@ -186,11 +186,14 @@ OptParse.new do |op|
       --help          Print a longer help message with more options
       -f              Interpret args as files, not strings
       -c              Exit nonzero if any escapes are printed. ("check")
+      -q              Suppress output. (useful with -c)
       -1              Print out arguments once per line, and add a trailing newline
       -n              Print out arguments with nothing separating them
       -v, -V          Enable/disable visual effects
     #{BOLD_BEGIN}INPUT DATA#{BOLD_END}
-      -b, -A, -8      Interpret the input bytes as binary/ASCII/UTF-8
+      -8              Interpret input data as UTF-8 (default unless POSIXLY_CORRECT set)
+      -b              Interpret input data as binary text
+      -A              Interpret input data as ASCII; like -b, except invalid bytes
     #{BOLD_BEGIN}CHANGE HOW CHARACTERS ARE OUTPUT#{BOLD_END}
       -p [CHARSET]    Print chars in CHARSET unchanged
       -d [CHARSET]    Deletes chars in CHARSET
@@ -235,6 +238,11 @@ OptParse.new do |op|
     $escape_error = ee
   end
 
+  $quiet = false
+  op.on '-q', '--[no-]quiet', 'Do not output anything. (Useful with -c or --malformed-error)' do |q|
+    $quiet = q
+  end
+
   op.on '-v', '--visual', 'Enable visual effects. (default only if stdout is tty)' do
     $visual = true
   end
@@ -272,6 +280,19 @@ OptParse.new do |op|
   #   Patterns.reset!
   # end
 
+  op.accept :charset do |selector|
+    case selector
+    when '\A'   then /./m
+    when '\m'   then Patterns::LAMBDA_FOR_MULTIBYTE
+    when '\M'   then Patterns::LAMBDA_FOR_SINGLEBYTE
+    when '\@'   then :default
+    when nil    then :default
+    when ''     then nil
+    when String then selector.to_s
+    else        fail "bad selector?: #{selector}"
+    end
+  end
+
   op.on '--default-charset=CHARSET', :CHARSET, 'Set the default charset for --print, --delete, --dot, and --hex' do |cs|
     Patterns.default_charset = cs
   end
@@ -280,7 +301,8 @@ OptParse.new do |op|
     Patterns.print(cs || next)
   end
 
-  op.on '-d', '--delete[=CHARSET]', :CHARSET, 'Delete characters which match CHARSET from the output.' do |cs|
+  op.on '-d', '--delete[=CHARSET]', :charset, 'Delete characters which match CHARSET from the output.' do |cs|
+    next if cs == :empty
     Patterns.delete(cs || next)
   end
 
@@ -322,10 +344,14 @@ OptParse.new do |op|
   end
 
   op.on <<~'EOS'
-    CHARSET is a regex character set; the braces can be omitted. For example `--delete=a-z` will
-    cause all lower-case latin letters to be removed. Note that sequences like `\w` and `\d` are
-    supported. In addition, there are some special cases for a charset of just: `\A` (all chars),
-    `\m` (all multibyte chars), and `\M` (all non-multibyte chars)
+    A 'CHARSET' is a regex character without the surrounding brackets (for example, --delete='^a-z' will
+    only output lower-case letters.) In addition to normal escapes like '\n' for newlines, '\w' for
+    "word" characters, etc, some other special sequences are accepted:
+      * '\A' matches all chars (--print='\A' would print out every character)
+      * '\m' matches multibyte characters (only useful if input data is utf-8, the default.)
+      * '\M' matches all single-byte characters
+      * '\@' matches the default charset. (i.e. --print is equiv to --print='\@')
+    If more than pattern matches, the last-most one wins.
   EOS
 
   ## =====
@@ -431,6 +457,7 @@ defined? $files            or $files = !$stdin.tty? && $*.empty?
 defined? $trailing_newline or $trailing_newline = true
 defined? $encoding         or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 # ^ Escape things above `\x80` by replacing them with their codepoints if in utf-8 mode, and "make everything hex" wasn't requested
+$quiet and $stdout = File.open(File::NULL, 'w')
 
 PATTERNS = Patterns.build!
 
