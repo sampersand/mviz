@@ -313,7 +313,7 @@ OptParse.new do |op|
 
   ## =====
   ## =====
-  ## =====
+  ## ===== 
 
   op.separator 'SHORTHANDS'
   op.on '-l', '--print-newlines', "Same as --print='\\n'" do
