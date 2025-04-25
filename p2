@@ -17,6 +17,7 @@ PROGRAM_NAME = File.basename($0, '.*')
 def abort(msg = $!) super "#{PROGRAM_NAME}: #{msg}" end
 def warn(msg = $!)  super "#{PROGRAM_NAME}: #{msg}" end
 
+
 module Patterns
   module_function
   @patterns = []
@@ -34,38 +35,60 @@ module Patterns
     end
   end
 
-  def add_charset(charset, block)
-    return if charset == '' || charset == '^' # Ignore empty charsets
-    @patterns.prepend [charset, block]
+  # def reset!
+  #   @patterns.clear
+  # end
+
+  def print(charset)
+    @patterns.prepend [charset, ->char{ char }]
   end
 
-  C_ESCAPES_MAP = {
+  def delete(charset)
+    @patterns.prepend [charset, ->_char{ $SOMETHING_ESCAPED = true; '' }]
+  end
+
+  def dot(charset)
+    @patterns.prepend [charset, ->_char{ visualize '.' }]
+  end
+
+  def hex(charset)
+    @patterns.prepend [charset, ->char{ visualize hex_bytes char }]
+  end
+
+  def codepoints(charset)
+    @patterns.prepend [charset, ->char{ visualize '\u{%04X}' % char.ord }]
+  end
+
+  C_ESCAPES = {
     "\0" => '\0', "\a" => '\a', "\b" => '\b', "\t" => '\t',
     "\n" => '\n', "\v" => '\v', "\f" => '\f', "\r" => '\r',
     "\e" => '\e', "\\" => '\\\\',
   }
-  C_ESCAPES_DEFAULT = /[#{C_ESCAPES_MAP.keys.map{_1.inspect[1..-2]}.join}]/
+  C_ESCAPES_DEFAULT = /[#{C_ESCAPES.keys.map{_1.inspect[1..-2]}.join}]/
 
-  PRINT = ->char { char }
-  DELETE = ->_char{ $SOMETHING_ESCAPED = true; '' }
-  DOT = ->_char { visualize '.' }
-  HEX = ->char { visualize hex_bytes char }
-  CODEPOINTS = ->char { visualize '\u{%04X}' % char.ord }
-  C_ESCAPES = ->char { visualize C_ESCAPES_MAP.fetch(char) }
-  HIGHLIGHT = ->char { visualize char }
-  PICTURES = ->char{
-    case char
-    when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
-    when "\x7F" then visualize "\u{2421}"
-    when ' '    then visualize "\u{2423}"
-    else fail
-    end
-  }
+  def c_escapes(charset)
+    @patterns.prepend [charset || C_ESCAPES_DEFAULT, ->char{ visualize C_ESCAPES.fetch(char) }]
+  end
 
-  DEFAULT = ->char{
+  def highlight(charset)
+    @patterns.prepend [charset, ->char{ visualize char }]
+  end
+
+  def pictures(charset)
+    @patterns.prepend [charset, ->char{
+      case char
+      when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
+      when "\x7F" then visualize "\u{2421}"
+      when ' '    then visualize "\u{2423}"
+      else fail
+      end
+    }]
+  end
+
+  DEFAULT_PROC = ->char{
     if char == '\\'
       $visual ? '\\' : '\\\\'
-    elsif ce = C_ESCAPES_MAP[char]
+    elsif ce = C_ESCAPES[char]
       visualize ce
     elsif (char == "\x7F" || char <= "\x1F") or ($encoding == Encoding::BINARY && char >= "\x7F")
       visualize hex_bytes char
@@ -73,6 +96,10 @@ module Patterns
       char
     end
   }
+
+  def default(charset)
+    @patterns.prepend [charset, DEFAULT_PROC]
+  end
 
   LAMBDA_FOR_MULTIBYTE = ->char{char.bytesize > 1}
   LAMBDA_FOR_SINGLEBYTE = ->char{char.bytesize == 1}
@@ -99,7 +126,7 @@ module Patterns
       return escape_method.call(char) if condition === char
     end
 
-    DEFAULT.call(char)
+    DEFAULT_PROC.call(char)
   end
 end
 
@@ -236,43 +263,59 @@ OptParse.new do |op|
 
   op.separator 'ESCAPE PATTERNS', '(If something matches multiple, the last one wins.)'
 
-  op.accept :charset do |selector|
+  # op.on '--reset-patterns', 'Clear all patterns that have been specified so far' do
+  #   Patterns.reset!
+  # end
+
+  op.accept :CHARSET do |selector|
     case selector
-    when '\A'    then /./m
-    when '\m'    then Patterns::LAMBDA_FOR_MULTIBYTE
-    when '\M'    then Patterns::LAMBDA_FOR_SINGLEBYTE
-    when '\@'    then :default
-    when '', '^' then :empty
-    when nil     then nil
-    when String  then selector
-    else
-      fail "bad selector?: #{selector}"
+    when '\A'   then /./m
+    when '\@'   then :default
+    when '\m'   then Patterns::LAMBDA_FOR_MULTIBYTE
+    when '\M'   then Patterns::LAMBDA_FOR_SINGLEBYTE
+    when ''     then :empty
+    when nil    then :default
+    when String then selector
+    else        fail "bad selector?: #{selector}"
     end
   end
 
-  op.on '--default-charset=CHARSET', :charset, 'Set the default charset for --print, --delete, --dot, and --hex' do |cs|
-    Patterns.default_charset = p(cs)
+  op.accept :charset do |selector|
+    case selector
+    when '\A'   then /./m
+    when '\m'   then Patterns::LAMBDA_FOR_MULTIBYTE
+    when '\M'   then Patterns::LAMBDA_FOR_SINGLEBYTE
+    when '\@'   then :default
+    when nil    then :default
+    when ''     then nil
+    when String then selector.to_s
+    else        fail "bad selector?: #{selector}"
+    end
   end
 
-  op.on '-p', '--print[=CHARSET]', :charset, 'Print characters, unchanged, which match CHARSET' do |cs|
-    Patterns.add_charset(cs, Patterns::PRINT)
+  op.on '--default-charset=CHARSET', :CHARSET, 'Set the default charset for --print, --delete, --dot, and --hex' do |cs|
+    Patterns.default_charset = cs
+  end
+
+  op.on '-p', '--print[=CHARSET]', :CHARSET, 'Print characters, unchanged, which match CHARSET' do |cs|
+    Patterns.print(cs || next)
   end
 
   op.on '-d', '--delete[=CHARSET]', :charset, 'Delete characters which match CHARSET from the output.' do |cs|
-    Patterns.add_charset(cs, Patterns::DELETE)
+    next if cs == :empty
+    Patterns.delete(cs || next)
   end
 
-  op.on '-.', '--dot[=CHARSET]', :charset, "Replaces CHARSET with a period ('.')" do |cs|
-    Patterns.add_charset(cs, Patterns::DOT)
+  op.on '-.', '--dot[=CHARSET]', :CHARSET, "Replaces CHARSET with a period ('.')" do |cs|
+    Patterns.dot(cs || next)
   end
 
-  op.on '-x', '--hex[=CHARSET]', :charset, 'Replaces characters with their hex value (\xHH)' do |cs|
-    Patterns.add_charset(cs, Patterns::HEX)
+  op.on '-x', '--hex[=CHARSET]', :CHARSET, 'Replaces characters with their hex value (\xHH)' do |cs|
+    Patterns.hex(cs || next)
   end
 
-  op.on '-P', '--pictures[=CHARSET]', :charset, 'Use "pictures" (U+240x-U+242x). CHARSET defaults to \0-\x20\x7F',
+  op.on '-P', '--pictures[=CHARSET]', 'Use "pictures" (U+240x-U+242x). CHARSET defaults to \0-\x20\x7F',
                                       'Attempts to generate pictures for other chars is an error.' do |cs|
-    Patterns.add_charset(cs, Patterns::PICTURES)
     Patterns.pictures(charset || /[\0-\x20\x7F]/)
   end
 
