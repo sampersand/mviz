@@ -167,39 +167,26 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator 'GENERIC OPTIONS'
 
-  op.accept :CHARSET do |selector|
-    case selector
-    when '\A'   then /./m
-    when '\@'   then :default
-    when '\m'   then Patterns::LAMBDA_FOR_MULTIBYTE
-    when '\M'   then Patterns::LAMBDA_FOR_SINGLEBYTE
-    when ''     then nil # Ie a value was given, but it's empty.
-    when nil    then :default
-    when String then selector.to_s
-    else        fail "bad selector?: #{selector}"
-    end
-  end
-
   op.on '-h', 'Print a shorter help message and exit' do
     puts <<~EOS
     #{BOLD_BEGIN}usage: #{op.program_name} [options] [string ...]#{BOLD_END}
       --help          Print a longer help message with more options
-      -f              Interpret args as files, not strings
+      -f              Interpret all arguments as filenames, not strings
       -c              Exit nonzero if any escapes are printed. ("check")
-      -q              Suppress output. (useful with -c)
-      -1              Print out arguments once per line, and add a trailing newline
-      -n              Print out arguments with nothing separating them
-      -v, -V          Enable/disable visual effects
+      -q              Don't output anything. (Useful with -c)
+      -1              Don't print a "prefix" to arguments, but do print newlines
+      -n              Don't print either "prefixes" nor newlines for arguments
+      -v, -V          Enable/disable visual effects for escaped characters
     #{BOLD_BEGIN}INPUT DATA#{BOLD_END}
       -8              Interpret input data as UTF-8 (default unless POSIXLY_CORRECT set)
       -b              Interpret input data as binary text
       -A              Interpret input data as ASCII; like -b, except invalid bytes
     #{BOLD_BEGIN}CHANGE HOW CHARACTERS ARE OUTPUT#{BOLD_END}
-      -p [CHARSET]    Print chars in CHARSET unchanged
-      -d [CHARSET]    Deletes chars in CHARSET
-      -. [CHARSET]    Replace chars in CHARSET with a period
-      -x [CHARSET]    Escape chars with their hexadecimal value of their bytes
-      -P [CHARSET]    Escape some chars with their "pictures"; does not use default charset.
+      -p[CHARSET]     Print chars in CHARSET unchanged
+      -d[CHARSET]     Deletes chars in CHARSET
+      -.[CHARSET]     Replace chars in CHARSET with a period
+      -x[CHARSET]     Escape chars with their hexadecimal value of their bytes
+      -P[CHARSET]     Escape some chars with their "pictures"; does not use default charset.
     #{BOLD_BEGIN}SHORTHANDS#{BOLD_END}
       -l              Don't escape newlines.
       -w              Don't escape newlines, tabs, or spaces
@@ -279,6 +266,19 @@ OptParse.new do |op|
   # op.on '--reset-patterns', 'Clear all patterns that have been specified so far' do
   #   Patterns.reset!
   # end
+
+  op.accept :CHARSET do |selector|
+    case selector
+    when '\A'   then /./m
+    when '\@'   then :default
+    when '\m'   then Patterns::LAMBDA_FOR_MULTIBYTE
+    when '\M'   then Patterns::LAMBDA_FOR_SINGLEBYTE
+    when ''     then :empty
+    when nil    then :default
+    when String then selector
+    else        fail "bad selector?: #{selector}"
+    end
+  end
 
   op.accept :charset do |selector|
     case selector
