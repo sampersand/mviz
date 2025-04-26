@@ -19,20 +19,6 @@ def warn(msg = $!)  super "#{PROGRAM_NAME}: #{msg}" end
 
 module Patterns
   module_function
-  @patterns = []
-  @default_charset = nil #'[\0-\x1F\x7F]'
-
-  class << self
-    attr_writer :default_charset
-  end
-
-  def default_charset
-    @default_charset ||= if $encoding == Encoding::BINARY
-      Regexp.new((+"[\0-\x1F\x7F-\xFF]").force_encoding(Encoding::BINARY))
-    else
-      /[\0-\x1F\x7F]/
-    end
-  end
 
   def add_charset(charset, block, default: :default)
     return if charset == '' || charset == '^' # Ignore empty charsets
@@ -58,7 +44,7 @@ module Patterns
     when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
     when "\x7F" then visualize "\u{2421}"
     when ' '    then visualize "\u{2423}"
-    else fail
+    else fail "ops"
     end
   }
 
@@ -73,6 +59,28 @@ module Patterns
       char
     end
   }
+
+  @patterns = []
+  @default_charset = nil #'[\0-\x1F\x7F]'
+  @default_action  = DEFAULT
+
+  class << self
+    attr_writer :default_charset
+    attr_accessor :default_pictures
+  end
+
+  def default_charset
+    @default_charset ||= if $encoding == Encoding::BINARY
+      Regexp.new((+"[\0-\x1F\x7F-\xFF]").force_encoding(Encoding::BINARY))
+    else
+      /[\0-\x1F\x7F]/
+    end
+  end
+
+  def default_action(what)
+    @default_action = what
+  end
+
 
   LAMBDA_FOR_MULTIBYTE = ->char{char.bytesize > 1}
   LAMBDA_FOR_SINGLEBYTE = ->char{char.bytesize == 1}
@@ -99,7 +107,13 @@ module Patterns
       return escape_method.call(char) if condition === char
     end
 
-    DEFAULT.call(char)
+    return char unless default_charset === char
+
+    if default_pictures && ( ("\0".."\x20") === char || "\x7F" === char )
+      PICTURES.call(char)
+    else
+      @default_action.call(char)
+    end
   end
 end
 
@@ -120,7 +134,7 @@ BOLD_END         = (ENV.fetch('P_BOLD_END',   "\e[0m") if $__SHOULD_USE_COLOR)
 
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
-  op.version = '0.8.7'
+  op.version = '0.9.0'
   op.banner = <<~BANNER
   #{VISUAL_BEGIN if $__SHOULD_USE_COLOR}usage#{VISUAL_END if $__SHOULD_USE_COLOR}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
@@ -133,6 +147,19 @@ OptParse.new do |op|
   # Define a custom `separator` function to add bold to each section
   def op.separator(title, additional = nil)
     super "\n#{BOLD_BEGIN}#{title}#{BOLD_END}#{additional && ' '}#{additional}"
+  end
+
+  op.accept :charset do |selector|
+    case selector
+    when '\A'    then /./m
+    when '\m'    then Patterns::LAMBDA_FOR_MULTIBYTE
+    when '\M'    then Patterns::LAMBDA_FOR_SINGLEBYTE
+    when '\@'    then :default
+    when '', '^' then :empty
+    when String  then selector
+    else
+      fail "bad selector?: #{selector}"
+    end
   end
 
   ##################################################################################################
@@ -155,17 +182,17 @@ OptParse.new do |op|
       -b              Interpret input data as binary text
       -A              Interpret input data as ASCII; like -b, except invalid bytes
     #{BOLD_BEGIN}CHANGE HOW CHARACTERS ARE OUTPUT#{BOLD_END}
-      -p[CHARSET]     Print chars in CHARSET unchanged
-      -d[CHARSET]     Deletes chars in CHARSET
-      -.[CHARSET]     Replace chars in CHARSET with a period
-      -x[CHARSET]     Escape chars with their hexadecimal value of their bytes
-      -P[CHARSET]     Escape some chars with their "pictures"; does not use default charset.
+      -p              Print escaped chars unchanged
+      -d              Delete escaped chars
+      -.              Replace escaped chars with periods
+      -x              Print hex escape (\\xHH) for escaped chars
+      -P              Escape some chars with their "pictures"
     #{BOLD_BEGIN}SHORTHANDS#{BOLD_END}
       -l              Don't escape newlines.
       -w              Don't escape newlines, tabs, or spaces
       -s              Escape spaces
       -B              Escape backslashes
-      -m              Escape multibyte characters with their Unicode codepoint.
+      -m, -u          Escape multibyte characters with their Unicode codepoint.
     EOS
     exit
   end
@@ -234,62 +261,79 @@ OptParse.new do |op|
   #                                            Escaping                                            #
   ##################################################################################################
 
-  op.separator 'ESCAPE PATTERNS', '(If something matches multiple, the last one wins.)'
+  op.separator 'BASIC ESCAPES'
 
-  op.accept :charset do |selector|
-    case selector
-    when '\A'    then /./m
-    when '\m'    then Patterns::LAMBDA_FOR_MULTIBYTE
-    when '\M'    then Patterns::LAMBDA_FOR_SINGLEBYTE
-    when '\@'    then :default
-    when '', '^' then :empty
-    when nil     then nil
-    when String  then selector
-    else
-      fail "bad selector?: #{selector}"
-    end
-  end
-
-  op.on '--default-charset=CHARSET', :charset, 'Set the default charset for --print, --delete, --dot, and --hex' do |cs|
+  op.on '--default-charset=CHARSET', :charset, 'Set the default charset for --default; things not in this charset are printed literally' do |cs|
     cs = '' if cs == :empty # an empty charset is allowed for `default-charset`
-    Patterns.default_charset = cs || ''
+    Patterns.default_charset = cs ? /[#{cs}]/ : ''
   end
 
-  op.on '-p', '--print[=CHARSET]', :charset, 'Print characters, unchanged, which match CHARSET' do |cs|
+  op.on '--default=WHAT', %w[print delete dot hex default pictures codepoints highlight],
+      'Specify the default escaping behaviour. WHAT must be one of the "ESCAPE PATTERNS" flags' do |what|
+    Patterns.default_action(Patterns.const_get(what.upcase.to_sym))
+  end
+
+  op.on '-p', "Alias for '--default print'; Print escaped chars verbatim"  do
+    Patterns.default_action(Patterns::PRINT)
+  end
+
+  op.on '-d', "Alias for '--default delete'; Delete escaped chars"  do
+    Patterns.default_action(Patterns::DELETE)
+  end
+
+  op.on '-.', "Alias for '--default dot'; Replace escaped chars with a period"  do
+    Patterns.default_action(Patterns::DOT)
+  end
+
+  op.on '-x', "Alias for '--default hex'; Output hex value (\\xHH) for escaped chars"  do
+    Patterns.default_action(Patterns::HEX)
+  end
+
+  op.on '-P', '--[no-]default-pictures', 'Print out "pictures" if possible; non-pictures will use whatever other default is set' do |cs|
+    Patterns.default_pictures = cs
+  end
+
+  ########
+  ########
+  ########
+
+  op.separator 'SPECIFIC ESCAPES', '(If something matches multiple, the last one wins.)'
+
+  op.on '--print CHARSET', :charset, 'Print characters, unchanged, which match CHARSET' do |cs|
     Patterns.add_charset(cs, Patterns::PRINT)
   end
 
-  op.on '-d', '--delete[=CHARSET]', :charset, 'Delete characters which match CHARSET from the output.' do |cs|
+  op.on '--delete CHARSET', :charset, 'Delete characters which match CHARSET from the output.' do |cs|
     Patterns.add_charset(cs, Patterns::DELETE)
   end
 
-  op.on '-.', '--dot[=CHARSET]', :charset, "Replaces CHARSET with a period ('.')" do |cs|
+  op.on '--dot CHARSET', :charset, "Replaces CHARSET with a period ('.')" do |cs|
     Patterns.add_charset(cs, Patterns::DOT)
   end
 
-  op.on '-x', '--hex[=CHARSET]', :charset, 'Replaces characters with their hex value (\xHH)' do |cs|
+  op.on '--hex CHARSET', :charset, 'Replaces characters with their hex value (\xHH)' do |cs|
     Patterns.add_charset(cs, Patterns::HEX)
   end
 
-  op.on '--codepoints=CHARSET', :charset, 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
+  op.on '--codepoints CHARSET', :charset, 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
     Patterns.add_charset(cs, Patterns::CODEPOINTS)
   end
 
-  op.on '--highlight=CHARSET', :charset, 'Prints the char unchanged, but visual effects are added to it.' do |cs|
+  op.on '--highlight CHARSET', :charset, 'Prints the char unchanged, but visual effects are added to it.' do |cs|
     Patterns.add_charset(cs, Patterns::HIGHLIGHT)
   end
 
   # (Note: You'"can \"undo\" all previous patterns via --default='\\A')
-  op.on '--default=CHARSET', :charset, 'Use the default patterns for chars in CHARSET' do |cs|
+  op.on '--defaultcharset CHARSET', :charset, 'Use the default patterns for chars in CHARSET' do |cs|
     Patterns.add_charset(cs, Patterns::DEFAULT)
   end
 
-  op.on '-P', '--pictures[=CHARSET]', :charset, 'Use "pictures" (U+240x-U+242x). CHARSET defaults to \0-\x20\x7F',
+  op.on '--pictures CHARSET', :charset, 'Use "pictures" (U+240x-U+242x). CHARSET defaults to \0-\x20\x7F',
                                       'Attempts to generate pictures for other chars is an error.' do |cs|
     Patterns.add_charset(cs, Patterns::PICTURES, default: /[\0-\x20\x7F]/)
   end
 
-  op.on '--c-escapes[=CHARSET]', 'Replaces chars with their C escapes; Attempts to generate',
+  op.on '--c-escapes CHARSET', 'Replaces chars with their C escapes; Attempts to generate',
                                "c-escapes for non-'#{Patterns::C_ESCAPES_DEFAULT.source[1..-2]
                                                       .sub('u0000', '0')}' is an error", 'Does not use default charset' do |cs|
     Patterns.add_charset(cs, Patterns::C_ESCAPES, default: Patterns::C_ESCAPES_DEFAULT)
@@ -332,7 +376,7 @@ OptParse.new do |op|
     Patterns.add_charset(/\\/, Patterns::C_ESCAPES)
   end
 
-  op.on '-m', '--multibyte-codepoints', "Same as --codepoints='\\m'" do
+  op.on '-m', '-u', '--multibyte-codepoints', "Same as --codepoints='\\m'" do
     Patterns.add_charset(Patterns::LAMBDA_FOR_MULTIBYTE, Patterns::CODEPOINTS)
   end
 
