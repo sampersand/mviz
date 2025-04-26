@@ -261,12 +261,12 @@ OptParse.new do |op|
   #                                            Escaping                                            #
   ##################################################################################################
 
-  op.separator 'DEFAULT ESCAPE FORMATTING', '(options to change the default behaviour)'
+  op.separator 'DEFAULT ESCAPE FORMATTING', '(Change the default output behaviour)'
 
-  op.on '--default-charset=CHARSET', :charset, 'Set the "default" charset. Characters that do not match this',
-                                               'charset are printed verbatim.' do |cs|
+  op.on '--default-charset=CHARSET', :charset, 'Explicitly set the "default" charset. Characters that do not',
+                                               'match this charset are printed verbatim.' do |cs|
     cs = '' if cs == :empty # an empty charset is allowed for `default-charset`
-    Patterns.default_charset = cs ? /[#{cs}]/ : ''
+    Patterns.default_charset = /[#{cs}]/ # TODO: make this work with different encodings?
   end
 
   op.on '--default-format=WHAT', 'Specify the default escaping behaviour. WHAT must be one of:',
@@ -284,27 +284,36 @@ OptParse.new do |op|
     )
   end
 
-  op.on '-p', '--default-format-print', "Alias for '--default-format=print'; Print escaped chars verbatim"  do
-    Patterns.default_action( Patterns::PRINT)
+  op.on '-p', '--default-format-print', 'Print escaped chars verbatim'  do
+    Patterns.default_action(Patterns::PRINT)
   end
 
-  op.on '-d', '--default-format-delete', "Alias for '--default-format=delete'; Delete escaped chars"  do
+  op.on '-d', '--default-format-delete', 'Delete escaped chars'  do
     Patterns.default_action(Patterns::DELETE)
   end
 
-  op.on '-.', "Alias for '--default-format=dot'; Replace escaped chars with '.'"  do
+  op.on '-.', '--default-format-dot', "Replace escaped chars with '.'"  do
     Patterns.default_action(Patterns::DOT)
   end
 
-  op.on '-x', "Alias for '--default-format=hex'; Output hex value (\\xHH) for escaped chars"  do
+  op.on '-x', '--default-format-hex', 'Output hex value (\xHH) for escaped chars'  do
     Patterns.default_action(Patterns::HEX)
   end
 
-  op.on '-P', '--[no-]default-pictures', 'Print out "pictures" if possible; non-pictures will use whatever other default is set' do |cs|
-    Patterns.default_pictures = cs
+  op.on       '--default-format-codepoints', 'Output characters as codepointsby default'  do
+    Patterns.default_action(Patterns::CODEPOINTS)
+  end
+  op.on       '--default-format-highlight', 'Simply add highlighting around escaped chars'  do
+    Patterns.default_action(Patterns::HIGHLIGHT)
+  end
+  op.on       '--default-format-default', 'Reset the default format back to its default value'  do
+    Patterns.default_action(Patterns::DEFAULT)
   end
 
-  puts op.help; exit
+  op.on '-P', '--[no-]default-pictures', 'Print out "pictures" if possible; non-pictures will use',
+                                         'whatever other default is set' do |cs|
+    Patterns.default_pictures = cs
+  end
 
   ########
   ########
@@ -336,19 +345,17 @@ OptParse.new do |op|
     Patterns.add_charset(cs, Patterns::HIGHLIGHT)
   end
 
-  # (Note: You'"can \"undo\" all previous patterns via --default='\\A')
-  op.on '--defaultcharset CHARSET', :charset, 'Use the default patterns for chars in CHARSET' do |cs|
+  op.on '--use-default CHARSET', :charset, 'Use the default patterns for chars in CHARSET' do |cs|
     Patterns.add_charset(cs, Patterns::DEFAULT)
   end
 
-  op.on '--pictures CHARSET', :charset, 'Use "pictures" (U+240x-U+242x). CHARSET defaults to \0-\x20\x7F',
-                                      'Attempts to generate pictures for other chars is an error.' do |cs|
-    Patterns.add_charset(cs, Patterns::PICTURES, default: /[\0-\x20\x7F]/)
+  op.on '--pictures CHARSET', :charset, 'Use "pictures" (U+240x-U+242x). Attempts to generate pictures',
+                                        "for chars outside of '\\0-\\x20\\x7F' is an error." do |cs|
+    Patterns.add_charset(cs, Patterns::PICTURES)
   end
 
   op.on '--c-escapes CHARSET', 'Replaces chars with their C escapes; Attempts to generate',
-                               "c-escapes for non-'#{Patterns::C_ESCAPES_DEFAULT.source[1..-2]
-                                                      .sub('u0000', '0')}' is an error", 'Does not use default charset' do |cs|
+                               "c-escapes for non-'#{Patterns::C_ESCAPES_DEFAULT.source[1..-2].sub('u0000', '0')}' is an error" do |cs|
     Patterns.add_charset(cs, Patterns::C_ESCAPES, default: Patterns::C_ESCAPES_DEFAULT)
   end
 
