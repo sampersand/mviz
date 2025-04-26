@@ -177,11 +177,11 @@ OptParse.new do |op|
       -1              Don't print a "prefix" to arguments, but do print newlines
       -n              Don't print either "prefixes" nor newlines for arguments
       -v, -V          Enable/disable visual effects for escaped characters
-    #{BOLD_BEGIN}ESCAPE FORMATTING#{BOLD_END} (-x, -. ,-d, -p are mutually exclusive)
-      -x              Print hex escapes (\\xHH) for escaped chars
-      -.              Replace escaped chars with periods
-      -d              Delete escaped chars
+    #{BOLD_BEGIN}ESCAPE FORMATTING#{BOLD_END} (-x, -d, -p, -. are mutually exclusive)
+      -x              Print escaped chars in hex-notation (\\xHH)
+      -d              Delete escaped chars from the output
       -p              Print escaped chars unchanged
+      -.              Replace escaped chars with periods
       -P              Escape some chars with their "pictures".
     #{BOLD_BEGIN}SHORTHANDS FOR COMMON ESCAPES#{BOLD_END}
       -l              Don't escape newlines.
@@ -190,9 +190,9 @@ OptParse.new do |op|
       -B              Escape backslashes
       -m, -u          Escape multibyte characters with their Unicode codepoint.
     #{BOLD_BEGIN}INPUT DATA#{BOLD_END}
-      -8              Interpret input data as UTF-8 (default unless POSIXLY_CORRECT set)
       -b              Interpret input data as binary text
       -A              Interpret input data as ASCII; like -b, except invalid bytes
+      -8              Interpret input data as UTF-8 (default unless POSIXLY_CORRECT set)
     EOS
     exit
   end
@@ -261,37 +261,50 @@ OptParse.new do |op|
   #                                            Escaping                                            #
   ##################################################################################################
 
-  op.separator 'BASIC ESCAPES'
+  op.separator 'ESCAPING THE DEFAULT CHARSET'
 
-  op.on '--default-charset=CHARSET', :charset, 'Set the default charset for --default; things not in this charset are printed literally' do |cs|
+  op.on '--default-charset=CHARSET', :charset, 'Set the "default" charset. Characters that do not match this',
+                                               'charset are printed verbatim.' do |cs|
     cs = '' if cs == :empty # an empty charset is allowed for `default-charset`
     Patterns.default_charset = cs ? /[#{cs}]/ : ''
   end
 
-  op.on '--default=WHAT', %w[print delete dot hex default pictures codepoints highlight],
-      'Specify the default escaping behaviour. WHAT must be one of the "ESCAPE PATTERNS" flags' do |what|
-    Patterns.default_action(Patterns.const_get(what.upcase.to_sym))
+  op.on '--default-format=WHAT', 'Specify the default escaping behaviour. WHAT must be one of:',
+                                 'print, delete, dot, hex, codepoints, highlight, or default.' do |what|
+    Patterns.default_action(
+      case what
+      when 'print' then Patterns::PRINT
+      when 'delete' then Patterns::DELETE
+      when 'hex' then Patterns::HEX
+      when 'default' then Patterns::DEFAULT
+      when 'codepoints' then Patterns::CODEPOINTS
+      when 'highlight' then Patterns::HIGHLIGHT
+      else abort "invalid --default-format option: #{what}"
+      end
+    )
   end
 
-  op.on '-p', "Alias for '--default print'; Print escaped chars verbatim"  do
+  op.on '-p', "Alias for '--default-format=print'; Print escaped chars verbatim"  do
     Patterns.default_action(Patterns::PRINT)
   end
 
-  op.on '-d', "Alias for '--default delete'; Delete escaped chars"  do
+  op.on '-d', "Alias for '--default-format=delete'; Delete escaped chars"  do
     Patterns.default_action(Patterns::DELETE)
   end
 
-  op.on '-.', "Alias for '--default dot'; Replace escaped chars with a period"  do
+  op.on '-.', "Alias for '--default-format=dot'; Replace escaped chars with '.'"  do
     Patterns.default_action(Patterns::DOT)
   end
 
-  op.on '-x', "Alias for '--default hex'; Output hex value (\\xHH) for escaped chars"  do
+  op.on '-x', "Alias for '--default-format=hex'; Output hex value (\\xHH) for escaped chars"  do
     Patterns.default_action(Patterns::HEX)
   end
 
   op.on '-P', '--[no-]default-pictures', 'Print out "pictures" if possible; non-pictures will use whatever other default is set' do |cs|
     Patterns.default_pictures = cs
   end
+
+  puts op.help; exit
 
   ########
   ########
