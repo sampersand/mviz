@@ -177,22 +177,22 @@ OptParse.new do |op|
       -1              Don't print a "prefix" to arguments, but do print newlines
       -n              Don't print either "prefixes" nor newlines for arguments
       -v, -V          Enable/disable visual effects for escaped characters
-    #{BOLD_BEGIN}INPUT DATA#{BOLD_END}
-      -8              Interpret input data as UTF-8 (default unless POSIXLY_CORRECT set)
-      -b              Interpret input data as binary text
-      -A              Interpret input data as ASCII; like -b, except invalid bytes
-    #{BOLD_BEGIN}CHANGE HOW CHARACTERS ARE OUTPUT#{BOLD_END}
-      -p              Print escaped chars unchanged
-      -d              Delete escaped chars
+    #{BOLD_BEGIN}ESCAPE FORMATTING#{BOLD_END} (-x, -. ,-d, -p are mutually exclusive)
+      -x              Print hex escapes (\\xHH) for escaped chars
       -.              Replace escaped chars with periods
-      -x              Print hex escape (\\xHH) for escaped chars
-      -P              Escape some chars with their "pictures"
-    #{BOLD_BEGIN}SHORTHANDS#{BOLD_END}
+      -d              Delete escaped chars
+      -p              Print escaped chars unchanged
+      -P              Escape some chars with their "pictures".
+    #{BOLD_BEGIN}SHORTHANDS FOR COMMON ESCAPES#{BOLD_END}
       -l              Don't escape newlines.
       -w              Don't escape newlines, tabs, or spaces
       -s              Escape spaces
       -B              Escape backslashes
       -m, -u          Escape multibyte characters with their Unicode codepoint.
+    #{BOLD_BEGIN}INPUT DATA#{BOLD_END}
+      -8              Interpret input data as UTF-8 (default unless POSIXLY_CORRECT set)
+      -b              Interpret input data as binary text
+      -A              Interpret input data as ASCII; like -b, except invalid bytes
     EOS
     exit
   end
