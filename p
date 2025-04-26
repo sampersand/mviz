@@ -261,7 +261,7 @@ OptParse.new do |op|
   #                                            Escaping                                            #
   ##################################################################################################
 
-  op.separator 'ESCAPING THE DEFAULT CHARSET'
+  op.separator 'DEFAULT ESCAPE FORMATTING', '(options to change the default behaviour)'
 
   op.on '--default-charset=CHARSET', :charset, 'Set the "default" charset. Characters that do not match this',
                                                'charset are printed verbatim.' do |cs|
@@ -273,22 +273,22 @@ OptParse.new do |op|
                                  'print, delete, dot, hex, codepoints, highlight, or default.' do |what|
     Patterns.default_action(
       case what
-      when 'print' then Patterns::PRINT
-      when 'delete' then Patterns::DELETE
-      when 'hex' then Patterns::HEX
-      when 'default' then Patterns::DEFAULT
+      when 'print'      then Patterns::PRINT
+      when 'delete'     then Patterns::DELETE
+      when 'hex'        then Patterns::HEX
+      when 'default'    then Patterns::DEFAULT
       when 'codepoints' then Patterns::CODEPOINTS
-      when 'highlight' then Patterns::HIGHLIGHT
+      when 'highlight'  then Patterns::HIGHLIGHT
       else abort "invalid --default-format option: #{what}"
       end
     )
   end
 
-  op.on '-p', "Alias for '--default-format=print'; Print escaped chars verbatim"  do
-    Patterns.default_action(Patterns::PRINT)
+  op.on '-p', '--default-format-print', "Alias for '--default-format=print'; Print escaped chars verbatim"  do
+    Patterns.default_action( Patterns::PRINT)
   end
 
-  op.on '-d', "Alias for '--default-format=delete'; Delete escaped chars"  do
+  op.on '-d', '--default-format-delete', "Alias for '--default-format=delete'; Delete escaped chars"  do
     Patterns.default_action(Patterns::DELETE)
   end
 
@@ -310,7 +310,7 @@ OptParse.new do |op|
   ########
   ########
 
-  op.separator 'SPECIFIC ESCAPES', '(If something matches multiple, the last one wins.)'
+  op.separator 'SPECIFIC ESCAPES FORMATTING', '(Takes precedence over defaults; fIf something matches multiple, the last one wins.)'
 
   op.on '--print CHARSET', :charset, 'Print characters, unchanged, which match CHARSET' do |cs|
     Patterns.add_charset(cs, Patterns::PRINT)
