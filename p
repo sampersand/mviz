@@ -153,19 +153,31 @@ end
 #                                                                                                  #
 ####################################################################################################
 
+# Helper for `USE_COLOR`.
+def ENV.present?(key) !fetch(key, '').empty? end
+
+# Whether visual effects should be enabled by default
+USE_COLOR = case
+            when ENV.present?('P_FORCE_COLOR') then true
+            when ENV.present?('P_NO_COLOR')    then false
+            when ENV.present?('FORCE_COLOR')   then true
+            when ENV.present?('NO_COLOR')      then false
+            else                                    $stdout.tty?
+            end
+
 # Fetch standout constants (regardless of whether we're using them, as they're used as defaults)
 VISUAL_BEGIN     = ENV.fetch('P_VISUAL_BEGIN', "\e[7m")
 VISUAL_END       = ENV.fetch('P_VISUAL_END',   "\e[27m")
 VISUAL_ERR_BEGIN = ENV.fetch('P_VISUAL_ERR_BEGIN', "\e[37m\e[41m")
 VISUAL_ERR_END   = ENV.fetch('P_VISUAL_ERR_END',   "\e[49m\e[39m")
-BOLD_BEGIN       = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if $__SHOULD_USE_COLOR = $stdout.tty? || ENV['P_COLOR'])
-BOLD_END         = (ENV.fetch('P_BOLD_END',   "\e[0m") if $__SHOULD_USE_COLOR)
+BOLD_BEGIN       = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if USE_COLOR)
+BOLD_END         = (ENV.fetch('P_BOLD_END',   "\e[0m") if USE_COLOR)
 
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
   op.version = '0.9.0'
   op.banner = <<~BANNER
-  #{VISUAL_BEGIN if $__SHOULD_USE_COLOR}usage#{VISUAL_END if $__SHOULD_USE_COLOR}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
+  #{VISUAL_BEGIN if USE_COLOR}usage#{VISUAL_END if USE_COLOR}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
          #{BOLD_BEGIN}#{op.program_name} -f [options] [file ...]#{BOLD_END}  # Read from files
   When no args are given, first form is assumed if stdin is not a tty.
@@ -254,6 +266,11 @@ OptParse.new do |op|
     $escape_error = ee
   end
 
+  ##################################################################################################
+  #                                       Separating Outputs                                       #
+  ##################################################################################################
+  op.separator 'OUTPUT FORMAT', "(They're all mutually exclusive; last one wins.)"
+
   $quiet = false
   op.on '-q', '--[no-]quiet', 'Do not output anything. (Useful with -c or --malformed-error)' do |q|
     $quiet = q
@@ -266,11 +283,6 @@ OptParse.new do |op|
   op.on '-V', '--no-visual', 'Do not enable visual effects' do
     $visual = false
   end
-
-  ##################################################################################################
-  #                                       Separating Outputs                                       #
-  ##################################################################################################
-  op.separator 'OUTPUT FORMAT', "(They're all mutually exclusive; last one wins.)"
 
   op.on '--prefixes', "Add \"prefixes\". (default if stdout's a tty, and args are given)" do
     $prefixes = true
@@ -292,12 +304,12 @@ OptParse.new do |op|
 
   op.separator 'DEFAULT ESCAPE FORMATTING', '(Change the default output behaviour)'
 
-  op.on '--default-charset=CHARSET', :charset, 'Explicitly set the charset for --default-format' do |cs|
+  op.on '--default-charset CHARSET', :charset, 'Set the charset for --default-format. (See below for "CHARSET")' do |cs|
     cs = '' if cs == :empty # an empty charset is allowed for `default-charset`
     Patterns.default_charset = /[#{cs}]/ # TODO: make this work with different encodings?
   end
 
-  op.on '--default-format=WHAT', 'Specify the default escaping behaviour. WHAT must be one of:',
+  op.on '--default-format WHAT', 'Specify the default escaping behaviour. WHAT must be one of:',
                                  'print, delete, dot, hex, codepoints, highlight, or default.' do |what|
     Patterns.default_action(
       case what
@@ -334,11 +346,47 @@ OptParse.new do |op|
     Patterns.default_pictures = cs
   end
 
+  $escape_surronding_spaces = true
+  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
+    $escape_surronding_spaces = ess
+  end
+
+  ## =====
+  ## =====
+  ## =====
+
+  op.separator 'SHORTHANDS'
+  op.on '-l', '--print-newlines', "Don't escape newline. (Same as --print='\\n')" do
+    Patterns.add_charset(/\n/, Patterns::PRINT)
+  end
+
+  op.on '-w', '--print-whitespace', "Don't escape newline, tab, or space. (Same as --print='\\n\\t ')" do
+    Patterns.add_charset(/[\n\t ]/, Patterns::PRINT)
+  end
+
+  op.on '-s', '--highlight-space', "Escape all spaces with highlights. (Same as --highlight=' ')" do
+    Patterns.add_charset(/ /, Patterns::HIGHLIGHT)
+  end
+
+  op.on '-S', '--picture-space', "Escape all spaces with a \"picture\". (Same as --picture=' ')" do
+    Patterns.add_charset(/ /, Patterns::PICTURES)
+  end
+
+  op.on '-B', '--escape-backslashes', "Escape backslashes as '\\\\'. (Same as --c-escape='\\\\')",
+                                      '(default if not visual mode)' do |eb|
+    Patterns.add_charset(/\\/, Patterns::C_ESCAPES)
+  end
+
+  op.on '-m', '--multibyte-codepoints', "Use codepoints for multibyte chars. (Same as --codepoint='\\m')",
+                                        '(Not useful in single-byte-only encodings)' do
+    Patterns.add_charset(Patterns::LAMBDA_FOR_MULTIBYTE, Patterns::CODEPOINTS)
+  end
+
   ########
   ########
   ########
 
-  op.separator 'SPECIFIC ESCAPES FORMATTING', '(Takes precedence over defaults; fIf something matches multiple, the last one wins.)'
+  op.separator 'SPECIFIC ESCAPES FORMATTING', '(Takes precedence over defaults; Ties go to the last one specified)'
 
   op.on '--print CHARSET', :charset, 'Print characters, unchanged, which match CHARSET' do |cs|
     Patterns.add_charset(cs, Patterns::PRINT)
@@ -356,7 +404,7 @@ OptParse.new do |op|
     Patterns.add_charset(cs, Patterns::HEX)
   end
 
-  op.on '--codepoints CHARSET', :charset, 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
+  op.on '--codepoint CHARSET', :charset, 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
     Patterns.add_charset(cs, Patterns::CODEPOINTS)
   end
 
@@ -368,59 +416,14 @@ OptParse.new do |op|
     Patterns.add_charset(cs, Patterns::DEFAULT)
   end
 
-  op.on '--pictures CHARSET', :charset, 'Use "pictures" (U+240x-U+242x). Attempts to generate pictures',
-                                        "for chars outside of '\\0-\\x20\\x7F' is an error." do |cs|
+  op.on '--picture CHARSET', :charset, 'Use "pictures" (U+240x-U+242x). Attempts to generate pictures',
+                                       "for chars outside of '\\0-\\x20\\x7F' is an error." do |cs|
     Patterns.add_charset(cs, Patterns::PICTURES)
   end
 
-  op.on '--c-escapes CHARSET', 'Replaces chars with their C escapes; Attempts to generate',
-                               "c-escapes for non-'#{Patterns::C_ESCAPES_DEFAULT.source[1..-2].sub('u0000', '0')}' is an error" do |cs|
+  op.on '--c-escape CHARSET', 'Replaces chars with their C escapes; Attempts to generate',
+                              "c-escapes for non-'#{Patterns::C_ESCAPES_DEFAULT.source}' is an error" do |cs|
     Patterns.add_charset(cs, Patterns::C_ESCAPES, default: Patterns::C_ESCAPES_DEFAULT)
-  end
-
-  $escape_surronding_spaces = true
-  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
-    $escape_surronding_spaces = ess
-  end
-
-  op.on <<~'EOS'
-    A 'CHARSET' is a regex character without the surrounding brackets (for example, --delete='^a-z' will
-    only output lower-case letters.) In addition to normal escapes like '\n' for newlines, '\w' for
-    "word" characters, etc, some other special sequences are accepted:
-      * '\A' matches all chars (--print='\A' would print out every character)
-      * '\m' matches multibyte characters (only useful if input data is utf-8, the default.)
-      * '\M' matches all single-byte characters
-      * '\@' matches the default charset. (i.e. --print is equiv to --print='\@')
-    If more than pattern matches, the last-most one wins.
-  EOS
-
-  ## =====
-  ## =====
-  ## ===== 
-
-  op.separator 'SHORTHANDS'
-  op.on '-l', '--print-newlines', "Same as --print='\\n'" do
-    Patterns.add_charset(/\n/, Patterns::PRINT)
-  end
-
-  op.on '-w', '--print-whitespace', "Same as --print='\\n\\t '" do
-    Patterns.add_charset(/[\n\t ]/, Patterns::PRINT)
-  end
-
-  op.on '-s', '--highlight-space', "Same as --highlight=' '" do
-    Patterns.add_charset(/ /, Patterns::HIGHLIGHT)
-  end
-
-  op.on '-S', '--picture-space', "Same as --picture=' '" do
-    Patterns.add_charset(/ /, Patterns::PICTURES)
-  end
-
-  op.on '-B', '-\\', '--escape-backslashes', "Same as --c-escapes='\\\\' (default if not visual mode)" do |eb|
-    Patterns.add_charset(/\\/, Patterns::C_ESCAPES)
-  end
-
-  op.on '-m', '-u', '--multibyte-codepoints', "Same as --codepoints='\\m'" do
-    Patterns.add_charset(Patterns::LAMBDA_FOR_MULTIBYTE, Patterns::CODEPOINTS)
   end
 
   ##################################################################################################
@@ -428,7 +431,7 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator 'ENCODINGS', '(default based on POSIXLY_CORRECT; --utf-8 if unset, --locale if set)'
 
-  op.on '--encoding=ENCODING', "Specify the input's encoding. Case-insensitive. Encodings that",
+  op.on '--encoding ENCODING', "Specify the input's encoding. Case-insensitive. Encodings that",
                                "aren't ASCII-compatible encodings (eg UTF-16) aren't accepted." do |enc|
     $encoding = Encoding.find enc rescue abort $!
     $encoding.ascii_compatible? or abort "Encoding #$encoding is not ASCII-compatible!"
@@ -465,14 +468,41 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator 'ENVIRONMENT VARIABLES'
   op.on <<-EOS # Note: `-EOS` not `~EOS` to keep leading spaces
-    P_VISUAL_BEGIN        Beginning escape sequence for --visual
-    P_VISUAL_END          Ending escape sequence for --visual
-    P_VISUAL_ERR_BEGIN    Beginning escape sequence for invalid bytes with --visual
-    P_VISUAL_ERR_END      Ending escape sequence for invalid bytes with --visual
-    POSIXLY_CORRECT       If present, changes default encoding to the locale's (cf locale(1).), and
-                          also disables parsing switches after arguments (e.g. `p foo -x` will print
-                          out `foo` and `-x`, and won't interpret `-x` as a switch.)
-    LC_ALL/LC_CTYPE/LANG  Checked (in that order) for encoding when --locale is used.
+    P_FORCE_COLOR, P_NO_COLOR, FORCE_COLOR, NO_COLOR
+      The first of these which is set to a non-empty value specifies whether visual effects will be
+      shown by default, including for usage messages. (If none are set, it defaults to whether the
+      stdout is a tty.)
+
+    POSIXLY_CORRECT
+      If present, changes the default `--encoding` to be the locale's (cf locale(1).), and also
+      disables parsing switches after arguments (e.g. passing in `foo -x` as arguments will not
+      interpret `-x` as a switch).
+
+    P_VISUAL_BEGIN, P_VISUAL_END
+      Beginning and ending escape sequences for --visual; Usually don't need to be set, as they have
+      sane defaults.
+
+    P_VISUAL_ERR_BEGIN, P_VISUAL_ERR_END
+      Like P_VISUAL_BEGIN/P_VISUAL_END, except for invalid bytes (eg \\xC3 in --utf-8)
+
+    LC_ALL, LC_CTYPE, LANG
+       Checked (in that order) for the encoding when --encoding=locale is used.
+  EOS
+
+  #######
+  #######
+  #######
+
+  op.separator 'CHARSETS'
+  op.on <<~'EOS'
+    A 'CHARSET' is a regex character without the surrounding brackets (for example, --delete='^a-z' will
+    only output lowercase letters.) In addition to normal escapes (eg '\n' for newlines, '\w' for "word"
+    characters, etc), some other special sequences are accepted:
+      - '\A' matches all chars (--print='\A' would print out every character)
+      - '\m' matches multibyte characters (only useful if input data is utf-8, the default.)
+      - '\M' matches all single-byte characters
+      - '\@' matches the default charset. (i.e. --print is equiv to --print='\@')
+    If more than pattern matches, the last-most one wins.
   EOS
 
   ##################################################################################################
@@ -495,7 +525,7 @@ end
 ####################################################################################################
 
 # Specify defaults
-defined? $visual           or $visual = $stdout.tty?
+defined? $visual           or $visual = USE_COLOR
 defined? $prefixes         or $prefixes = $stdout.tty? && (!$*.empty? || (defined?($files) && $files))
 defined? $files            or $files = !$stdin.tty? && $*.empty?
 defined? $trailing_newline or $trailing_newline = true
