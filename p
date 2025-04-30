@@ -47,28 +47,21 @@ def warn(message)  super "#{PROGRAM_NAME}: #{message}" end
 ####################################################################################################
 
 module Patterns
-  module_function
-
-  def add_charset(charset, block, default: :default)
-    return if charset == '' || charset == '^' # Ignore empty charsets
-    @patterns.prepend [charset || default, block]
-  end
-
   C_ESCAPES_MAP = {
     "\0" => '\0', "\a" => '\a', "\b" => '\b', "\t" => '\t',
     "\n" => '\n', "\v" => '\v', "\f" => '\f', "\r" => '\r',
     "\e" => '\e', "\\" => '\\\\',
   }
-  C_ESCAPES_DEFAULT = /[#{C_ESCAPES_MAP.keys.map{_1.inspect[1..-2]}.join}]/
+  C_ESCAPES_DEFAULT = /[#{C_ESCAPES_MAP.keys.map{_1.inspect[1..-2]}.join.sub('u000','')}]/
 
-  PRINT = ->char { char }
-  DELETE = ->_char{ $SOMETHING_ESCAPED = true; '' }
-  DOT = ->_char { visualize '.' }
-  HEX = ->char { visualize hex_bytes char }
+  PRINT      = ->char { char }
+  DELETE     = ->_char{ $SOMETHING_ESCAPED = true; '' }
+  DOT        = ->_char { visualize '.' }
+  HEX        = ->char { visualize hex_bytes char }
   CODEPOINTS = ->char { visualize '\u{%04X}' % char.ord }
-  C_ESCAPES = ->char { visualize C_ESCAPES_MAP.fetch(char) }
-  HIGHLIGHT = ->char { visualize char }
-  PICTURES = ->char{
+  C_ESCAPES  = ->char { visualize C_ESCAPES_MAP.fetch(char) }
+  HIGHLIGHT  = ->char { visualize char }
+  PICTURES   = ->char{
     case char
     when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
     when "\x7F" then visualize "\u{2421}"
@@ -92,6 +85,13 @@ module Patterns
   @patterns = []
   @default_charset = nil #'[\0-\x1F\x7F]'
   @default_action  = DEFAULT
+
+  module_function
+
+  def add_charset(charset, block, default: :default)
+    return if charset == '' || charset == '^' # Ignore empty charsets
+    @patterns.prepend [charset || default, block]
+  end
 
   class << self
     attr_writer :default_charset
@@ -292,8 +292,7 @@ OptParse.new do |op|
 
   op.separator 'DEFAULT ESCAPE FORMATTING', '(Change the default output behaviour)'
 
-  op.on '--default-charset=CHARSET', :charset, 'Explicitly set the "default" charset. Characters that do not',
-                                               'match this charset are printed verbatim.' do |cs|
+  op.on '--default-charset=CHARSET', :charset, 'Explicitly set the charset for --default-format' do |cs|
     cs = '' if cs == :empty # an empty charset is allowed for `default-charset`
     Patterns.default_charset = /[#{cs}]/ # TODO: make this work with different encodings?
   end
@@ -304,39 +303,30 @@ OptParse.new do |op|
       case what
       when 'print'      then Patterns::PRINT
       when 'delete'     then Patterns::DELETE
+      when 'dot'        then Patterns::DOT
       when 'hex'        then Patterns::HEX
-      when 'default'    then Patterns::DEFAULT
       when 'codepoints' then Patterns::CODEPOINTS
       when 'highlight'  then Patterns::HIGHLIGHT
+      when 'default'    then Patterns::DEFAULT
       else abort "invalid --default-format option: #{what}"
       end
     )
   end
 
-  op.on '-p', '--default-format-print', 'Print escaped chars verbatim'  do
-    Patterns.default_action(Patterns::PRINT)
+  op.on '-p', 'Print escaped chars verbatim. (Same as --default-format=print)'  do
+    Patterns.default_action Patterns::PRINT
   end
 
-  op.on '-d', '--default-format-delete', 'Delete escaped chars'  do
-    Patterns.default_action(Patterns::DELETE)
+  op.on '-d', 'Delete escaped chars. (Same as --default-format=delete)'  do
+    Patterns.default_action Patterns::DELETE
   end
 
-  op.on '-.', '--default-format-dot', "Replace escaped chars with '.'"  do
-    Patterns.default_action(Patterns::DOT)
+  op.on '-.', "Replace escaped chars with '.'. (Same as --default-format=dot)"  do
+    Patterns.default_action Patterns::DOT
   end
 
-  op.on '-x', '--default-format-hex', 'Output hex value (\xHH) for escaped chars'  do
-    Patterns.default_action(Patterns::HEX)
-  end
-
-  op.on       '--default-format-codepoints', 'Output characters as codepointsby default'  do
-    Patterns.default_action(Patterns::CODEPOINTS)
-  end
-  op.on       '--default-format-highlight', 'Simply add highlighting around escaped chars'  do
-    Patterns.default_action(Patterns::HIGHLIGHT)
-  end
-  op.on       '--default-format-default', 'Reset the default format back to its default value'  do
-    Patterns.default_action(Patterns::DEFAULT)
+  op.on '-x', 'Output hex for escaped chars. (Same as --default-format=hex)'  do
+    Patterns.default_action Patterns::HEX
   end
 
   op.on '-P', '--[no-]default-pictures', 'Print out "pictures" if possible; non-pictures will use',
