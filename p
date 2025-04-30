@@ -1,21 +1,50 @@
-#!/usr/bin/env -S ruby -Ebinary
+#!/bin/sh
+exec env ruby -S -Ebinary "$0" "$@"
+#!ruby
 # -*- encoding: UTF-8; frozen-string-literal: true -*-
-# ^ Force all strings in this file to be utf-8, regardless of what the environment says
-# NOTE: we needthe `-Ebinary` up top to force `$*` arguments to be binary. otherwise, optparse's
-# regexes will die. We could fix it by `$*.replace $*.map { (+_1).force_encoding 'binary' }` but ew.
+
+=begin Notes on the above
+The first three lines (the shebang, `exec env`, and `#!ruby`) are there so that we can specify the
+`-Ebinary` flag, which specifies that all command-line arguments should be binary-encoded; If we
+didn't, they'd default to UTF-8 (unless `RUBYOPT` was set), and `optparse`'s regexes would fail. An
+alternative would be to do something like `$*.replace $*.map { (+_1).force_encoding 'binary' }`, but
+we need to clone each arg, as ruby makes the arguments frozen, which precludes `force_encoding`.
+Since we possibly expect large strings to be passed in, I decided to juse use the `#!/bin/sh` hack.
+
+We also specify this file's encoding as UTF-8 (which overrides what `RUBYOPT` might have), as that
+way all the strings default to it. We also specify frozen string literals, as we use a lot of
+strings.
+=end
+
+####################################################################################################
+#                                                                                                  #
+#                                             Prelude                                              #
+#                                                                                                  #
+####################################################################################################
+
+## Import `optparse`, which is a default gem (and thus should always be available). Note that we
+# target older versions of Ruby (2.3.0 and above), so we don't use some of the new features of
+# optparse.
 require 'optparse'
 
-# Enable YJIT, but if there's any problems just ignore them
+## Enable YJIT, for speed improvements. If there's _any_ problems (including running on a version
+# where YJIT doesn't exist), just silently ignore them.
 begin
   RubyVM::YJIT.enable
 rescue Exception
-  # Ignore
+  # Completely ignore the exception
 end
 
-## Define custom `abort` and `warn`s to use the program name when writing messages.
+## Redefine `abort` and `warn` to prepend the program name to the message, in the traditional style.
 PROGRAM_NAME = File.basename($0, '.*')
-def abort(msg = $!) super "#{PROGRAM_NAME}: #{msg}" end
-def warn(msg = $!)  super "#{PROGRAM_NAME}: #{msg}" end
+def abort(message) super "#{PROGRAM_NAME}: #{message}" end
+def warn(message)  super "#{PROGRAM_NAME}: #{message}" end
+
+####################################################################################################
+#                                                                                                  #
+#                                             Patterns                                             #
+#                                                                                                  #
+####################################################################################################
 
 module Patterns
   module_function
@@ -392,6 +421,10 @@ OptParse.new do |op|
     Patterns.add_charset(/ /, Patterns::HIGHLIGHT)
   end
 
+  op.on '-S', '--picture-space', "Same as --picture=' '" do
+    Patterns.add_charset(/ /, Patterns::PICTURES)
+  end
+
   op.on '-B', '-\\', '--escape-backslashes', "Same as --c-escapes='\\\\' (default if not visual mode)" do |eb|
     Patterns.add_charset(/\\/, Patterns::C_ESCAPES)
   end
@@ -407,7 +440,7 @@ OptParse.new do |op|
 
   op.on '--encoding=ENCODING', "Specify the input's encoding. Case-insensitive. Encodings that",
                                "aren't ASCII-compatible encodings (eg UTF-16) aren't accepted." do |enc|
-    $encoding = Encoding.find enc rescue abort
+    $encoding = Encoding.find enc rescue abort $!
     $encoding.ascii_compatible? or abort "Encoding #$encoding is not ASCII-compatible!"
   end
 
