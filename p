@@ -102,10 +102,10 @@ module Patterns
 
   def create_charset(selector)
     case selector
-    when '\A' then /./m
-    when '\@' then default_charset_computed
-    when '\m' then LAMBDA_FOR_MULTIBYTE
-    when '\M' then LAMBDA_FOR_SINGLEBYTE
+    when '\A'   then /./m
+    when '\@'   then default_charset_computed
+    when '\m'   then LAMBDA_FOR_MULTIBYTE
+    when '\M'   then LAMBDA_FOR_SINGLEBYTE
     when String then Regexp.new("[#{selector}]".force_encoding($encoding))
     when Regexp, Proc then selector
     else raise "fail: bad charset '#{selector.inspect}'"
@@ -115,7 +115,9 @@ module Patterns
   def default_charset_computed
     @default_charset_computed ||=
       if @default_charset
-        Regexp.new "[#@default_charset]".force_encoding($encoding)
+        create_charset @default_charset
+      elsif @default_charset == false
+        ->char { false }
       elsif $encoding == Encoding::BINARY
         Regexp.new (+"[\0-\x1F\x7F-\xFF]").force_encoding(Encoding::BINARY)
       else
@@ -128,19 +130,10 @@ module Patterns
 
   def build!
     @built = @patterns.map do |selector, block|
-      selector = case selector
-                 when '\A' then /./m
-                 when '\@' then default_charset_computed
-                 when '\m' then LAMBDA_FOR_MULTIBYTE
-                 when '\M' then LAMBDA_FOR_SINGLEBYTE
-                 when '', '^' then next # If it's empty, don't register it
-                 when String then Regexp.new("[#{selector}]".force_encoding($encoding))
-                 when :default then default_charset_computed
-                 when Regexp, Proc then selector
-                 else raise "fail: bad charset '#{selector.inspect}'"
-                 end
-      [selector, block]
-    end.compact
+      [create_charset(selector), block]
+    rescue RegexpError
+      abort $!
+    end
   end
 
   def handle(char)
@@ -148,7 +141,7 @@ module Patterns
       return escape_method.call(char) if condition === char
     end
 
-    return char unless default_charset === char
+    return char unless default_charset_computed === char
 
     if default_pictures && ( ("\0".."\x20") === char || "\x7F" === char )
       PICTURES.call(char)
@@ -308,6 +301,10 @@ OptParse.new do |op|
 
   op.on '--default-charset CHARSET', 'Explicitly set the charset that --default-format uses.' do |cs|
     Patterns.default_charset = cs
+  end
+
+  op.on '--no-default-charset' do
+    Patterns.default_charset = false
   end
 
   op.on '--default-format WHAT', 'Specify the default escaping behaviour. WHAT must be one of:',
