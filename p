@@ -98,7 +98,7 @@ module Patterns
     attr_accessor :default_pictures
   end
 
-  def default_charset
+  def default_charset_computed
     @default_charset ||= if $encoding == Encoding::BINARY
       Regexp.new((+"[\0-\x1F\x7F-\xFF]").force_encoding(Encoding::BINARY))
     else
@@ -110,7 +110,6 @@ module Patterns
     @default_action = what
   end
 
-
   LAMBDA_FOR_MULTIBYTE = ->char{char.bytesize > 1}
   LAMBDA_FOR_SINGLEBYTE = ->char{char.bytesize == 1}
 
@@ -118,12 +117,12 @@ module Patterns
     @built = @patterns.map do |selector, block|
       selector = case selector
                  when '\A' then /./m
-                 when '\@' then default_charset
+                 when '\@' then default_charset_computed
                  when '\m' then LAMBDA_FOR_MULTIBYTE
                  when '\M' then LAMBDA_FOR_SINGLEBYTE
-                 when ''   then next # If it's empty, don't register it
+                 when '', :empty   then next # If it's empty, don't register it
                  when String then Regexp.new("[#{selector}]".force_encoding($encoding))
-                 when :default then default_charset
+                 when :default then default_charset_computed
                  when Regexp, Proc then selector
                  else raise "fail: bad charset '#{selector.inspect}'"
                  end
@@ -190,18 +189,8 @@ OptParse.new do |op|
     super "\n#{BOLD_BEGIN}#{title}#{BOLD_END}#{additional && ' '}#{additional}"
   end
 
-  op.accept :charset do |selector|
-    case selector
-    when '\A'    then /./m
-    when '\m'    then Patterns::LAMBDA_FOR_MULTIBYTE
-    when '\M'    then Patterns::LAMBDA_FOR_SINGLEBYTE
-    when '\@'    then :default
-    when '', '^' then :empty
-    when String  then selector
-    else
-      fail "bad selector?: #{selector}"
-    end
-  end
+  # We can't use an `op.accept :CHARSET` here to create regex patterns because we only know the
+  # encoding after parsing all options, at which point we'd have already created all the regexes.
 
   ##################################################################################################
   #                                        Generic Options                                         #
@@ -304,9 +293,13 @@ OptParse.new do |op|
 
   op.separator 'DEFAULT ESCAPE FORMATTING', '(Change the default output behaviour)'
 
-  op.on '--default-charset CHARSET', :charset, 'Set the charset for --default-format. (See below for "CHARSET")' do |cs|
+  op.on '--default-charset CHARSET', 'Set the charset for --default-format. (See below for "CHARSET")' do |cs|
     cs = '' if cs == :empty # an empty charset is allowed for `default-charset`
-    Patterns.default_charset = /[#{cs}]/ # TODO: make this work with different encodings?
+    Patterns.default_charset = cs && /[#{cs}]/ # TODO: make this work with different encodings?
+  end
+
+  op.on '--no-default-charset', 'Disable the default charset; nothing in this section will work. (except --escape-surrounding-space)' do |cs|
+    Patterns.default_charset = false
   end
 
   op.on '--default-format WHAT', 'Specify the default escaping behaviour. WHAT must be one of:',
@@ -388,35 +381,35 @@ OptParse.new do |op|
 
   op.separator 'SPECIFIC ESCAPES FORMATTING', '(Takes precedence over defaults; Ties go to the last one specified)'
 
-  op.on '--print CHARSET', :charset, 'Print characters, unchanged, which match CHARSET' do |cs|
+  op.on '--print CHARSET', 'Print characters, unchanged, which match CHARSET' do |cs|
     Patterns.add_charset(cs, Patterns::PRINT)
   end
 
-  op.on '--delete CHARSET', :charset, 'Delete characters which match CHARSET from the output.' do |cs|
+  op.on '--delete CHARSET', 'Delete characters which match CHARSET from the output.' do |cs|
     Patterns.add_charset(cs, Patterns::DELETE)
   end
 
-  op.on '--dot CHARSET', :charset, "Replaces CHARSET with a period ('.')" do |cs|
+  op.on '--dot CHARSET', "Replaces CHARSET with a period ('.')" do |cs|
     Patterns.add_charset(cs, Patterns::DOT)
   end
 
-  op.on '--hex CHARSET', :charset, 'Replaces characters with their hex value (\xHH)' do |cs|
+  op.on '--hex CHARSET', 'Replaces characters with their hex value (\xHH)' do |cs|
     Patterns.add_charset(cs, Patterns::HEX)
   end
 
-  op.on '--codepoint CHARSET', :charset, 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
+  op.on '--codepoint CHARSET', 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
     Patterns.add_charset(cs, Patterns::CODEPOINTS)
   end
 
-  op.on '--highlight CHARSET', :charset, 'Prints the char unchanged, but visual effects are added to it.' do |cs|
+  op.on '--highlight CHARSET', 'Prints the char unchanged, but visual effects are added to it.' do |cs|
     Patterns.add_charset(cs, Patterns::HIGHLIGHT)
   end
 
-  op.on '--use-default CHARSET', :charset, 'Use the default patterns for chars in CHARSET' do |cs|
+  op.on '--use-default CHARSET', 'Use the default patterns for chars in CHARSET' do |cs|
     Patterns.add_charset(cs, Patterns::DEFAULT)
   end
 
-  op.on '--picture CHARSET', :charset, 'Use "pictures" (U+240x-U+242x). Attempts to generate pictures',
+  op.on '--picture CHARSET', 'Use "pictures" (U+240x-U+242x). Attempts to generate pictures',
                                        "for chars outside of '\\0-\\x20\\x7F' is an error." do |cs|
     Patterns.add_charset(cs, Patterns::PICTURES)
   end
