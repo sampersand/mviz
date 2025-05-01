@@ -246,7 +246,7 @@ OptParse.new do |op|
   end
 
   $malformed_error = true
-  op.on'--[no-]malformed-error', 'Invalid chars in the --encoding a cause nonzero exit. (default)' do |me|
+  op.on '--[no-]malformed-error', 'Invalid chars in the --encoding a cause nonzero exit. (default)' do |me|
     $malformed_error = me
   end
 
