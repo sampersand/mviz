@@ -73,7 +73,7 @@ module Patterns
   DEFAULT = ->char{
     case
     when char == '\\'
-      $visual ? '\\' : '\\\\'
+      $use_color ? '\\' : '\\\\'
     when (ce = C_ESCAPES_MAP[char])
       visualize ce
     when char <= "\x1F", char == "\x7F", ($encoding == Encoding::BINARY && "\x7F" <= char)
@@ -159,7 +159,7 @@ end
 ####################################################################################################
 
 # Whether visual effects should be enabled by default
-$USE_COLOR =
+USE_COLOR_DEFAULT = $use_color =
   if ENV.fetch('FORCE_COLOR', '') != ''
     true
   elsif ENV.fetch('NO_COLOR', '') != ''
@@ -173,14 +173,14 @@ VISUAL_BEGIN     = ENV.fetch('P_VISUAL_BEGIN', "\e[7m")
 VISUAL_END       = ENV.fetch('P_VISUAL_END',   "\e[27m")
 VISUAL_ERR_BEGIN = ENV.fetch('P_VISUAL_ERR_BEGIN', "\e[37m\e[41m")
 VISUAL_ERR_END   = ENV.fetch('P_VISUAL_ERR_END',   "\e[49m\e[39m")
-BOLD_BEGIN       = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if $USE_COLOR)
-BOLD_END         = (ENV.fetch('P_BOLD_END',   "\e[0m") if $USE_COLOR)
+BOLD_BEGIN       = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if $use_color)
+BOLD_END         = (ENV.fetch('P_BOLD_END',   "\e[0m") if $use_color)
 
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
   op.version = '0.9.0'
   op.banner = <<~BANNER
-  #{VISUAL_BEGIN if $USE_COLOR}usage#{VISUAL_END if $USE_COLOR}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
+  #{VISUAL_BEGIN if $use_color}usage#{VISUAL_END if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
          #{BOLD_BEGIN}#{op.program_name} -f [options] [file ...]#{BOLD_END}  # Read from files
   When no args are given, first form is assumed if stdin is not a tty.
@@ -271,22 +271,22 @@ OptParse.new do |op|
 
   op.on '--[no-]color[=WHEN]', %w[always never auto], 'When to enable visual effects. (WHEN is always, never, auto)',
                                                       'auto (default) uses on NO_COLOR/FORCE_COLOR; See ENV VARS below' do |w|
-    $visual =
+    $use_color =
       case w
       when 'always', nil  then true
       when 'never', false then false
-      when 'auto'         then $USE_COLOR
+      when 'auto'         then USE_COLOR_DEFAULT
       else fail
       end
   end
 
 =begin
   op.on '-v', '--visualize', 'Enable visual effects. (default only if stdout is tty)' do
-    $visual = true
+    $use_color = true
   end
 
   op.on '-V', '--no-visualize', 'Do not enable visual effects' do
-    $visual = false
+    $use_color = false
   end
 =end
 
@@ -533,7 +533,6 @@ end
 ####################################################################################################
 
 # Specify defaults
-defined? $visual           or $visual = $USE_COLOR
 defined? $prefixes         or $prefixes = $stdout.tty? && (!$*.empty? || (defined?($files) && $files))
 defined? $files            or $files = !$stdin.tty? && $*.empty?
 defined? $trailing_newline or $trailing_newline = true
@@ -573,7 +572,7 @@ end
 def visualize(string, start=VISUAL_BEGIN, stop=VISUAL_END)
   $SOMETHING_ESCAPED = true
 
-  if $visual
+  if $use_color
     "#{start}#{string}#{stop}"
   else
     string
