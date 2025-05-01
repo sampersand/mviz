@@ -271,11 +271,11 @@ OptParse.new do |op|
     $quiet = q
   end
 
-  op.on '-v', '--visual', 'Enable visual effects. (default only if stdout is tty)' do
+  op.on '-v', '--visualize', 'Enable visual effects. (default only if stdout is tty)' do
     $visual = true
   end
 
-  op.on '-V', '--no-visual', 'Do not enable visual effects' do
+  op.on '-V', '--no-visualize', 'Do not enable visual effects' do
     $visual = false
   end
 

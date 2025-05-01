@@ -11,7 +11,7 @@ $ some_command | p   # See if `some_command` outputs something weird
 $ p -f some-file.txt # see if `some-file.txt` is contains weird characters
 ```
 
-Try `p --help` for usage
+Try `p -h` for short usage, and `p --help` for the longer one.
 
 ## Why not use tool X (`xxd`, `hexdmp`, `vis`, `od`, etc)?
 The biggest difference between `p` and other tools is that `p` is intended for looking at text (not binary data) by default, and optimizes for that. (It doesn't change the output _unless_ weird characters exist.) For example:
