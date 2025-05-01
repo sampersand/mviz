@@ -64,18 +64,19 @@ module Patterns
   PICTURES   = ->char{
     case char
     when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
-    when "\x7F" then visualize "\u{2421}"
-    when ' '    then visualize "\u{2423}"
+    when "\x7F"       then visualize "\u{2421}"
+    when ' '          then visualize "\u{2423}"
     else fail "ops"
     end
   }
 
   DEFAULT = ->char{
-    if char == '\\'
+    case
+    when char == '\\'
       $visual ? '\\' : '\\\\'
-    elsif ce = C_ESCAPES_MAP[char]
+    when (ce = C_ESCAPES_MAP[char])
       visualize ce
-    elsif (char == "\x7F" || char <= "\x1F") or ($encoding == Encoding::BINARY && char >= "\x7F")
+    when char <= "\x1F", char == "\x7F", ($encoding == Encoding::BINARY && "\x7F" <= char)
       visualize hex_bytes char
     else
       char
@@ -83,7 +84,7 @@ module Patterns
   }
 
   @patterns = []
-  @default_charset = nil #'[\0-\x1F\x7F]'
+  @default_charset = nil
   @default_action  = DEFAULT
 
   module_function
@@ -95,19 +96,31 @@ module Patterns
 
   class << self
     attr_writer :default_charset
+    attr_writer :default_action
     attr_accessor :default_pictures
   end
 
-  def default_charset_computed
-    @default_charset ||= if $encoding == Encoding::BINARY
-      Regexp.new((+"[\0-\x1F\x7F-\xFF]").force_encoding(Encoding::BINARY))
-    else
-      /[\0-\x1F\x7F]/
+  def create_charset(selector)
+    case selector
+    when '\A' then /./m
+    when '\@' then default_charset_computed
+    when '\m' then LAMBDA_FOR_MULTIBYTE
+    when '\M' then LAMBDA_FOR_SINGLEBYTE
+    when String then Regexp.new("[#{selector}]".force_encoding($encoding))
+    when Regexp, Proc then selector
+    else raise "fail: bad charset '#{selector.inspect}'"
     end
   end
 
-  def default_action(what)
-    @default_action = what
+  def default_charset_computed
+    @default_charset_computed ||=
+      if @default_charset
+        Regexp.new "[#@default_charset]".force_encoding($encoding)
+      elsif $encoding == Encoding::BINARY
+        Regexp.new (+"[\0-\x1F\x7F-\xFF]").force_encoding(Encoding::BINARY)
+      else
+        /[\0-\x1F\x7F]/
+      end
   end
 
   LAMBDA_FOR_MULTIBYTE = ->char{char.bytesize > 1}
@@ -293,18 +306,13 @@ OptParse.new do |op|
 
   op.separator 'DEFAULT ESCAPE FORMATTING', '(Change the default output behaviour)'
 
-  op.on '--default-charset CHARSET', 'Set the charset for --default-format. (See below for "CHARSET")' do |cs|
-    cs = '' if cs == :empty # an empty charset is allowed for `default-charset`
-    Patterns.default_charset = cs && /[#{cs}]/ # TODO: make this work with different encodings?
-  end
-
-  op.on '--no-default-charset', 'Disable the default charset; nothing in this section will work. (except --escape-surrounding-space)' do |cs|
-    Patterns.default_charset = false
+  op.on '--default-charset CHARSET', 'Explicitly set the charset that --default-format uses.' do |cs|
+    Patterns.default_charset = cs
   end
 
   op.on '--default-format WHAT', 'Specify the default escaping behaviour. WHAT must be one of:',
                                  'print, delete, dot, hex, codepoints, highlight, or default.' do |what|
-    Patterns.default_action(
+    Patterns.default_action =
       case what
       when 'print'      then Patterns::PRINT
       when 'delete'     then Patterns::DELETE
@@ -315,33 +323,27 @@ OptParse.new do |op|
       when 'default'    then Patterns::DEFAULT
       else abort "invalid --default-format option: #{what}"
       end
-    )
   end
 
   op.on '-p', 'Print escaped chars verbatim. (Same as --default-format=print)'  do
-    Patterns.default_action Patterns::PRINT
+    Patterns.default_action = Patterns::PRINT
   end
 
   op.on '-d', 'Delete escaped chars. (Same as --default-format=delete)'  do
-    Patterns.default_action Patterns::DELETE
+    Patterns.default_action = Patterns::DELETE
   end
 
   op.on '-.', "Replace escaped chars with '.'. (Same as --default-format=dot)"  do
-    Patterns.default_action Patterns::DOT
+    Patterns.default_action = Patterns::DOT
   end
 
   op.on '-x', 'Output hex for escaped chars. (Same as --default-format=hex)'  do
-    Patterns.default_action Patterns::HEX
+    Patterns.default_action = Patterns::HEX
   end
 
-  op.on '-P', '--[no-]default-pictures', 'Print out "pictures" if possible; non-pictures will use',
-                                         'whatever other default is set' do |cs|
+  op.on '-P', '--[no-]default-pictures', 'Print out "pictures" for some characters; Other characters',
+                                         'will use whatever the --default-format is' do |cs|
     Patterns.default_pictures = cs
-  end
-
-  $escape_surronding_spaces = true
-  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
-    $escape_surronding_spaces = ess
   end
 
   ## =====
@@ -417,6 +419,11 @@ OptParse.new do |op|
   op.on '--c-escape CHARSET', 'Replaces chars with their C escapes; Attempts to generate',
                               "c-escapes for non-'#{Patterns::C_ESCAPES_DEFAULT.source}' is an error" do |cs|
     Patterns.add_charset(cs, Patterns::C_ESCAPES)
+  end
+
+  $escape_surronding_spaces = true
+  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
+    $escape_surronding_spaces = ess
   end
 
   ##################################################################################################
@@ -548,14 +555,13 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-# Converts a string's bytes to their `\xHH` escaped version, and joins them
-def hex_bytes(string) string.each_byte.map { |byte| '\x%02X' % byte }.join end
+# Converts a string's bytes to their `\xHH` escaped version
+def hex_bytes(string)
+  string.each_byte.map { |byte| '\x%02X' % byte }.join
+end
 
-# Add "visualize" escape sequences to a string; all escaped characters should be passed to this, as
-# visual effects are the whole purpose of the `p` program.
-# - if `$delete` is specified, then an empty string is returned---escaped characters are deleted.
-# - if `$visual` is specified, then `start` and `stop` surround `string`
-# - else, `string` is returned.
+# Visualizes `string` by surrounding it with the visual escape sequences if visual mode is enabled.
+# Also, sets the variable `$SOMETHING_ESCAPED` regardless of visual mode for `--check-escapes`.
 def visualize(string, start=VISUAL_BEGIN, stop=VISUAL_END)
   $SOMETHING_ESCAPED = true
 
@@ -572,10 +578,9 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-
-## Construct the `CHARACTERS` hash, whose keys are characters, and values are the corresponding
+## Construct the `ESCAPES_CACHE` hash, whose keys are characters, and values are the corresponding
 # sequences to be printed.
-CHARACTERS = Hash.new do |hash, key|
+ESCAPES_CACHE = Hash.new do |hash, key|
   hash[key] =
     if !key.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$malformed_error`.
@@ -590,9 +595,6 @@ end
 #                                         Handle Arguments                                         #
 #                                                                                                  #
 ####################################################################################################
-
-# CAPACITY = ENV['P_CAP'].to_i.nonzero? || 4096 * 3
-# OUTPUT = String.new(capacity: CAPACITY * 8, encoding: Encoding::BINARY)
 
 ## Put both stdin and stdout in bin(ary)mode: Disable newline conversion (which is used by Windows),
 # no encoding conversion done, and defaults the encoding to Encoding::BINARY (ie ascii-8bit). We
@@ -609,7 +611,7 @@ def print_escapes(has_each_char, suffix = nil)
   # character in a file was a newline.)
   last = nil
   has_each_char.each_char do |char|
-    print last = CHARACTERS[char]
+    print last = ESCAPES_CACHE[char]
   end
 
   ## If a suffix is given (eg trailing spaces with `--escape-surrounding-space)`, then print it out
@@ -617,8 +619,7 @@ def print_escapes(has_each_char, suffix = nil)
   print suffix if suffix
 
   ## Print a newline if the following are satisfied:
-  # 1. It was requested. (This is the default, but can be suppressed by `--no-trailing-newline`, or
-  #    `-n`. Note that if prefixes are enabled, trailing newlines are always enabled regardless.)
+  # 1. It was requested. (This is the default, but can be suppressed by `--no-prefixes-or-newline`.)
   # 2. At least one character was printed, or prefixes were enabled; If no characters are printed,
   #    we normally don't want to add a newline, when prefixes are being output we want each filename
   #    to be on their own lines.
@@ -627,6 +628,12 @@ def print_escapes(has_each_char, suffix = nil)
   #    to prevent a blank line in the output. (Kinda like how `puts "a\n"` only prints one newline.)
   puts if $trailing_newline && last != "\n" && (last != nil || $prefixes)
 end
+
+####################################################################################################
+#                                                                                                  #
+#                                Handle when arguments are strings                                 #
+#                                                                                                  #
+####################################################################################################
 
 ## Interpret arguments as strings
 unless $files
@@ -641,23 +648,29 @@ unless $files
 
     # If we're escaping surrounding spaces, check for them.
     if $escape_surronding_spaces
-      # TODO: If we ever end up not needing to modify `string` via `.force_encoding` down below (i.e.
+      # TODO: If we ever end up not needing to modify `string` via `.force_encoding` down below (ie
       # if there's a way to iterate over chars without changing encodings/duplicating the string
-      # beforehand), this should be changed to use `byteslice`.The method used here is more convenient,
-      # but is destructive. ALSO. It doesn't work wtih non-utf8 characters
+      # beforehand), this should be changed to use `byteslice`. The method used here is more
+      # convenient, but is destructive. ALSO. It doesn't work wtih non-utf8 characters
       string.force_encoding Encoding::BINARY
-      leading_spaces  = string.slice!(/\A +/) and print visualize(CHARACTERS[' '] * $&.length)
-      trailing_spaces = string.slice!(/ +\z/) && visualize(CHARACTERS[' '] * $&.length)
+      leading_spaces  = string.slice!(/\A +/) and print visualize(ESCAPES_CACHE[' '] * $&.length)
+      trailing_spaces = string.slice!(/ +\z/) && visualize(ESCAPES_CACHE[' '] * $&.length)
     end
 
     # handle the input string
     print_escapes string.force_encoding($encoding), trailing_spaces
   end
 
-  # Exit early so we don't deal with the chunk below. note however, the `at_exit` above for the
-  # `--malformed-error` flag.
+  # Exit early so we don't deal with the chunk below. Note however, the `at_exit` earlier in this
+  # file for dealing with the `--malformed-error` flag.
   return
 end
+
+####################################################################################################
+#                                                                                                  #
+#                                          Handle --files                                          #
+#                                                                                                  #
+####################################################################################################
 
 # Sadly, we can't use `ARGF` for numerous reasons:
 # 1. `ARGF#each_char` will completely skip empty files, and won't call its block. So there's no easy
