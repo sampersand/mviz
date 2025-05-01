@@ -158,31 +158,29 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-# Helper for `USE_COLOR`.
-def ENV.present?(key) !fetch(key, '').empty? end
-
 # Whether visual effects should be enabled by default
-USE_COLOR = case
-            when ENV.present?('P_FORCE_COLOR') then true
-            when ENV.present?('P_NO_COLOR')    then false
-            when ENV.present?('FORCE_COLOR')   then true
-            when ENV.present?('NO_COLOR')      then false
-            else                                    $stdout.tty?
-            end
+$USE_COLOR =
+  if ENV.fetch('FORCE_COLOR', '') != ''
+    true
+  elsif ENV.fetch('NO_COLOR', '') != ''
+    false
+  else
+    $stdout.tty?
+  end
 
 # Fetch standout constants (regardless of whether we're using them, as they're used as defaults)
 VISUAL_BEGIN     = ENV.fetch('P_VISUAL_BEGIN', "\e[7m")
 VISUAL_END       = ENV.fetch('P_VISUAL_END',   "\e[27m")
 VISUAL_ERR_BEGIN = ENV.fetch('P_VISUAL_ERR_BEGIN', "\e[37m\e[41m")
 VISUAL_ERR_END   = ENV.fetch('P_VISUAL_ERR_END',   "\e[49m\e[39m")
-BOLD_BEGIN       = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if USE_COLOR)
-BOLD_END         = (ENV.fetch('P_BOLD_END',   "\e[0m") if USE_COLOR)
+BOLD_BEGIN       = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if $USE_COLOR)
+BOLD_END         = (ENV.fetch('P_BOLD_END',   "\e[0m") if $USE_COLOR)
 
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
   op.version = '0.9.0'
   op.banner = <<~BANNER
-  #{VISUAL_BEGIN if USE_COLOR}usage#{VISUAL_END if USE_COLOR}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
+  #{VISUAL_BEGIN if $USE_COLOR}usage#{VISUAL_END if $USE_COLOR}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
          #{BOLD_BEGIN}#{op.program_name} -f [options] [file ...]#{BOLD_END}  # Read from files
   When no args are given, first form is assumed if stdin is not a tty.
@@ -208,11 +206,11 @@ OptParse.new do |op|
     #{BOLD_BEGIN}usage: #{op.program_name} [options] [string ...]#{BOLD_END}
       --help          Print a longer help message with more options
       -f              Interpret all arguments as filenames, not strings
-      -c              Exit nonzero if any escapes are printed. ("check")
+      -k              Exit nonzero if any escapes are printed. ("check")
       -q              Don't output anything. (Useful with -c)
       -1              Don't print a "prefix" to arguments, but do print newlines
       -n              Don't print either "prefixes" nor newlines for arguments
-      -v, -V          Enable/disable visual effects for escaped characters
+      -c, -C          Enable/disable colors for escaped characters
     #{BOLD_BEGIN}ESCAPE FORMATTING#{BOLD_END} (-x, -d, -p, -. are mutually exclusive)
       -x              Print escaped chars in hex-notation (\\xHH)
       -d              Delete escaped chars from the output
@@ -257,7 +255,7 @@ OptParse.new do |op|
   end
 
   $escape_error = false
-  op.on '-c', '--[no-]check-escapes', 'Return nonzero if _any_ character is escaped' do |ee|
+  op.on '-k', '--[no-]check-escapes', 'Return nonzero if _any_ character is escaped' do |ee|
     $escape_error = ee
   end
 
@@ -271,6 +269,18 @@ OptParse.new do |op|
     $quiet = q
   end
 
+  op.on '--[no-]color[=WHEN]', %w[always never auto], 'When to enable visual effects. (WHEN is always, never, auto)',
+                                                      'auto (default) uses on NO_COLOR/FORCE_COLOR; See ENV VARS below' do |w|
+    $visual =
+      case w
+      when 'always', nil  then true
+      when 'never', false then false
+      when 'auto'         then $USE_COLOR
+      else fail
+      end
+  end
+
+=begin
   op.on '-v', '--visualize', 'Enable visual effects. (default only if stdout is tty)' do
     $visual = true
   end
@@ -278,6 +288,7 @@ OptParse.new do |op|
   op.on '-V', '--no-visualize', 'Do not enable visual effects' do
     $visual = false
   end
+=end
 
   op.on '--prefixes', "Add \"prefixes\". (default if stdout's a tty, and args are given)" do
     $prefixes = true
@@ -465,10 +476,10 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator 'ENVIRONMENT VARIABLES'
   op.on <<-EOS # Note: `-EOS` not `~EOS` to keep leading spaces
-    P_FORCE_COLOR, P_NO_COLOR, FORCE_COLOR, NO_COLOR
-      The first of these which is set to a non-empty value specifies whether visual effects will be
-      shown by default, including for usage messages. (If none are set, it defaults to whether the
-      stdout is a tty.)
+    FORCE_COLOR, NO_COLOR
+      Controls `--color=auto`. If FORCE_COLOR is set and nonempty, acts like `--color=always`. Else,
+      if NO_COLOR is set and nonempty, acts like `--color=never`. If neither is set to a non-empty
+      value, `--color=auto` defaults to `--color=always` when stdout is a tty.
 
     POSIXLY_CORRECT
       If present, changes the default `--encoding` to be the locale's (cf locale(1).), and also
@@ -522,7 +533,7 @@ end
 ####################################################################################################
 
 # Specify defaults
-defined? $visual           or $visual = USE_COLOR
+defined? $visual           or $visual = $USE_COLOR
 defined? $prefixes         or $prefixes = $stdout.tty? && (!$*.empty? || (defined?($files) && $files))
 defined? $files            or $files = !$stdin.tty? && $*.empty?
 defined? $trailing_newline or $trailing_newline = true
