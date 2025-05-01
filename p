@@ -88,9 +88,9 @@ module Patterns
 
   module_function
 
-  def add_charset(charset, block, default: :default)
+  def add_charset(charset, block)
     return if charset == '' || charset == '^' # Ignore empty charsets
-    @patterns.prepend [charset || default, block]
+    @patterns.prepend [charset, block]
   end
 
   class << self
@@ -120,7 +120,7 @@ module Patterns
                  when '\@' then default_charset_computed
                  when '\m' then LAMBDA_FOR_MULTIBYTE
                  when '\M' then LAMBDA_FOR_SINGLEBYTE
-                 when '', :empty   then next # If it's empty, don't register it
+                 when '', '^' then next # If it's empty, don't register it
                  when String then Regexp.new("[#{selector}]".force_encoding($encoding))
                  when :default then default_charset_computed
                  when Regexp, Proc then selector
@@ -222,7 +222,7 @@ OptParse.new do |op|
     #{BOLD_BEGIN}INPUT DATA#{BOLD_END}
       -b              Interpret input data as binary text
       -A              Interpret input data as ASCII; like -b, except invalid bytes
-      -8              Interpret input data as UTF-8 (default unless POSIXLY_CORRECT set)
+      -8              Interpret input data as UTF-8
     EOS
     exit
   end
@@ -416,7 +416,7 @@ OptParse.new do |op|
 
   op.on '--c-escape CHARSET', 'Replaces chars with their C escapes; Attempts to generate',
                               "c-escapes for non-'#{Patterns::C_ESCAPES_DEFAULT.source}' is an error" do |cs|
-    Patterns.add_charset(cs, Patterns::C_ESCAPES, default: Patterns::C_ESCAPES_DEFAULT)
+    Patterns.add_charset(cs, Patterns::C_ESCAPES)
   end
 
   ##################################################################################################
