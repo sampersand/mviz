@@ -206,22 +206,22 @@ OptParse.new do |op|
     #{BOLD_BEGIN}usage: #{op.program_name} [options] [string ...]#{BOLD_END}
       --help          Print a longer help message with more options
       -f              Interpret all arguments as filenames, not strings
-      -k              Exit nonzero if any escapes are printed. ("check")
+      -c              Exit nonzero if any escapes are printed. ("check")
       -q              Don't output anything. (Useful with -c)
       -1              Don't print a "prefix" to arguments, but do print newlines
       -n              Don't print either "prefixes" nor newlines for arguments
-      -c, -C          Enable/disable colors for escaped characters
-    #{BOLD_BEGIN}ESCAPE FORMATTING#{BOLD_END} (-x, -d, -p, -. are mutually exclusive)
-      -x              Print escaped chars in hex-notation (\\xHH)
-      -d              Delete escaped chars from the output
-      -p              Print escaped chars unchanged
-      -.              Replace escaped chars with periods
-      -P              Escape some chars with their "pictures".
+      --color=WHAT    Change colour output (options: always/never/auto)
+    #{BOLD_BEGIN}TRANSLATIONS#{BOLD_END} (-x, -d, -p, -. are mutually exclusive)
+      -x              Print translated chars in hex-notation (\\xHH)
+      -d              Delete translated chars from the output
+      -p              Print translated chars unchanged
+      -.              Replace translated chars with periods
+      -P              Translate some chars with their "pictures"
     #{BOLD_BEGIN}SHORTHANDS FOR COMMON ESCAPES#{BOLD_END}
       -l              Don't escape newlines.
       -w              Don't escape newlines, tabs, or spaces
       -s              Escape spaces
-      -B              Escape backslashes
+      -B              Escape backslashes. (Defaults when colour is off)
       -m, -u          Escape multibyte characters with their Unicode codepoint.
     #{BOLD_BEGIN}INPUT DATA#{BOLD_END}
       -b              Interpret input data as binary text
@@ -255,7 +255,7 @@ OptParse.new do |op|
   end
 
   $escape_error = false
-  op.on '-k', '--[no-]check-escapes', 'Return nonzero if _any_ character is escaped' do |ee|
+  op.on '-c', '--[no-]check-escapes', 'Return nonzero if _any_ character is escaped' do |ee|
     $escape_error = ee
   end
 
@@ -308,49 +308,29 @@ OptParse.new do |op|
   #                                            Escaping                                            #
   ##################################################################################################
 
-  op.separator 'DEFAULT ESCAPE FORMATTING', '(Change the default output behaviour)'
+  op.separator 'TRANSLATIONS', '(Change the default output behaviour. -p, -d, -., and -x are mutually exclusive)'
 
-  op.on '--default-charset CHARSET', 'Explicitly set the charset that --default-format uses.' do |cs|
-    Patterns.default_charset = cs
-  end
-
-  op.on '--no-default-charset' do
-    Patterns.default_charset = false
-  end
-
-  op.on '--default-format WHAT', 'Specify the default escaping behaviour. WHAT must be one of:',
-                                 'print, delete, dot, hex, codepoints, highlight, or default.' do |what|
-    Patterns.default_action =
-      case what
-      when 'print'      then Patterns::PRINT
-      when 'delete'     then Patterns::DELETE
-      when 'dot'        then Patterns::DOT
-      when 'hex'        then Patterns::HEX
-      when 'codepoints' then Patterns::CODEPOINTS
-      when 'highlight'  then Patterns::HIGHLIGHT
-      when 'default'    then Patterns::DEFAULT
-      else abort "invalid --default-format option: #{what}"
-      end
-  end
-
-  op.on '-p', 'Print escaped chars verbatim. (Same as --default-format=print)'  do
+  op.on '-p', '--translate-by-print', 'Print translated chars verbatim' do
     Patterns.default_action = Patterns::PRINT
   end
 
-  op.on '-d', 'Delete escaped chars. (Same as --default-format=delete)'  do
+  op.on '-d', '--translate-by-delete', 'Delete translated chars' do
     Patterns.default_action = Patterns::DELETE
   end
 
-  op.on '-.', "Replace escaped chars with '.'. (Same as --default-format=dot)"  do
+  op.on '-.', '--translate-by-dot', "Replace translated chars with '.'" do
     Patterns.default_action = Patterns::DOT
   end
 
-  op.on '-x', 'Output hex for escaped chars. (Same as --default-format=hex)'  do
+  op.on '-x', '--translate-by-hex', 'Output hex escape (\xHH) for translated chars' do
     Patterns.default_action = Patterns::HEX
   end
 
-  op.on '-P', '--[no-]default-pictures', 'Print out "pictures" for some characters; Other characters',
-                                         'will use whatever the --default-format is' do |cs|
+  op.on '--translate-charset=CHARSET', 'Explicitly set the charset that -p, -d, -., and -x use' do |cs|
+    Patterns.default_charset = cs
+  end
+
+  op.on '-P', '--[no-]translate-by-pictures', "Print out pictures \\0-\\x20 and \\x7F; Doesn't affect other chars" do |cs|
     Patterns.default_pictures = cs
   end
 
@@ -389,7 +369,7 @@ OptParse.new do |op|
   ########
   ########
 
-  op.separator 'SPECIFIC ESCAPES FORMATTING', '(Takes precedence over defaults; Ties go to the last one specified)'
+  op.separator 'SPECIFIC TRANSLATIONS', '(Takes precedence over "TRANSLATIONS"; Ties go to the last one specified)'
 
   op.on '--print CHARSET', 'Print characters, unchanged, which match CHARSET' do |cs|
     Patterns.add_charset(cs, Patterns::PRINT)
@@ -399,12 +379,20 @@ OptParse.new do |op|
     Patterns.add_charset(cs, Patterns::DELETE)
   end
 
-  op.on '--dot CHARSET', "Replaces CHARSET with a period ('.')" do |cs|
-    Patterns.add_charset(cs, Patterns::DOT)
+  op.on '--dot[=CHARSET]', "Replaces CHARSET with a period ('.')" do |cs|
+    if cs
+      Patterns.add_charset(cs, Patterns::DOT)
+    else
+      Patterns.default_action = Patterns::DOT
+    end
   end
 
-  op.on '--hex CHARSET', 'Replaces characters with their hex value (\xHH)' do |cs|
-    Patterns.add_charset(cs, Patterns::HEX)
+  op.on '--hex[=CHARSET]', 'Replaces characters with their hex value (\xHH)' do |cs|
+    if cs
+      Patterns.add_charset(cs, Patterns::HEX)
+    else
+      Patterns.default_action = Patterns::HEX
+    end
   end
 
   op.on '--codepoint CHARSET', 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
@@ -415,7 +403,7 @@ OptParse.new do |op|
     Patterns.add_charset(cs, Patterns::HIGHLIGHT)
   end
 
-  op.on '--use-default CHARSET', 'Use the default patterns for chars in CHARSET' do |cs|
+  op.on '--default CHARSET', 'Use the default patterns for chars in CHARSET' do |cs|
     Patterns.add_charset(cs, Patterns::DEFAULT)
   end
 

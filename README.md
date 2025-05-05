@@ -36,6 +36,8 @@ hello\x04world, how are you? \xC3👍\n
 % printf 'hello\x04world, how are you? \xC3👍\n' | vis
 hello\^Dworld, how are you? \M-C\M-p\M^_\M^Q\M^M
 
+% printf 'hello\x04world, how are you? \xC3👍\n' | cat -v
+hello^Dworld, how are you? ??M-^_M-^QM-^M
 ```
 
 ## TODO
