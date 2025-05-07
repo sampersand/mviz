@@ -58,6 +58,7 @@ module Patterns
   DELETE     = ->_char{ $SOMETHING_ESCAPED = true; '' }
   DOT        = ->_char { visualize '.' }
   HEX        = ->char { visualize hex_bytes char }
+  OCTAL      = ->char { visualize char.each_byte.map { |byte| '\%03o' % byte }.join }
   CODEPOINTS = ->char { visualize '\u{%04X}' % char.ord }
   C_ESCAPES  = ->char { visualize C_ESCAPES_MAP.fetch(char) }
   HIGHLIGHT  = ->char { visualize char }
@@ -317,6 +318,10 @@ OptParse.new do |op|
     Patterns.default_action = Patterns::HEX
   end
 
+  op.on '-o', '--escape-by-octal', 'Output octal escapes (\###) for escaped chars' do
+    Patterns.default_action = Patterns::OCTAL
+  end
+
   op.on '--escape-charset=CHARSET', 'Explicitly set the charset that -p, -d, -., and -x use' do |cs|
     Patterns.default_charset = cs
   end
@@ -381,6 +386,10 @@ OptParse.new do |op|
 
   op.on '--hex CHARSET', 'Replaces characters with their hex value (\xHH)' do |cs|
     Patterns.add_charset(cs, Patterns::HEX)
+  end
+
+  op.on '--octal CHARSET', 'Replaces characters with their octal escapes (\###)' do |cs|
+    Patterns.add_charset(cs, Patterns::OCTAL)
   end
 
   op.on '--codepoint CHARSET', 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
