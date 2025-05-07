@@ -212,7 +212,7 @@ OptParse.new do |op|
       -1              Don't print a "prefix" to arguments, but do print newlines
       -n              Don't print either "prefixes" nor newlines for arguments
       --color=WHAT    Change colour output (options: always/never/auto)
-    #{BOLD_BEGIN}ESCAPES#{BOLD_END} (-x, -d, -p, -. are mutually exclusive)
+    #{BOLD_BEGIN}ESCAPES#{BOLD_END} (-x, -o, -d, -p, -. are mutually exclusive)
       -x              Print escaped chars in hex notation (\\xHH)
       -o              Print escaped chars in octal notation (\\###)
       -d              Delete escaped chars from the output
@@ -301,7 +301,7 @@ OptParse.new do |op|
   #                                            Escaping                                            #
   ##################################################################################################
 
-  op.separator 'ESCAPES', '(Change the default output behaviour. -p, -d, -., and -x are mutually exclusive)'
+  op.separator 'ESCAPES', '(Change the default output behaviour. -p, -d, -., -x, and -o are mutually exclusive)'
 
   op.on '-p', '--escape-by-print', 'Print escaped chars verbatim' do
     Patterns.default_action = Patterns::PRINT
