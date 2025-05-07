@@ -222,6 +222,7 @@ OptParse.new do |op|
       -s, -S          Escape spaces by highlighting it/with "pictures"
       -B              Escape backslashes. (defaults when colour is off)
       -m              Escape multibyte characters with their Unicode codepoint.
+      -a              Escape _every_ character
     #{BOLD_BEGIN}INPUT DATA#{BOLD_END}
       -b              Interpret input data as binary text
       -A              Interpret input data as ASCII; like -b, except invalid bytes
@@ -371,6 +372,10 @@ OptParse.new do |op|
   op.on '-m', '--multibyte-codepoints', "Use codepoints for multibyte chars. (Same as --codepoint='\\m')",
                                         '(Not useful in single-byte-only encodings)' do
     Patterns.add_charset(Patterns::LAMBDA_FOR_MULTIBYTE, Patterns::CODEPOINTS)
+  end
+
+  op.on '-a', '--escape-all', "Escape _all_ characters. (Same as --escape-charset='\\A')" do
+    Patterns.default_charset = /./m
   end
 
   ##################################################################################################
