@@ -1,17 +1,38 @@
 # The `p` command
 A program to escape "weird" characters in strings or files.
 
-The `p` command grew from an amalgamation of different scripts I'd written that all did _roughly_ the same thing.
+`p` is essentially a replacement for interactive use of `echo` or `cat`: Instead of `echo "$variable"` or `cat file.txt`, which would be hiding invisible characters (like `\x01`), instead do `p "$variable"` or `p -f file.txt`.
 
 # Examples
-`p` is designed with defaults in mind; its default behaviour is what you want most of the time, but can easily (and sensibly) be changed wht options
+`p` is designed with defaults in mind; its default behaviour is what you want most of the time, but can easily (and sensibly) be changed with options
+
+```shell
+$ p "$variable"        # See the contents of a shell variable
+$ p -d "$variable"     # Delete weird characters from the variable
+$ p -f some-file.txt   # Print some-file, escaping all characters
+$ p -fw some-file.txt  # Like the previous line, but newlines and tabs aren't escaped.
+$ some_command | p     # Visualize weird chars of `some_command`
+$ some_command | p -l  # Like the previous one, but don't escape newlines.
+$ some_command | p -b  # Interpret input data as binary, not utf-8 (the default)
+```
+It's also quite useful when you're learning how shells work:
 ```bash
-# See the contents of a shell variable
-$ p "$variable"
-$ p $variable        # See how `$variable` word splits
-$ p *                # See what files are expanded by a glob
-$ some_command | p   # See if `some_command` outputs something weird
-$ p -f some-file.txt # see if `some-file.txt` is contains weird characters
+# See what files are expanded by a glob
+$ p [A-Z]*
+    1: LICENSE
+    2: README.md
+# See how `$variable` word splits
+$ variable='hello    world,   :-)'
+$ p $variable
+    1: hello
+    2: world,
+    3: :-)
+# See how `$IFS` affects it
+$ IFS=o
+$ p $variable
+    1: hell
+    2:     w
+    3: rld,   :-)
 ```
 
 Try `p -h` for short usage, and `p --help` for the longer one.

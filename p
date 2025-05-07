@@ -326,7 +326,7 @@ OptParse.new do |op|
   end
 
   $escape_surronding_spaces = true
-  op.on '--[no-]translate-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
+  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
     $escape_surronding_spaces = ess
   end
 
