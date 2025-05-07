@@ -52,7 +52,7 @@ module Patterns
     "\n" => '\n', "\v" => '\v', "\f" => '\f', "\r" => '\r',
     "\e" => '\e', "\\" => '\\\\',
   }
-  C_ESCAPES_DEFAULT = /[#{C_ESCAPES_MAP.keys.map{_1.inspect[1..-2]}.join.sub('u000','')}]/
+  C_ESCAPES_DEFAULT = C_ESCAPES_MAP.keys.map{_1.inspect[1..-2]}.join.sub('u000','')
 
   PRINT      = ->char { char }
   DELETE     = ->_char{ $SOMETHING_ESCAPED = true; '' }
@@ -102,11 +102,11 @@ module Patterns
 
   def create_charset(selector)
     case selector
-    when '\A'   then /./m
-    when '\@'   then default_charset_computed
-    when '\m'   then LAMBDA_FOR_MULTIBYTE
-    when '\M'   then LAMBDA_FOR_SINGLEBYTE
-    when String then Regexp.new("[#{selector}]".force_encoding($encoding))
+    when '\A'         then /./m
+    when '\@'         then default_charset_computed
+    when '\m'         then LAMBDA_FOR_MULTIBYTE
+    when '\M'         then LAMBDA_FOR_SINGLEBYTE
+    when String       then Regexp.new("[#{selector}]".force_encoding($encoding))
     when Regexp, Proc then selector
     else raise "fail: bad charset '#{selector.inspect}'"
     end
@@ -231,8 +231,13 @@ OptParse.new do |op|
   end
 
   op.on '--help', 'Print a longer usage message and exit' do
-    puts op.help # Newer versions of OptParse have `op.help_exit`, but we are targeting older ones.
-    exit
+    # Newer versions of OptParse have `op.help_exit`, but we also support older ones
+    if defined? op.help_exit
+      op.help_exit
+    else
+      puts op.help
+      exit
+    end
   end
 
   op.on '--version', 'Print the version and exit' do
@@ -244,8 +249,11 @@ OptParse.new do |op|
     $DEBUG = $VERBOSE = true
   end
 
-  op.on '-f', '--files', 'Interpret trailing options as filenames to read' do |f|
-    $files = f
+  # We intentionally don't have a `--no-files` options, as this is used to change how remaining
+  # arguments are parsed.
+  $files = false
+  op.on '-f', '--files', 'Interpret trailing options as filenames to read' do
+    $files = true
   end
 
   $malformed_error = true
@@ -254,13 +262,13 @@ OptParse.new do |op|
   end
 
   $escape_error = false
-  op.on '-c', '--[no-]check-escapes', 'Return nonzero if _any_ character is escaped. Useful to',
-                                      'programmatically check inputs to ensure they are "normal".' do |ee|
+  op.on '-c', '--[no-]check-escapes', 'Return nonzero if any character is escaped. Useful to check',
+                                      'inputs programmatically to ensure they are "normal".' do |ee|
     $escape_error = ee
   end
 
   ##################################################################################################
-  #                                       Separating Outputs                                       #
+  #                                            Outputs                                             #
   ##################################################################################################
   op.separator 'OUTPUTS'
 
@@ -269,6 +277,7 @@ OptParse.new do |op|
     $quiet = q
   end
 
+  # (Support `--color`, `--no-color`, and `--color=...`)
   op.on '--[no-]color[=WHEN]', %w[always never auto], 'When to enable visual effects. (WHEN is always, never, auto)',
                                                       'auto (default) uses on NO_COLOR/FORCE_COLOR; See ENV VARS below' do |w|
     $use_color =
@@ -280,6 +289,7 @@ OptParse.new do |op|
       end
   end
 
+  # TODO: Should `--prefixes`, `--one-per-line`, and `--no-prefixes-or-newline` be collapsed?
   op.on '--prefixes', "Add \"prefixes\". (default if stdout's a tty, and args are given)" do
     $prefixes = true
   end
@@ -295,7 +305,7 @@ OptParse.new do |op|
   end
 
   ##################################################################################################
-  #                                            Escaping                                            #
+  #                                            Escapes                                             #
   ##################################################################################################
 
   op.separator 'ESCAPES', '(Change the default output behaviour. -p, -d, -., -x, -o, and -P are mutually exclusive)'
@@ -324,7 +334,7 @@ OptParse.new do |op|
     Patterns.default_action = Patterns::PICTURES
   end
 
-  op.on '--escape-charset=CHARSET', 'Explicitly set the charset that -p, -d, -., and -x use' do |cs|
+  op.on '--escape-charset CHARSET', 'Explicitly set the charset that -p, -d, -., and -x use' do |cs|
     Patterns.default_charset = cs
   end
 
@@ -333,9 +343,9 @@ OptParse.new do |op|
     $escape_surronding_spaces = ess
   end
 
-  ## =====
-  ## =====
-  ## =====
+  ##################################################################################################
+  #                                           Shorthands                                           #
+  ##################################################################################################
 
   op.separator 'SHORTHANDS'
   op.on '-l', '--print-newlines', "Don't escape newline. (Same as --print='\\n')" do
@@ -364,9 +374,9 @@ OptParse.new do |op|
     Patterns.add_charset(Patterns::LAMBDA_FOR_MULTIBYTE, Patterns::CODEPOINTS)
   end
 
-  ########
-  ########
-  ########
+  ##################################################################################################
+  #                                        Specific Escapes                                        #
+  ##################################################################################################
 
   op.separator 'SPECIFIC ESCAPES', '(Takes precedence over "ESCAPES"; Ties go to the last one specified)'
 
@@ -398,32 +408,32 @@ OptParse.new do |op|
     Patterns.add_charset(cs, Patterns::HIGHLIGHT)
   end
 
-  op.on '--default CHARSET', 'Use the default patterns for chars in CHARSET' do |cs|
-    Patterns.add_charset(cs, Patterns::DEFAULT)
-  end
-
   op.on '--picture CHARSET', 'Use "pictures" (U+240x-U+242x). Attempts to generate pictures',
                                        "for chars outside of '\\0-\\x20\\x7F' is an error." do |cs|
     Patterns.add_charset(cs, Patterns::PICTURES)
   end
 
-  op.on '--c-escape CHARSET', 'Replaces chars with their C escapes; Attempts to generate',
-                              "c-escapes for non-'#{Patterns::C_ESCAPES_DEFAULT.source}' is an error" do |cs|
+  op.on '--c-escape CHARSET', 'Like --hex, except c-style escapes (eg \n) are used for the',
+                              "following chars: #{Patterns::C_ESCAPES_DEFAULT}" do |cs|
     Patterns.add_charset(cs, Patterns::C_ESCAPES)
   end
 
-  ##################################################################################################
-  #                                        Input Encodings                                         #
-  ##################################################################################################
-  op.separator 'ENCODINGS', '(default based on POSIXLY_CORRECT; --utf-8 if unset, --locale if set)'
-
-  op.on '--encoding ENCODING', "Specify the input's encoding. Case-insensitive. Encodings that",
-                               "aren't ASCII-compatible encodings (eg UTF-16) aren't accepted." do |enc|
-    $encoding = Encoding.find enc rescue abort $!
-    $encoding.ascii_compatible? or abort "Encoding #$encoding is not ASCII-compatible!"
+  op.on '--default CHARSET', 'Use the default patterns for chars in CHARSET' do |cs|
+    Patterns.add_charset(cs, Patterns::DEFAULT)
   end
 
-  op.on '--list-encodings', 'List all possible encodings, and exit.' do
+  ##################################################################################################
+  #                                        Specific Escapes                                        #
+  ##################################################################################################
+  op.separator 'ENCODINGS', '(default is normally --utf-8. If POSIXLY_CORRECT is set, --locale is the default)'
+
+  op.on '--encoding ENCODING', "Specify the input's encoding. Case-insensitive. Encodings that",
+                               "aren't ASCII-compatible encodings (eg UTF-16) are illegal." do |enc|
+    $encoding = Encoding.find enc rescue abort $!
+    abort "Encoding #$encoding is not ASCII-compatible!" unless $encoding.ascii_compatible?
+  end
+
+  op.on '--list-encodings', 'List all possible encodings, and exit' do
     # Don't list external or internal encodings, as they're not really options
     possible_encodings = (Encoding.name_list - %w[external internal])
       .select { |name| Encoding.find(name).ascii_compatible? }
