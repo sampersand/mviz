@@ -518,8 +518,9 @@ OptParse.new do |op|
   op.separator 'EXIT CODES'
   op.on <<~'EOS'
     Specific exit codes are used:
-      - 0: No problems encountered
-      - 1: There was a problem opening a file
+      - 0    No problems encountered
+      - 1    A problem opening a file given with `-f`
+      - 2    Command-line usage error
   EOS
 
 
