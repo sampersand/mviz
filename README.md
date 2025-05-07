@@ -1,10 +1,13 @@
 # The `p` command
-A program to print out invisible characters in strings or files.
+A program to escape "weird" characters in strings or files.
 
-# "Impetus" example usages:
-(i.e. the usages that inspired this command)
-```shell
-$ p "$variable"      # See the contents of `$variable`
+The `p` command grew from an amalgamation of different scripts I'd written that all did _roughly_ the same thing.
+
+# Examples
+`p` is designed with defaults in mind; its default behaviour is what you want most of the time, but can easily (and sensibly) be changed wht options
+```bash
+# See the contents of a shell variable
+$ p "$variable"
 $ p $variable        # See how `$variable` word splits
 $ p *                # See what files are expanded by a glob
 $ some_command | p   # See if `some_command` outputs something weird
