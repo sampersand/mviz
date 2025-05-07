@@ -67,7 +67,7 @@ module Patterns
     when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
     when "\x7F"       then visualize "\u{2421}"
     when ' '          then visualize "\u{2423}"
-    else fail "ops"
+    else                   HEX.call(char) # Default to hex if pictures doesn't work
     end
   }
 
@@ -98,7 +98,6 @@ module Patterns
   class << self
     attr_writer :default_charset
     attr_writer :default_action
-    attr_accessor :default_pictures
   end
 
   def create_charset(selector)
@@ -142,12 +141,10 @@ module Patterns
       return escape_method.call(char) if condition === char
     end
 
-    return char unless default_charset_computed === char
-
-    if default_pictures && ( ("\0".."\x20") === char || "\x7F" === char )
-      PICTURES.call(char)
-    else
+    if default_charset_computed === char
       @default_action.call(char)
+    else
+      char
     end
   end
 end
@@ -207,23 +204,23 @@ OptParse.new do |op|
     #{BOLD_BEGIN}usage: #{op.program_name} [options] [string ...]#{BOLD_END}
       --help          Print a longer help message with more options
       -f              Interpret all arguments as filenames, not strings
-      -c              Exit nonzero if any escapes are printed. ("check")
+      -c              Check if any escapes are printed, and exit nonzero if so.
       -q              Don't output anything. (Useful with -c)
       -1              Don't print a "prefix" to arguments, but do print newlines
       -n              Don't print either "prefixes" nor newlines for arguments
       --color=WHAT    Change colour output (options: always/never/auto)
-    #{BOLD_BEGIN}ESCAPES#{BOLD_END} (All but '-P' are mutually exclusive)
+    #{BOLD_BEGIN}ESCAPES#{BOLD_END} (All are mutually exclusive)
       -x              Print escaped chars in hex notation (\\xHH)
       -o              Print escaped chars in octal notation (\\###)
       -d              Delete escaped chars from the output
       -p              Print escaped chars unchanged
-      -.              Replace escaped chars with periods
-      -P              Replace some escaped chars with their "pictures"
+      -.              Replace escaped chars with a period ('.')
+      -P              Replace escaped chars with their "pictures"
     #{BOLD_BEGIN}SPECIFIC ESCAPES#{BOLD_END}
       -l              Don't escape newlines.
       -w              Don't escape newlines, tabs, or spaces
       -s, -S          Escape spaces by highlighting it/with "pictures"
-      -B              Escape backslashes. (Defaults when colour is off)
+      -B              Escape backslashes. (defaults when colour is off)
       -m              Escape multibyte characters with their Unicode codepoint.
     #{BOLD_BEGIN}INPUT DATA#{BOLD_END}
       -b              Interpret input data as binary text
@@ -301,7 +298,7 @@ OptParse.new do |op|
   #                                            Escaping                                            #
   ##################################################################################################
 
-  op.separator 'ESCAPES', '(Change the default output behaviour. -p, -d, -., -x, and -o are mutually exclusive)'
+  op.separator 'ESCAPES', '(Change the default output behaviour. -p, -d, -., -x, -o, and -P are mutually exclusive)'
 
   op.on '-p', '--escape-by-print', 'Print escaped chars verbatim' do
     Patterns.default_action = Patterns::PRINT
@@ -323,12 +320,12 @@ OptParse.new do |op|
     Patterns.default_action = Patterns::OCTAL
   end
 
-  op.on '--escape-charset=CHARSET', 'Explicitly set the charset that -p, -d, -., and -x use' do |cs|
-    Patterns.default_charset = cs
+  op.on '-P', '--escape-by-pictures', 'Print out pictures for some chars; others use hex' do
+    Patterns.default_action = Patterns::PICTURES
   end
 
-  op.on '-P', '--[no-]escape-by-pictures', "Print out pictures \\0-\\x20 and \\x7F; Doesn't affect other chars" do |cs|
-    Patterns.default_pictures = cs
+  op.on '--escape-charset=CHARSET', 'Explicitly set the charset that -p, -d, -., and -x use' do |cs|
+    Patterns.default_charset = cs
   end
 
   $escape_surronding_spaces = true
