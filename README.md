@@ -64,7 +64,13 @@ hello\^Dworld, how are you? \M-C\M-p\M^_\M^Q\M^M
 hello^Dworld, how are you? ??M-^_M-^QM-^M
 ```
 
-# Details
+# Encodings
+
+# How it works
+The way `p` works at a high-level is pretty easy: Every character in an input is checked against the list of escapes. If it matches, the first escape that matches is used. Otherwise, the char is printed verbatim. In list form:
+
+1. Is the byte/character illegal in the given encoding (eg byte `\xC3` in UTF-8)? If so, print the escape.
+
 
 # Charsets
 

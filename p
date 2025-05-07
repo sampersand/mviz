@@ -251,7 +251,6 @@ OptParse.new do |op|
 
   # We intentionally don't have a `--no-files` options, as this is used to change how remaining
   # arguments are parsed.
-  $files = false
   op.on '-f', '--files', 'Interpret trailing options as filenames to read' do
     $files = true
   end
