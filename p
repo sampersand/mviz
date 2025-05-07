@@ -40,6 +40,14 @@ PROGRAM_NAME = File.basename($0, '.*')
 def abort(message) super "#{PROGRAM_NAME}: #{message}" end
 def warn(message)  super "#{PROGRAM_NAME}: #{message}" end
 
+## Converts a string's bytes to their `\xHH` escaped version
+# it's here because `hex_bytes` is frequently used
+class String
+  def hex_bytes
+    each_byte.map { |byte| '\x%02X' % byte }.join
+  end
+end
+
 ####################################################################################################
 #                                                                                                  #
 #                                             Patterns                                             #
@@ -57,7 +65,7 @@ module Patterns
   PRINT      = ->char { char }
   DELETE     = ->_char{ $SOMETHING_ESCAPED = true; '' }
   DOT        = ->_char { visualize '.' }
-  HEX        = ->char { visualize hex_bytes char }
+  HEX        = ->char { visualize char.hex_bytes }
   OCTAL      = ->char { visualize char.each_byte.map { |byte| '\%03o' % byte }.join }
   CODEPOINTS = ->char { visualize '\u{%04X}' % char.ord }
   C_ESCAPES  = ->char { visualize C_ESCAPES_MAP.fetch(char) }
@@ -78,7 +86,7 @@ module Patterns
     when (ce = C_ESCAPES_MAP[char])
       visualize ce
     when char <= "\x1F", char == "\x7F", ($encoding == Encoding::BINARY && "\x7F" <= char)
-      visualize hex_bytes char
+      visualize char.hex_bytes
     else
       char
     end
@@ -289,18 +297,22 @@ OptParse.new do |op|
   end
 
   # TODO: Should `--prefixes`, `--one-per-line`, and `--no-prefixes-or-newline` be collapsed?
+  $trailing_newline = true
   op.on '--prefixes', "Add \"prefixes\". (default if stdout's a tty, and args are given)" do
     $prefixes = true
+    $trailing_newline = true
   end
 
   op.on '-1', '--one-per-line', "Print each arg on its own line. (default when --prefixes isn't)" do
     $prefixes = false
+    $trailing_newline = true
   end
 
   # No need to have an option to set `$trailing_newline` on its own to false, as it's useless
   # when `$prefixes` is truthy.
   op.on '-n', '--no-prefixes-or-newline', 'Disables both prefixes and trailing newlines' do
-    $prefixes = $trailing_newline = false
+    $prefixes = false
+    $trailing_newline = false
   end
 
   ##################################################################################################
@@ -527,7 +539,6 @@ end
 # Specify defaults
 defined? $prefixes         or $prefixes = $stdout.tty? && (!$*.empty? || (defined?($files) && $files))
 defined? $files            or $files = !$stdin.tty? && $*.empty?
-defined? $trailing_newline or $trailing_newline = true
 defined? $encoding         or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 # ^ Escape things above `\x80` by replacing them with their codepoints if in utf-8 mode, and "make everything hex" wasn't requested
 $quiet and $stdout = File.open(File::NULL, 'w')
@@ -554,11 +565,6 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-# Converts a string's bytes to their `\xHH` escaped version
-def hex_bytes(string)
-  string.each_byte.map { |byte| '\x%02X' % byte }.join
-end
-
 # Visualizes `string` by surrounding it with the visual escape sequences if visual mode is enabled.
 # Also, sets the variable `$SOMETHING_ESCAPED` regardless of visual mode for `--check-escapes`.
 def visualize(string, start=VISUAL_BEGIN, stop=VISUAL_END)
@@ -583,7 +589,7 @@ ESCAPES_CACHE = Hash.new do |hash, key|
   hash[key] =
     if !key.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$malformed_error`.
-      visualize(hex_bytes(key), VISUAL_ERR_BEGIN, VISUAL_ERR_END)
+      visualize(key.hex_bytes, VISUAL_ERR_BEGIN, VISUAL_ERR_END)
     else
       Patterns.handle(key)
     end
@@ -603,7 +609,6 @@ end
 $stdout.binmode
 $stdin.binmode.set_encoding $encoding
 
-# TODO: optimize this later
 def print_escapes(has_each_char, suffix = nil)
   ## Print out each character in the file, or their escapes. We capture the last printed character,
   # so that we can match it in the following block. (We don't want to print newlines if the last
@@ -720,7 +725,7 @@ rescue => err
   ## Whenever an error occurs, we want to handle it, but not bail out: We want to print every file
   # we're given (like `cat`), reporting errors along the way, and then exiting with a non-zero exit
   # status if there's a problem.
-  warn err       # Warn of the problem
+  warn err           # Warn of the problem
   @FILE_ERROR = true # For use when we're exiting
 ensure
   ## Regardless of whether an exception occurred, attempt to close the file after each execution.
@@ -728,7 +733,7 @@ ensure
   # be reading from it later on. Additionally any problems closing the file are silently swallowed,
   # as we only care about problems opening/reading files, not closing them.
   unless file.nil? || file.equal?($stdin) # file can be `nil` if opening it failed
-    file.close rescue nil
+    file.close rescue nil # We don't care about problems closing it
   end
 end
 
