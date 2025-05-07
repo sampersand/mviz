@@ -208,7 +208,6 @@ OptParse.new do |op|
       -q              Don't output anything. (Useful with -c)
       -1              Don't print a "prefix" to arguments, but do print newlines
       -n              Don't print either "prefixes" nor newlines for arguments
-      --color=WHAT    Change colour output (options: always/never/auto)
     #{BOLD_BEGIN}ESCAPES#{BOLD_END} (All are mutually exclusive)
       -x              Print escaped chars in hex notation (\\xHH)
       -o              Print escaped chars in octal notation (\\###)
@@ -374,7 +373,8 @@ OptParse.new do |op|
     Patterns.add_charset(Patterns::LAMBDA_FOR_MULTIBYTE, Patterns::CODEPOINTS)
   end
 
-  op.on '-a', '--escape-all', "Escape _all_ characters. (Same as --escape-charset='\\A')" do
+  op.on '-a', '--escape-all', "Mark all characters as escaped. (Same as --escape-charset='\\A')",
+                              'Does nothing alone; it needs to be used with an "ESCAPES" flag' do
     Patterns.default_charset = /./m
   end
 
