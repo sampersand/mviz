@@ -212,19 +212,19 @@ OptParse.new do |op|
       -1              Don't print a "prefix" to arguments, but do print newlines
       -n              Don't print either "prefixes" nor newlines for arguments
       --color=WHAT    Change colour output (options: always/never/auto)
-    #{BOLD_BEGIN}ESCAPES#{BOLD_END} (-x, -o, -d, -p, -. are mutually exclusive)
+    #{BOLD_BEGIN}ESCAPES#{BOLD_END} (All but '-P' are mutually exclusive)
       -x              Print escaped chars in hex notation (\\xHH)
       -o              Print escaped chars in octal notation (\\###)
       -d              Delete escaped chars from the output
       -p              Print escaped chars unchanged
       -.              Replace escaped chars with periods
       -P              Replace some escaped chars with their "pictures"
-    #{BOLD_BEGIN}SHORTHANDS FOR COMMON ESCAPES#{BOLD_END}
+    #{BOLD_BEGIN}SPECIFIC ESCAPES#{BOLD_END}
       -l              Don't escape newlines.
       -w              Don't escape newlines, tabs, or spaces
-      -s              Escape spaces
+      -s, -S          Escape spaces by highlighting it/with "pictures"
       -B              Escape backslashes. (Defaults when colour is off)
-      -m, -u          Escape multibyte characters with their Unicode codepoint.
+      -m              Escape multibyte characters with their Unicode codepoint.
     #{BOLD_BEGIN}INPUT DATA#{BOLD_END}
       -b              Interpret input data as binary text
       -A              Interpret input data as ASCII; like -b, except invalid bytes
