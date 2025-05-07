@@ -257,20 +257,18 @@ OptParse.new do |op|
     $DEBUG = $VERBOSE = true
   end
 
-  # We intentionally don't have a `--no-files` options, as this is used to change how remaining
-  # arguments are parsed.
-  op.on '-f', '--files', 'Interpret trailing options as filenames to read' do
-    $files = true
+  op.on '-f', '--[no-]files', 'Interpret trailing options as filenames to read' do |f|
+    $files = f
   end
 
   $malformed_error = true
-  op.on '--[no-]malformed-error', 'Invalid chars in the --encoding a cause nonzero exit. (default)' do |me|
+  op.on '--[no-]malformed-error', 'Invalid chars in the --encoding cause exit status 2. (default)' do |me|
     $malformed_error = me
   end
 
   $escape_error = false
-  op.on '-c', '--[no-]check-escapes', 'Return nonzero if any character is escaped. Useful to check',
-                                      'inputs programmatically to ensure they are "normal".' do |ee|
+  op.on '-c', '--[no-]check-escapes', 'Exits with status 1 if any character is escaped. Useful to',
+                                      'check inputs programmatically to ensure they are "normal".' do |ee|
     $escape_error = ee
   end
 
@@ -308,9 +306,9 @@ OptParse.new do |op|
     $trailing_newline = true
   end
 
-  # No need to have an option to set `$trailing_newline` on its own to false, as it's useless
-  # when `$prefixes` is truthy.
   op.on '-n', '--no-prefixes-or-newline', 'Disables both prefixes and trailing newlines' do
+    # No need to have an option to set `$trailing_newline` on its own to false, as it's useless
+    # when `$prefixes` is truthy.
     $prefixes = false
     $trailing_newline = false
   end
@@ -517,6 +515,14 @@ OptParse.new do |op|
     If more than pattern matches, the last one supplied on the command line wins.
   EOS
 
+  op.separator 'EXIT CODES'
+  op.on <<~'EOS'
+    Specific exit codes are used:
+      - 0: No problems encountered
+      - 1: There was a problem opening a file
+  EOS
+
+
   ##################################################################################################
   #                                         Parse Options                                          #
   ##################################################################################################
@@ -537,10 +543,9 @@ end
 ####################################################################################################
 
 # Specify defaults
-defined? $prefixes         or $prefixes = $stdout.tty? && (!$*.empty? || (defined?($files) && $files))
-defined? $files            or $files = !$stdin.tty? && $*.empty?
-defined? $encoding         or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
-# ^ Escape things above `\x80` by replacing them with their codepoints if in utf-8 mode, and "make everything hex" wasn't requested
+defined? $prefixes or $prefixes = $stdout.tty? && (!$*.empty? || (defined?($files) && $files))
+defined? $files    or $files = !$stdin.tty? && $*.empty?
+defined? $encoding or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 $quiet and $stdout = File.open(File::NULL, 'w')
 
 PATTERNS = Patterns.build!
@@ -549,12 +554,26 @@ PATTERNS = Patterns.build!
 # newline between each header, which is weird.
 $trailing_newline ||= $prefixes
 
-at_exit do
-  next if $! # If there's an exception, then just yield that
+####################################################################################################
+#                                                                                                  #
+#                                          Exit Statuses                                           #
+#                                                                                                  #
+####################################################################################################
 
-  if $malformed_error && ($ENCODING_FAILED ||= false)
+# Set the defaults for the options
+$ENCODING_FAILED = $SOMETHING_ESCAPED = false
+
+# Change the exit status to reflect `--malformed-error` / `--no-check-escapes`
+at_exit do
+  # `at_exit` runs even when exiting via an exception, but we only change the exit status upon a
+  # normal return.
+  next if $!
+
+  # We have specific exit codes for the different conditions, but they're documented as just
+  # "non-zero exit statuses."
+  if $malformed_error && $ENCODING_FAILED
     exit 1
-  elsif $escape_error && ($SOMETHING_ESCAPED ||= false)
+  elsif $escape_error && $SOMETHING_ESCAPED
     exit 1
   end
 end
