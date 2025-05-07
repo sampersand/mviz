@@ -241,7 +241,7 @@ OptParse.new do |op|
     exit
   end
 
-  op.on '--debug', 'Enable internal debugging code' do
+  op.on '--debug', 'Enable internal debugging code.' do
     $DEBUG = $VERBOSE = true
   end
 
@@ -255,14 +255,15 @@ OptParse.new do |op|
   end
 
   $escape_error = false
-  op.on '-c', '--[no-]check-escapes', 'Return nonzero if _any_ character is escaped' do |ee|
+  op.on '-c', '--[no-]check-translations', 'Return nonzero if _any_ character is translated. Useful to',
+                                           'programmatically check inputs to ensure they are "normal".' do |ee|
     $escape_error = ee
   end
 
   ##################################################################################################
   #                                       Separating Outputs                                       #
   ##################################################################################################
-  op.separator 'OUTPUT FORMAT', "(They're all mutually exclusive; last one wins.)"
+  op.separator 'OUTPUTS'
 
   $quiet = false
   op.on '-q', '--[no-]quiet', 'Do not output anything. (Useful with -c or --malformed-error)' do |q|
@@ -276,19 +277,9 @@ OptParse.new do |op|
       when 'always', nil  then true
       when 'never', false then false
       when 'auto'         then USE_COLOR_DEFAULT
-      else fail
+      else fail # Should never happen, as a list of valid options is given via `%w[...]`.
       end
   end
-
-=begin
-  op.on '-v', '--visualize', 'Enable visual effects. (default only if stdout is tty)' do
-    $use_color = true
-  end
-
-  op.on '-V', '--no-visualize', 'Do not enable visual effects' do
-    $use_color = false
-  end
-=end
 
   op.on '--prefixes', "Add \"prefixes\". (default if stdout's a tty, and args are given)" do
     $prefixes = true
@@ -332,6 +323,11 @@ OptParse.new do |op|
 
   op.on '-P', '--[no-]translate-by-pictures', "Print out pictures \\0-\\x20 and \\x7F; Doesn't affect other chars" do |cs|
     Patterns.default_pictures = cs
+  end
+
+  $escape_surronding_spaces = true
+  op.on '--[no-]translate-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
+    $escape_surronding_spaces = ess
   end
 
   ## =====
@@ -379,20 +375,12 @@ OptParse.new do |op|
     Patterns.add_charset(cs, Patterns::DELETE)
   end
 
-  op.on '--dot[=CHARSET]', "Replaces CHARSET with a period ('.')" do |cs|
-    if cs
-      Patterns.add_charset(cs, Patterns::DOT)
-    else
-      Patterns.default_action = Patterns::DOT
-    end
+  op.on '--dot CHARSET', "Replaces CHARSET with a period ('.')" do |cs|
+    Patterns.add_charset(cs, Patterns::DOT)
   end
 
-  op.on '--hex[=CHARSET]', 'Replaces characters with their hex value (\xHH)' do |cs|
-    if cs
-      Patterns.add_charset(cs, Patterns::HEX)
-    else
-      Patterns.default_action = Patterns::HEX
-    end
+  op.on '--hex CHARSET', 'Replaces characters with their hex value (\xHH)' do |cs|
+    Patterns.add_charset(cs, Patterns::HEX)
   end
 
   op.on '--codepoint CHARSET', 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
@@ -415,11 +403,6 @@ OptParse.new do |op|
   op.on '--c-escape CHARSET', 'Replaces chars with their C escapes; Attempts to generate',
                               "c-escapes for non-'#{Patterns::C_ESCAPES_DEFAULT.source}' is an error" do |cs|
     Patterns.add_charset(cs, Patterns::C_ESCAPES)
-  end
-
-  $escape_surronding_spaces = true
-  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
-    $escape_surronding_spaces = ess
   end
 
   ##################################################################################################
@@ -556,7 +539,7 @@ def hex_bytes(string)
 end
 
 # Visualizes `string` by surrounding it with the visual escape sequences if visual mode is enabled.
-# Also, sets the variable `$SOMETHING_ESCAPED` regardless of visual mode for `--check-escapes`.
+# Also, sets the variable `$SOMETHING_ESCAPED` regardless of visual mode for `--check-translations`.
 def visualize(string, start=VISUAL_BEGIN, stop=VISUAL_END)
   $SOMETHING_ESCAPED = true
 
