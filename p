@@ -103,7 +103,7 @@ module Patterns
   def create_charset(selector)
     case selector
     when '\A'         then /./m
-    when '\@'         then default_charset_computed
+    when '\E'         then default_charset_computed
     when '\m'         then LAMBDA_FOR_MULTIBYTE
     when '\M'         then LAMBDA_FOR_SINGLEBYTE
     when String       then Regexp.new("[#{selector}]".force_encoding($encoding))
@@ -467,14 +467,14 @@ OptParse.new do |op|
   #                                        Environment Vars                                        #
   ##################################################################################################
   op.separator 'ENVIRONMENT VARIABLES'
-  op.on <<-EOS # Note: `-EOS` not `~EOS` to keep leading spaces
+  op.on <<-'EOS' # Note: `-EOS` not `~EOS` to keep leading spaces
     FORCE_COLOR, NO_COLOR
       Controls `--color=auto`. If FORCE_COLOR is set and nonempty, acts like `--color=always`. Else,
       if NO_COLOR is set and nonempty, acts like `--color=never`. If neither is set to a non-empty
       value, `--color=auto` defaults to `--color=always` when stdout is a tty.
 
     POSIXLY_CORRECT
-      If present, changes the default `--encoding` to be the locale's (cf locale(1).), and also
+      If present, changes the default `--encoding` to be `locale` (cf locale(1).), and also
       disables parsing switches after arguments (e.g. passing in `foo -x` as arguments will not
       interpret `-x` as a switch).
 
@@ -483,26 +483,26 @@ OptParse.new do |op|
       sane defaults.
 
     P_VISUAL_ERR_BEGIN, P_VISUAL_ERR_END
-      Like P_VISUAL_BEGIN/P_VISUAL_END, except for invalid bytes (eg \\xC3 in --utf-8)
+      Like P_VISUAL_BEGIN/P_VISUAL_END, except for invalid bytes (eg 0xC3 in --utf-8)
 
     LC_ALL, LC_CTYPE, LANG
        Checked (in that order) for the encoding when --encoding=locale is used.
   EOS
 
-  #######
-  #######
-  #######
+  ##################################################################################################
+  #                                      CHARSET Description                                       #
+  ##################################################################################################
 
   op.separator 'CHARSETS'
   op.on <<~'EOS'
     A 'CHARSET' is a regex character without the surrounding brackets (for example, --delete='^a-z' will
     only output lowercase letters.) In addition to normal escapes (eg '\n' for newlines, '\w' for "word"
     characters, etc), some other special sequences are accepted:
-      - '\A' matches all chars (--print='\A' would print out every character)
-      - '\m' matches multibyte characters (only useful if input data is utf-8, the default.)
-      - '\M' matches all single-byte characters
-      - '\@' matches the default charset. (i.e. --print is equiv to --print='\@')
-    If more than pattern matches, the last-most one wins.
+      - '\A' matches all chars (so `--print='\A'` would print out every character)
+      - '\m' matches multibyte characters (only useful if input data is multibyte like, UTF-8.)
+      - '\M' matches all single-byte characters (i.e. anything \m doesn't match)
+      - '\E' matches the charset "ESCAPES" uses (so `--hex='\E'` is equivalent to `--escape-by-hex`)
+    If more than pattern matches, the last one supplied on the command line wins.
   EOS
 
   ##################################################################################################
