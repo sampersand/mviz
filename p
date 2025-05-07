@@ -213,7 +213,8 @@ OptParse.new do |op|
       -n              Don't print either "prefixes" nor newlines for arguments
       --color=WHAT    Change colour output (options: always/never/auto)
     #{BOLD_BEGIN}ESCAPES#{BOLD_END} (-x, -d, -p, -. are mutually exclusive)
-      -x              Print escaped chars in hex-notation (\\xHH)
+      -x              Print escaped chars in hex notation (\\xHH)
+      -o              Print escaped chars in octal notation (\\###)
       -d              Delete escaped chars from the output
       -p              Print escaped chars unchanged
       -.              Replace escaped chars with periods
