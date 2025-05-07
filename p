@@ -179,7 +179,7 @@ BOLD_END         = (ENV.fetch('P_BOLD_END',   "\e[0m") if $use_color)
 
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
-  op.version = '0.9.1'
+  op.version = '0.10.0'
   op.banner = <<~BANNER
   #{VISUAL_BEGIN if $use_color}usage#{VISUAL_END if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
