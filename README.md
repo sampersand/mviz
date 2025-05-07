@@ -37,7 +37,7 @@ $ p $variable
 
 Try `p -h` for short usage, and `p --help` for the longer one.
 
-## Why not use tool X (`xxd`, `hexdmp`, `vis`, `od`, etc)?
+# Why not use tool X (`xxd`, `hexdmp`, `vis`, `od`, etc)?
 The biggest difference between `p` and other tools is that `p` is intended for looking at text (not binary data) by default, and optimizes for that. (It doesn't change the output _unless_ weird characters exist.) For example:
 ```bash
 % printf 'hello\x04world, how are you? \xC3👍\n' | p
@@ -64,6 +64,12 @@ hello\^Dworld, how are you? \M-C\M-p\M^_\M^Q\M^M
 hello^Dworld, how are you? ??M-^_M-^QM-^M
 ```
 
+# Details
+
+# Charsets
+
+<!--
+
 ## TODO
 - Should I add an `--highlight-means-error` flag (name subject to bikeshed)? I.e. if there's _any_ form of highlights, return an error. (done)
 - Should make `-l` not `--unescape='\n'` but instead act like `/\R/` (ie platform-indep line sep)?
@@ -89,3 +95,4 @@ If a character is to be escaped, it goes through the following steps:
 
 ---
 allenc=( $(i --list-encodings | awk '{$1=$2=""; print}' | tr ',' '\n' | tr -d ' ') )
+ -->

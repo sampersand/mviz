@@ -211,12 +211,12 @@ OptParse.new do |op|
       -1              Don't print a "prefix" to arguments, but do print newlines
       -n              Don't print either "prefixes" nor newlines for arguments
       --color=WHAT    Change colour output (options: always/never/auto)
-    #{BOLD_BEGIN}TRANSLATIONS#{BOLD_END} (-x, -d, -p, -. are mutually exclusive)
-      -x              Print translated chars in hex-notation (\\xHH)
-      -d              Delete translated chars from the output
-      -p              Print translated chars unchanged
-      -.              Replace translated chars with periods
-      -P              Translate some chars with their "pictures"
+    #{BOLD_BEGIN}ESCAPES#{BOLD_END} (-x, -d, -p, -. are mutually exclusive)
+      -x              Print escaped chars in hex-notation (\\xHH)
+      -d              Delete escaped chars from the output
+      -p              Print escaped chars unchanged
+      -.              Replace escaped chars with periods
+      -P              Replace some escaped chars with their "pictures"
     #{BOLD_BEGIN}SHORTHANDS FOR COMMON ESCAPES#{BOLD_END}
       -l              Don't escape newlines.
       -w              Don't escape newlines, tabs, or spaces
@@ -255,8 +255,8 @@ OptParse.new do |op|
   end
 
   $escape_error = false
-  op.on '-c', '--[no-]check-translations', 'Return nonzero if _any_ character is translated. Useful to',
-                                           'programmatically check inputs to ensure they are "normal".' do |ee|
+  op.on '-c', '--[no-]check-escapes', 'Return nonzero if _any_ character is escaped. Useful to',
+                                      'programmatically check inputs to ensure they are "normal".' do |ee|
     $escape_error = ee
   end
 
@@ -299,29 +299,29 @@ OptParse.new do |op|
   #                                            Escaping                                            #
   ##################################################################################################
 
-  op.separator 'TRANSLATIONS', '(Change the default output behaviour. -p, -d, -., and -x are mutually exclusive)'
+  op.separator 'ESCAPES', '(Change the default output behaviour. -p, -d, -., and -x are mutually exclusive)'
 
-  op.on '-p', '--translate-by-print', 'Print translated chars verbatim' do
+  op.on '-p', '--escape-by-print', 'Print escaped chars verbatim' do
     Patterns.default_action = Patterns::PRINT
   end
 
-  op.on '-d', '--translate-by-delete', 'Delete translated chars' do
+  op.on '-d', '--escape-by-delete', 'Delete escaped chars' do
     Patterns.default_action = Patterns::DELETE
   end
 
-  op.on '-.', '--translate-by-dot', "Replace translated chars with '.'" do
+  op.on '-.', '--escape-by-dot', "Replace escaped chars with '.'" do
     Patterns.default_action = Patterns::DOT
   end
 
-  op.on '-x', '--translate-by-hex', 'Output hex escape (\xHH) for translated chars' do
+  op.on '-x', '--escape-by-hex', 'Output hex escape (\xHH) for escaped chars' do
     Patterns.default_action = Patterns::HEX
   end
 
-  op.on '--translate-charset=CHARSET', 'Explicitly set the charset that -p, -d, -., and -x use' do |cs|
+  op.on '--escape-charset=CHARSET', 'Explicitly set the charset that -p, -d, -., and -x use' do |cs|
     Patterns.default_charset = cs
   end
 
-  op.on '-P', '--[no-]translate-by-pictures', "Print out pictures \\0-\\x20 and \\x7F; Doesn't affect other chars" do |cs|
+  op.on '-P', '--[no-]escape-by-pictures', "Print out pictures \\0-\\x20 and \\x7F; Doesn't affect other chars" do |cs|
     Patterns.default_pictures = cs
   end
 
@@ -365,7 +365,7 @@ OptParse.new do |op|
   ########
   ########
 
-  op.separator 'SPECIFIC TRANSLATIONS', '(Takes precedence over "TRANSLATIONS"; Ties go to the last one specified)'
+  op.separator 'SPECIFIC ESCAPES', '(Takes precedence over "ESCAPES"; Ties go to the last one specified)'
 
   op.on '--print CHARSET', 'Print characters, unchanged, which match CHARSET' do |cs|
     Patterns.add_charset(cs, Patterns::PRINT)
@@ -539,7 +539,7 @@ def hex_bytes(string)
 end
 
 # Visualizes `string` by surrounding it with the visual escape sequences if visual mode is enabled.
-# Also, sets the variable `$SOMETHING_ESCAPED` regardless of visual mode for `--check-translations`.
+# Also, sets the variable `$SOMETHING_ESCAPED` regardless of visual mode for `--check-escapes`.
 def visualize(string, start=VISUAL_BEGIN, stop=VISUAL_END)
   $SOMETHING_ESCAPED = true
 
