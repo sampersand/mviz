@@ -217,8 +217,7 @@ OptParse.new do |op|
       -1              Print one argument per line, but don't add "prefixes"
       -n              Print spaces between arguments, and omit the trailing newline.
     #{BOLD_BEGIN}ESCAPES#{BOLD_END} (All are mutually exclusive)
-      -x              Print escaped chars in hex notation (\\xHH)
-      -o              Print escaped chars in octal notation (\\###)
+      -x, -o          Print escaped chars in hex/octal notation
       -d              Delete escaped chars from the output
       -p              Print escaped chars unchanged
       -.              Replace escaped chars with a period ('.')
@@ -229,11 +228,11 @@ OptParse.new do |op|
       -s, -S          Escape spaces by highlighting it/with "pictures"
       -B              Escape backslashes. (defaults when colour is off)
       -m              Escape multibyte characters with their Unicode codepoint.
-      -a              Escape _every_ character
+      -a              Escape _every_ character. (Must be used with an "ESCAPES")
     #{BOLD_BEGIN}INPUT DATA#{BOLD_END}
-      -b              Interpret input data as binary text
-      -A              Interpret input data as ASCII; like -b, except invalid bytes
-      -8              Interpret input data as UTF-8
+      -b              Interpret inputs as binary text
+      -A              Interpret inputs as ASCII; like -b, except has invalid bytes
+      -8              Interpret inputs as UTF-8
     EOS
     exit
   end
