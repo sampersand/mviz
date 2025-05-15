@@ -60,7 +60,7 @@ module Patterns
     "\n" => '\n', "\v" => '\v', "\f" => '\f', "\r" => '\r',
     "\e" => '\e', "\\" => '\\\\',
   }
-  C_ESCAPES_DEFAULT = C_ESCAPES_MAP.keys.map{_1.inspect[1..-2]}.join.sub('u000','')
+  C_ESCAPES_DEFAULT = C_ESCAPES_MAP.keys.map{|x|x.inspect[1..-2]}.join.sub('u000','')
 
   PRINT      = ->char { char }
   DELETE     = ->_char{ $SOMETHING_ESCAPED = true; '' }
