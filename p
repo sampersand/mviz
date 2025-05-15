@@ -184,7 +184,7 @@ BOLD_END         = (ENV.fetch('P_BOLD_END',   "\e[0m") if $use_color)
 
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
-  op.version = '0.10.0'
+  op.version = '0.10.1'
   op.banner = <<~BANNER
   #{VISUAL_BEGIN if $use_color}usage#{VISUAL_END if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
@@ -214,8 +214,8 @@ OptParse.new do |op|
       -f              Interpret all arguments as filenames, not strings
       -c              Check if any escapes are printed, and exit nonzero if so.
       -q              Don't output anything. (Useful with -c)
-      -1              Don't print a "prefix" to arguments, but do print newlines
-      -n              Don't print either "prefixes" nor newlines for arguments
+      -1              Print one argument per line, but don't add "prefixes"
+      -n              Print spaces between arguments, and omit the trailing newline.
     #{BOLD_BEGIN}ESCAPES#{BOLD_END} (All are mutually exclusive)
       -x              Print escaped chars in hex notation (\\xHH)
       -o              Print escaped chars in octal notation (\\###)
@@ -306,7 +306,7 @@ OptParse.new do |op|
     $trailing_newline = true
   end
 
-  op.on '-n', '--no-prefixes-or-newline', 'Disables both prefixes and trailing newlines' do
+  op.on '-n', '--no-prefixes-or-newline', 'Disables both prefixes and trailing newlines', 'Spaces are printed between args unless -f is given' do
     # No need to have an option to set `$trailing_newline` on its own to false, as it's useless
     # when `$prefixes` is truthy.
     $prefixes = false
@@ -587,12 +587,14 @@ end
 
 # Visualizes `string` by surrounding it with the visual escape sequences if visual mode is enabled.
 # Also, sets the variable `$SOMETHING_ESCAPED` regardless of visual mode for `--check-escapes`.
-def visualize(string, start=VISUAL_BEGIN, stop=VISUAL_END)
-  $SOMETHING_ESCAPED = true
-
-  if $use_color
+if $use_color
+  def visualize(string, start=VISUAL_BEGIN, stop=VISUAL_END)
+    $SOMETHING_ESCAPED = true
     "#{start}#{string}#{stop}"
-  else
+  end
+else
+  def visualize(string, start=nil, stop=nil)
+    $SOMETHING_ESCAPED = true
     string
   end
 end
@@ -663,7 +665,11 @@ end
 unless $files
   ARGV.each_with_index do |string, idx|
     # Print out the prefix if a header was requested
-    printf '%5d: ', idx + 1 if $prefixes
+    if $prefixes
+      printf '%5d: ', idx + 1
+    elsif !$trailing_newline && idx.nonzero?
+      print ' '
+    end
 
     # Unfortunately, `ARGV` strings are frozen, and we need to forcibly change the string's encoding
     # within `handle` so can iterate over the contents of the string in the new encoding. As such,
