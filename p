@@ -80,12 +80,11 @@ module Patterns
   }
 
   DEFAULT = ->char{
-    case
-    when char == '\\'
+    if char == '\\'
       $use_color ? '\\' : '\\\\'
-    when (ce = C_ESCAPES_MAP[char])
+    elsif (ce = C_ESCAPES_MAP[char])
       visualize ce
-    when char <= "\x1F", char == "\x7F", ($encoding == Encoding::BINARY && "\x7F" <= char)
+    elsif char <= "\x1F" || char == "\x7F" || ($encoding == Encoding::BINARY && "\x7F" <= char)
       visualize char.hex_bytes
     else
       char
@@ -114,7 +113,7 @@ module Patterns
     when '\E'         then default_charset_computed
     when '\m'         then LAMBDA_FOR_MULTIBYTE
     when '\M'         then LAMBDA_FOR_SINGLEBYTE
-    when String       then Regexp.new("[#{selector}]".force_encoding($encoding))
+    when String       then Regexp.new((+"[#{selector}]").force_encoding($encoding)) # TODO: WHY is this frozen in ruby 2.6.10
     when Regexp, Proc then selector
     else raise "fail: bad charset '#{selector.inspect}'"
     end
@@ -126,10 +125,20 @@ module Patterns
         create_charset @default_charset
       elsif @default_charset == false
         ->char { false }
-      elsif $encoding == Encoding::BINARY
-        Regexp.new (+"[\0-\x1F\x7F-\xFF]").force_encoding(Encoding::BINARY)
       else
-        /[\0-\x1F\x7F]/
+        # Universal default character class; encode it in whatever the encoding we're using is.
+        regex = (+'[\0-\x1F\x7F').force_encoding $encoding
+
+        # Add the upper range if in binary
+        regex.concat '-\xFF' if $encoding == Encoding::BINARY
+
+        # If we're using the default action, and we're using colours, then also add backslash to the
+        # list of escapes. We need to use a double backslash so it interpolates correctly.
+        regex.concat '\\\\' if @default_action == DEFAULT && !$use_color
+
+        # Finish the character class
+        regex.concat ']'
+        Regexp.new regex
       end
   end
 
@@ -175,18 +184,18 @@ USE_COLOR_DEFAULT = $use_color =
   end
 
 # Fetch standout constants (regardless of whether we're using them, as they're used as defaults)
-VISUAL_BEGIN     = ENV.fetch('P_VISUAL_BEGIN', "\e[7m")
-VISUAL_END       = ENV.fetch('P_VISUAL_END',   "\e[27m")
-VISUAL_ERR_BEGIN = ENV.fetch('P_VISUAL_ERR_BEGIN', "\e[37m\e[41m")
-VISUAL_ERR_END   = ENV.fetch('P_VISUAL_ERR_END',   "\e[49m\e[39m")
-BOLD_BEGIN       = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if $use_color)
-BOLD_END         = (ENV.fetch('P_BOLD_END',   "\e[0m") if $use_color)
+STANDOUT_BEGIN     = ENV.fetch('P_STANDOUT_BEGIN', "\e[7m")
+STANDOUT_END       = ENV.fetch('P_STANDOUT_END',   "\e[27m")
+STANDOUT_ERR_BEGIN = ENV.fetch('P_STANDOUT_ERR_BEGIN', "\e[37m\e[41m")
+STANDOUT_ERR_END   = ENV.fetch('P_STANDOUT_ERR_END',   "\e[49m\e[39m")
+BOLD_BEGIN         = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if $use_color)
+BOLD_END           = (ENV.fetch('P_BOLD_END',   "\e[0m") if $use_color)
 
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
   op.version = '0.10.1'
   op.banner = <<~BANNER
-  #{VISUAL_BEGIN if $use_color}usage#{VISUAL_END if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
+  #{STANDOUT_BEGIN if $use_color}usage#{STANDOUT_END if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
          #{BOLD_BEGIN}#{op.program_name} -f [options] [file ...]#{BOLD_END}  # Read from files
   When no args are given, first form is assumed if stdin is not a tty.
@@ -226,7 +235,7 @@ OptParse.new do |op|
       -l              Don't escape newlines.
       -w              Don't escape newlines, tabs, or spaces
       -s, -S          Escape spaces by highlighting it/with "pictures"
-      -B              Escape backslashes. (defaults when colour is off)
+      -B              Escape backslashes. (default unless colour or "ESCAPES" given)
       -m              Escape multibyte characters with their Unicode codepoint.
       -a              Escape _every_ character. (Must be used with an "ESCAPES")
     #{BOLD_BEGIN}INPUT DATA#{BOLD_END}
@@ -316,7 +325,7 @@ OptParse.new do |op|
   #                                            Escapes                                             #
   ##################################################################################################
 
-  op.separator 'ESCAPES', '(Change the default output behaviour. -p, -d, -., -x, -o, and -P are mutually exclusive)'
+  op.separator 'ESCAPES', '(Change the default output behaviour. All --escape-by-XXX are mutually exclusive)'
 
   op.on '-p', '--escape-by-print', 'Print escaped chars verbatim' do
     Patterns.default_action = Patterns::PRINT
@@ -340,6 +349,10 @@ OptParse.new do |op|
 
   op.on '-P', '--escape-by-pictures', 'Print out pictures for some chars; others use hex' do
     Patterns.default_action = Patterns::PICTURES
+  end
+
+  op.on '--escape-by-default', 'Use the default escape action' do
+    Patterns.default_action = Patterns::DEFAULT
   end
 
   op.on '--escape-charset CHARSET', 'Explicitly set the charset that -p, -d, -., and -x use' do |cs|
@@ -373,7 +386,7 @@ OptParse.new do |op|
   end
 
   op.on '-B', '--escape-backslashes', "Escape backslashes as '\\\\'. (Same as --c-escape='\\\\')",
-                                      '(default if not visual mode)' do |eb|
+                                      '(Default if not in colour mode, and no --escape-by was given)' do |eb|
     Patterns.add_charset(/\\/, Patterns::C_ESCAPES)
   end
 
@@ -487,12 +500,12 @@ OptParse.new do |op|
       disables parsing switches after arguments (e.g. passing in `foo -x` as arguments will not
       interpret `-x` as a switch).
 
-    P_VISUAL_BEGIN, P_VISUAL_END
-      Beginning and ending escape sequences for --visual; Usually don't need to be set, as they have
+    P_STANDOUT_BEGIN, P_STANDOUT_END
+      Beginning and ending escape sequences for --colour; Usually don't need to be set, as they have
       sane defaults.
 
-    P_VISUAL_ERR_BEGIN, P_VISUAL_ERR_END
-      Like P_VISUAL_BEGIN/P_VISUAL_END, except for invalid bytes (eg 0xC3 in --utf-8)
+    P_STANDOUT_ERR_BEGIN, P_STANDOUT_ERR_END
+      Like P_STANDOUT_BEGIN/P_STANDOUT_END, except for invalid bytes (eg 0xC3 in --utf-8)
 
     LC_ALL, LC_CTYPE, LANG
        Checked (in that order) for the encoding when --encoding=locale is used.
@@ -584,10 +597,10 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-# Visualizes `string` by surrounding it with the visual escape sequences if visual mode is enabled.
-# Also, sets the variable `$SOMETHING_ESCAPED` regardless of visual mode for `--check-escapes`.
+# Visualizes `string` by surrounding it with the colour escape sequences if colour mode is enabled.
+# Also, sets the variable `$SOMETHING_ESCAPED` regardless of colour mode for `--check-escapes`.
 if $use_color
-  def visualize(string, start=VISUAL_BEGIN, stop=VISUAL_END)
+  def visualize(string, start=STANDOUT_BEGIN, stop=STANDOUT_END)
     $SOMETHING_ESCAPED = true
     "#{start}#{string}#{stop}"
   end
@@ -610,7 +623,7 @@ ESCAPES_CACHE = Hash.new do |hash, key|
   hash[key] =
     if !key.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$malformed_error`.
-      visualize(key.hex_bytes, VISUAL_ERR_BEGIN, VISUAL_ERR_END)
+      visualize(key.hex_bytes, STANDOUT_ERR_BEGIN, STANDOUT_ERR_END)
     else
       Patterns.handle(key)
     end
