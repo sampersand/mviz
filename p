@@ -94,6 +94,7 @@ module Patterns
   @patterns = []
   @default_charset = nil
   @default_action  = DEFAULT
+  @error_action = HEX
 
   module_function
 
@@ -193,7 +194,7 @@ BOLD_END           = (ENV.fetch('P_BOLD_END',   "\e[0m") if $use_color)
 
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
-  op.version = '0.11.0'
+  op.version = '0.11.1'
   op.banner = <<~BANNER
   #{STANDOUT_BEGIN if $use_color}usage#{STANDOUT_END if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
@@ -665,6 +666,7 @@ def print_escapes(has_each_char, suffix = nil)
   #    newline was unescaped (eg `-l`), then the last character may be a newline. This condition is
   #    to prevent a blank line in the output. (Kinda like how `puts "a\n"` only prints one newline.)
   puts if $trailing_newline && last != "\n" && (last != nil || $prefixes)
+  puts if $prefixes && $files
 end
 
 ####################################################################################################
@@ -755,7 +757,7 @@ ARGV.each do |filename|
     end
 
   ## Print out the filename, a colon, and a space if prefixes were requested.
-  print filename, ': ' if $prefixes
+  puts "==[#{filename}]==" if $prefixes
 
   ## Print the escapes for the file
   print_escapes file
