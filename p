@@ -184,6 +184,7 @@ USE_COLOR_DEFAULT = $use_color =
     $stdout.tty?
   end
 
+IS_POSIXLY_CORRECT = ENV.key?('POSIXLY_CORRECT')
 # Fetch standout constants (regardless of whether we're using them, as they're used as defaults)
 STANDOUT_BEGIN     = ENV.fetch('P_STANDOUT_BEGIN', "\e[7m")
 STANDOUT_END       = ENV.fetch('P_STANDOUT_END',   "\e[27m")
@@ -243,6 +244,7 @@ OptParse.new do |op|
       -b              Interpret inputs as binary text
       -A              Interpret inputs as ASCII; like -b, except has invalid bytes
       -8              Interpret inputs as UTF-8
+      -Eencoding      Specify the encoding directly
     EOS
     exit
   end
@@ -454,8 +456,11 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator 'ENCODINGS', '(default is normally --utf-8. If POSIXLY_CORRECT is set, --locale is the default)'
 
-  op.on '--encoding ENCODING', "Specify the input's encoding. Case-insensitive. Encodings that",
-                               "aren't ASCII-compatible encodings (eg UTF-16) are illegal." do |enc|
+  # Default value for the encoding
+  $encoding = IS_POSIXLY_CORRECT ? Encoding.find('locale') : Encoding::UTF_8
+
+  op.on '-E', '--encoding ENCODING', "Specify the input's encoding. Case-insensitive. Encodings that",
+                                     "aren't ASCII-compatible encodings (eg UTF-16) are illegal." do |enc|
     $encoding = Encoding.find enc rescue abort $!
     abort "Encoding #$encoding is not ASCII-compatible!" unless $encoding.ascii_compatible?
   end
@@ -559,10 +564,9 @@ end
 # Specify defaults
 defined? $prefixes or $prefixes = $stdout.tty? && (!$*.empty? || (defined?($files) && $files))
 defined? $files    or $files = !$stdin.tty? && $*.empty?
-defined? $encoding or $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 $quiet and $stdout = File.open(File::NULL, 'w')
 
-PATTERNS = Patterns.build!
+Patterns.build!
 
 ## Force `$trailing_newline` to be set if `$prefixes` are set, as otherwise there wouldn't be a
 # newline between each header, which is weird.
@@ -757,7 +761,7 @@ ARGV.each do |filename|
     end
 
   ## Print out the filename, a colon, and a space if prefixes were requested.
-  puts "==[#{filename}]==" if $prefixes
+  print BOLD_BEGIN, "==[#{filename}]==", BOLD_END, "\n" if $prefixes
 
   ## Print the escapes for the file
   print_escapes file
