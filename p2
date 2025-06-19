@@ -155,19 +155,28 @@ end
 ## The set of characters an action is taken on. Since CharSet are encoding-dependent, and the
 # encoding is only available after all command-line arguments have been parsed; cahrset needs ===
 module CharSet
-  ALL = /./m
-  LAMBDA_FOR_MULTIBYTE = ->char{char.bytesize > 1}
-  LAMBDA_FOR_SINGLEBYTE = ->char{char.bytesize == 1}
+  ## A character set which matches _all_ characters.
+  ALL = ->char { true }
+
+  ## A character set which matches no characters.
+  NONE = ->char { false }
+
+  ## A character set which matches characters composed of more than one byte.
+  MULTIBYTE = ->char { char.bytesize > 1 }
+
+  ## A character set which matches characters composed of exactly one byte.
+  SINGLEBYTE = ->char { char.bytesize == 1 }
 
   @charsets_which_need_conversions = []
 
   def self.new(selector, error_if_default=false)
     case selector
     when '', '^'      then nil
-    when '\A'         then /./m
+    when '\A'         then ALL
+    when '\N'         then NONE
     when '\E'         then error_if_default ? abort("can't use \\E in default charset") : default_charset_computed
-    when '\m'         then LAMBDA_FOR_MULTIBYTE
-    when '\M'         then LAMBDA_FOR_SINGLEBYTE
+    when '\m'         then MULTIBYTE
+    when '\M'         then SINGLEBYTE
     when String       then Regexp.new((+"[#{selector}]").force_encoding($encoding)) # TODO: WHY is this frozen in ruby 2.6.10
     when Regexp, Proc then selector
     else raise "fail: bad charset '#{selector.inspect}'"
@@ -186,7 +195,7 @@ module CharSet
       if @default_charset
         create_charset @default_charset, true
       elsif @default_charset == false
-        ->char { false }
+        NONE
       else
         # Universal default character class; encode it in whatever the encoding we're using is.
         regex = (+'[\0-\x1F\x7F').force_encoding $encoding
@@ -429,8 +438,10 @@ OptParse.new do |op|
     Action.default = Action::DEFAULT
   end
 
-  op.on '--escape-charset CHARSET', 'Explicitly set the charset that -p, -d, -., and -x use' do |cs|
-    CharSet.default = cs
+  op.on '--[no-]escape-charset CHARSET', 'Explicitly set the charset that -p, -d, -., and -x use.',
+                                         'If --no-escape-charset is used, only chars matched in SPECIFIC',
+                                         'ESCAPES" are used' do |cs|
+    CharSet.default = cs || CharSet::NONE
   end
 
   $escape_surronding_spaces = true
@@ -466,7 +477,7 @@ OptParse.new do |op|
 
   op.on '-m', '--multibyte-codepoints', "Use codepoints for multibyte chars. (Same as --codepoint='\\m')",
                                         '(Not useful in single-byte-only encodings)' do
-    Patterns.add_pattern(CharSet::LAMBDA_FOR_MULTIBYTE, Action::CODEPOINTS)
+    Patterns.add_pattern(CharSet::MULTIBYTE, Action::CODEPOINTS)
   end
 
   op.on '-a', '--escape-all', "Mark all characters as escaped. (Same as --escape-charset='\\A')",
@@ -601,6 +612,7 @@ OptParse.new do |op|
     only output lowercase letters.) In addition to normal escapes (eg '\n' for newlines, '\w' for "word"
     characters, etc), some other special sequences are accepted:
       - '\A' matches all chars (so `--print='\A'` would print out every character)
+      - '\N' matches no chars  (so `--delete='\N'` would never delete a character)
       - '\m' matches multibyte characters (only useful if input data is multibyte like, UTF-8.)
       - '\M' matches all single-byte characters (i.e. anything \m doesn't match)
       - '\E' matches the charset "ESCAPES" uses (so `--hex='\E'` is equivalent to `--escape-by-hex`)
