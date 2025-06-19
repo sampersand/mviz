@@ -106,10 +106,10 @@ module Patterns
     attr_writer :default_action
   end
 
-  def create_charset(selector)
+  def create_charset(selector, error_if_default=false)
     case selector
     when '\A'         then /./m
-    when '\E'         then default_charset_computed
+    when '\E'         then error_if_default ? abort("can't use \\E in default charset") : default_charset_computed
     when '\m'         then LAMBDA_FOR_MULTIBYTE
     when '\M'         then LAMBDA_FOR_SINGLEBYTE
     when String       then Regexp.new((+"[#{selector}]").force_encoding($encoding)) # TODO: WHY is this frozen in ruby 2.6.10
@@ -121,7 +121,7 @@ module Patterns
   def default_charset_computed
     @default_charset_computed ||=
       if @default_charset
-        create_charset @default_charset
+        create_charset @default_charset, true
       elsif @default_charset == false
         ->char { false }
       else
@@ -150,6 +150,8 @@ module Patterns
     rescue RegexpError
       abort $!
     end
+
+    default_charset_computed # create the default charset so it's not done when handling things
   end
 
   def handle(char)
@@ -406,6 +408,9 @@ OptParse.new do |op|
   ##################################################################################################
 
   op.separator 'SPECIFIC ESCAPES', '(Takes precedence over "ESCAPES"; Ties go to the last one specified)'
+
+  # We don't have an `op.accept(:charset)` or something similar because the encoding may be set
+  # _after_ the charset is encountered; so we do all the checking at the end.
 
   op.on '--print CHARSET', 'Print characters, unchanged, which match CHARSET' do |cs|
     Patterns.add_charset(cs, Patterns::PRINT)
