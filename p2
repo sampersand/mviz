@@ -140,14 +140,26 @@ module Action
   ## The action to use by default.
   class << self
     attr_accessor :default
+    attr_accessor :error_action
   end
-  self.default = DEFAULT
+  self.default      = DEFAULT
+  self.error_action = HEX
 end
 
-##
-module Charset
+####################################################################################################
+#                                                                                                  #
+#                                             CharSet                                              #
+#                                                                                                  #
+####################################################################################################
+
+## The set of characters an action is taken on. Since CharSet are encoding-dependent, and the
+# encoding is only available after all command-line arguments have been parsed; cahrset needs ===
+module CharSet
+  ALL = /./m
   LAMBDA_FOR_MULTIBYTE = ->char{char.bytesize > 1}
   LAMBDA_FOR_SINGLEBYTE = ->char{char.bytesize == 1}
+
+  @charsets_which_need_conversions = []
 
   def self.new(selector, error_if_default=false)
     case selector
@@ -163,11 +175,14 @@ module Charset
   end
 
   def self.default=(value)
+    fail if @default_charset_computed
     @default_charset = value
   end
 
-  def self.default
-    @default_charset_computed ||=
+  def self.build_default_charset!
+    fail if @default_charset_computed
+
+    @default_charset_computed =
       if @default_charset
         create_charset @default_charset, true
       elsif @default_charset == false
@@ -188,17 +203,43 @@ module Charset
         Regexp.new regex
       end
   end
-end
 
-class Patterns
-  def initialize(default_charset, default_action, error_action, extra_patterns)
-    @default_charset = Charset.new default_charset # nil
-    @default_action  = default_action # Actions::DEFAULT
-    @error_action    = error_action # Actions::HEX
-    @patterns        = extra_patterns # []
+  def self.default
+    @default_charset_computed or fail
   end
 end
 
+# Thsi is a module because it's a singleton
+module Patterns
+  @patterns = []
+
+  module_function
+  def add_pattern(charset, action)
+    @patterns.prepend [charset, action]
+  end
+
+  def build!
+    CharSet.build_default_charset!
+
+    @patterns.map! do |charset, action|
+      [CharSet.new(charset), action]
+    end
+  end
+
+  def handle(char)
+    @patterns.each do |condition, escape_method|
+      return escape_method.call(char) if condition === char
+    end
+
+    if CharSet.default === char
+      Action.default.call(char)
+    else
+      char
+    end
+  end
+end
+
+=begin
 module Patterns1
   @patterns = []
   @default_charset = nil
@@ -276,7 +317,7 @@ module Patterns1
     end
   end
 end
-
+=end
 
 ####################################################################################################
 #                                                                                                  #
@@ -469,7 +510,7 @@ OptParse.new do |op|
   end
 
   op.on '--escape-charset CHARSET', 'Explicitly set the charset that -p, -d, -., and -x use' do |cs|
-    Charset.default = cs
+    CharSet.default = cs
   end
 
   $escape_surronding_spaces = true
@@ -483,34 +524,34 @@ OptParse.new do |op|
 
   op.separator 'SHORTHANDS'
   op.on '-l', '--print-newlines', "Don't escape newline. (Same as --print='\\n')" do
-    Patterns1.add_charset(/\n/, Action::PRINT)
+    Patterns.add_pattern(/\n/, Action::PRINT)
   end
 
   op.on '-w', '--print-whitespace', "Don't escape newline, tab, or space. (Same as --print='\\n\\t ')" do
-    Patterns1.add_charset(/[\n\t ]/, Action::PRINT)
+    Patterns.add_pattern(/[\n\t ]/, Action::PRINT)
   end
 
   op.on '-s', '--highlight-space', "Escape all spaces with highlights. (Same as --highlight=' ')" do
-    Patterns1.add_charset(/ /, Action::HIGHLIGHT)
+    Patterns.add_pattern(/ /, Action::HIGHLIGHT)
   end
 
   op.on '-S', '--picture-space', "Escape all spaces with a \"picture\". (Same as --picture=' ')" do
-    Patterns1.add_charset(/ /, Action::PICTURES)
+    Patterns.add_pattern(/ /, Action::PICTURES)
   end
 
   op.on '-B', '--escape-backslashes', "Escape backslashes as '\\\\'. (Same as --c-escape='\\\\')",
                                       '(Default if not in colour mode, and no --escape-by was given)' do |eb|
-    Patterns1.add_charset(/\\/, Action::C_ESCAPES)
+    Patterns.add_pattern(/\\/, Action::C_ESCAPES)
   end
 
   op.on '-m', '--multibyte-codepoints', "Use codepoints for multibyte chars. (Same as --codepoint='\\m')",
                                         '(Not useful in single-byte-only encodings)' do
-    Patterns1.add_charset(Patterns1::LAMBDA_FOR_MULTIBYTE, Action::CODEPOINTS)
+    Patterns.add_pattern(CharSet::LAMBDA_FOR_MULTIBYTE, Action::CODEPOINTS)
   end
 
   op.on '-a', '--escape-all', "Mark all characters as escaped. (Same as --escape-charset='\\A')",
                               'Does nothing alone; it needs to be used with an "ESCAPES" flag' do
-    Patterns1.default_charset = /./m
+    CharSet.default = CharSet::ALL
   end
 
   ##################################################################################################
@@ -523,45 +564,45 @@ OptParse.new do |op|
   # _after_ the charset is encountered; so we do all the checking at the end.
 
   op.on '--print CHARSET', 'Print characters, unchanged, which match CHARSET' do |cs|
-    Patterns1.add_charset(cs, Action::PRINT)
+    Patterns.add_pattern(cs, Action::PRINT)
   end
 
   op.on '--delete CHARSET', 'Delete characters which match CHARSET from the output.' do |cs|
-    Patterns1.add_charset(cs, Action::DELETE)
+    Patterns.add_pattern(cs, Action::DELETE)
   end
 
   op.on '--dot CHARSET', "Replaces CHARSET with a period ('.')" do |cs|
-    Patterns1.add_charset(cs, Action::DOT)
+    Patterns.add_pattern(cs, Action::DOT)
   end
 
   op.on '--hex CHARSET', 'Replaces characters with their hex value (\xHH)' do |cs|
-    Patterns1.add_charset(cs, Action::HEX)
+    Patterns.add_pattern(cs, Action::HEX)
   end
 
   op.on '--octal CHARSET', 'Replaces characters with their octal escapes (\###)' do |cs|
-    Patterns1.add_charset(cs, Action::OCTAL)
+    Patterns.add_pattern(cs, Action::OCTAL)
   end
 
   op.on '--codepoint CHARSET', 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
-    Patterns1.add_charset(cs, Action::CODEPOINTS)
+    Patterns.add_pattern(cs, Action::CODEPOINTS)
   end
 
   op.on '--highlight CHARSET', 'Prints the char unchanged, but visual effects are added to it.' do |cs|
-    Patterns1.add_charset(cs, Action::HIGHLIGHT)
+    Patterns.add_pattern(cs, Action::HIGHLIGHT)
   end
 
   op.on '--picture CHARSET', 'Use "pictures" (U+240x-U+242x). Attempts to generate pictures',
                                        "for chars outside of '\\0-\\x20\\x7F' is an error." do |cs|
-    Patterns1.add_charset(cs, Action::PICTURES)
+    Patterns.add_pattern(cs, Action::PICTURES)
   end
 
   op.on '--c-escape CHARSET', 'Like --hex, except c-style escapes (eg \n) are used for the',
                               "following chars: #{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}" do |cs|
-    Patterns1.add_charset(cs, Action::C_ESCAPES)
+    Patterns.add_pattern(cs, Action::C_ESCAPES)
   end
 
   op.on '--default CHARSET', 'Use the default patterns for chars in CHARSET' do |cs|
-    Patterns1.add_charset(cs, Action::DEFAULT)
+    Patterns.add_pattern(cs, Action::DEFAULT)
   end
 
   ##################################################################################################
@@ -679,7 +720,7 @@ defined? $prefixes or $prefixes = $stdout.tty? && (!$*.empty? || (defined?($file
 defined? $files    or $files = !$stdin.tty? && $*.empty?
 $quiet and $stdout = File.open(File::NULL, 'w')
 
-Patterns1.build!
+Patterns.build!
 
 ## Force `$trailing_newline` to be set if `$prefixes` are set, as otherwise there wouldn't be a
 # newline between each header, which is weird.
@@ -743,7 +784,7 @@ ESCAPES_CACHE = Hash.new do |hash, key|
       $ENCODING_FAILED = true # for the exit status with `$malformed_error`.
       visualize(key.hex_bytes, STANDOUT_ERR_BEGIN, STANDOUT_ERR_END)
     else
-      Patterns1.handle(key)
+      Patterns.handle(key)
     end
 end
 
