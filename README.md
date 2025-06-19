@@ -4,9 +4,9 @@ A program to escape "weird" characters in strings or files.
 `p` is essentially a replacement for interactive use of `echo` or `cat`: Instead of `echo "$variable"` or `cat file.txt`, which would be hiding invisible characters (like `\x01`), instead do `p "$variable"` or `p -f file.txt`.
 
 # Examples
-`p` is designed with defaults in mind; its default behaviour is what you want most of the time, but can easily (and sensibly) be changed with options
+`p` is designed with sensible defaults in mind; its default behaviour is what you want most of the time, but it can easily (and sensibly) be changed with options
 
-```shell
+```sh
 $ p "$variable"        # See the contents of a shell variable
 $ p -d "$variable"     # Delete weird characters from the variable
 $ p -f some-file.txt   # Print some-file, escaping all characters

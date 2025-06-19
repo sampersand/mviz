@@ -35,13 +35,12 @@ rescue Exception
   # Completely ignore the exception
 end
 
-## Redefine `abort` and `warn` to prepend the program name to the message, in the traditional style.
+## Redefine `abort` and `warn` to prepend the program name to the message, in traditional unix style
 PROGRAM_NAME = File.basename($0, '.*')
 def abort(message) super "#{PROGRAM_NAME}: #{message}" end
 def warn(message)  super "#{PROGRAM_NAME}: #{message}" end
 
-## Converts a string's bytes to their `\xHH` escaped version
-# it's here because `hex_bytes` is frequently used
+## Add a method to `String` to convert its bytes to the `\xHH` notation.
 class String
   def hex_bytes
     each_byte.map { |byte| '\x%02X' % byte }.join
@@ -60,7 +59,6 @@ module Patterns
     "\n" => '\n', "\v" => '\v', "\f" => '\f', "\r" => '\r',
     "\e" => '\e', "\\" => '\\\\',
   }
-  C_ESCAPES_DEFAULT = C_ESCAPES_MAP.keys.map{|x|x.inspect[1..-2]}.join.sub('u000','')
 
   PRINT      = ->char { char }
   DELETE     = ->_char{ $SOMETHING_ESCAPED = true; '' }
@@ -443,7 +441,7 @@ OptParse.new do |op|
   end
 
   op.on '--c-escape CHARSET', 'Like --hex, except c-style escapes (eg \n) are used for the',
-                              "following chars: #{Patterns::C_ESCAPES_DEFAULT}" do |cs|
+                              "following chars: #{Patterns::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}" do |cs|
     Patterns.add_charset(cs, Patterns::C_ESCAPES)
   end
 
