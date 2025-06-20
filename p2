@@ -175,7 +175,8 @@ module CharSet
 
   module_function
 
-  ## Creates a new CharSet based on the selector
+  ## Creates a character set (ie something which has `===` defined) based on `selector`. If the
+  # selector is empty, or `^`, then `nil` is returned (indicating that the selector will never match.)
   def build(selector)
     case selector
     when '', '^'      then nil
@@ -190,26 +191,29 @@ module CharSet
     end
   end
 
-  @default_charset = nil
+  @raw_default_charset = nil
 
-  def default_charset=(value)
+  ## Set the default charset; This can only be called before `build_default_charset!` is run. If
+  def default_charset=(charset)
     fail if @default
-    # Handle `\E` here to mean "whatever the default is"
-    @default_charset =
-      case value
-      when '\E'    then nil
+
+    @raw_default_charset =
+      case charset
+      when '\E'    then nil # Handle `\E` here to mean "whatever the default is"
       when '', '^' then false
-      else              value
+      else              charset
       end
   end
 
+  ## Constructs the default charset; This should only ever be called once, after any calls to the
+  # `default_charset=` method have been performed.
   def build_default_charset!
     fail if @default
 
     @default =
-      if @default_charset
-        build @default_charset
-      elsif @default_charset == false
+      if @raw_default_charset
+        build @raw_default_charset
+      elsif @raw_default_charset == false
         NONE
       else
         # Universal default character class; encode it in whatever the encoding we're using is.
@@ -228,8 +232,10 @@ module CharSet
       end
   end
 
+  ## Get the default charset; This should only be called after `build_default_charset!` is called,
+  # as the encoding for the charset isn't known until all command-line options are parsed.
   def default
-    @default ||= build_default_charset!
+    @default or fail
   end
 end
 
@@ -238,6 +244,7 @@ module Patterns
   @patterns = []
 
   module_function
+
   def add_pattern(charset, action)
     @patterns.prepend [charset, action]
   end
