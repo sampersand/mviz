@@ -378,12 +378,12 @@ OptParse.new do |op|
       -w              Don't escape newlines, tabs, or spaces
       -s              Escape spaces by highlighting it
       -S              Escape spaces with "pictures"
-      -B              Escape backslashes. (default unless colour or "ESCAPES" given)
+      -B and -\\       Escape backslashes. (default unless colour or "ESCAPES" given)
       -m              Escape multibyte characters with their Unicode codepoint.
-      -a              Escape _every_ character. (Must be used with an "ESCAPES")
+      -A              Escape _every_ character. (Must be used with an "ESCAPES")
     #{BOLD_BEGIN}INPUT DATA#{BOLD_END}
       -b              Interpret inputs as binary text
-      -A              Interpret inputs as ASCII; like -b, except has invalid bytes
+      -a              Interpret inputs as ASCII; like -b, except has invalid bytes
       -8              Interpret inputs as UTF-8
       -Eencoding      Specify the (ASCII-compatible) encoding.
     EOS
@@ -547,7 +547,7 @@ OptParse.new do |op|
     Patterns.add_pattern(/ /, Action::CONTROL_PICTURES)
   end
 
-  op.on '-B', '--escape-backslashes', "Escape backslashes as '\\\\'. (Same as --c-escape='\\\\')",
+  op.on '-B', '-\\', '--escape-backslashes', "Escape backslashes as '\\\\'. (Same as --c-escape='\\\\')",
                                       '(Default if not in colour mode, and no --escape-by was given)' do |eb|
     Patterns.add_pattern(/\\/, Action::C_ESCAPES)
   end
@@ -557,7 +557,7 @@ OptParse.new do |op|
     Patterns.add_pattern(CharSet::MULTIBYTE, Action::CODEPOINTS)
   end
 
-  op.on '-a', '--escape-all', "Mark all characters as escaped. (Same as --escape-charset='\\A')",
+  op.on '-A', '--escape-all', "Mark all characters as escaped. (Same as --escape-charset='\\A')",
                               'Does nothing alone; it needs to be used with an "ESCAPES" flag' do
     CharSet.raw_default = CharSet::ALL
   end
@@ -638,7 +638,7 @@ OptParse.new do |op|
     $encoding = Encoding::BINARY
   end
 
-  op.on '-A', '--ascii', 'Same as --encoding=ASCII. Like -b, but high-bits are "invalid".' do
+  op.on '-a', '--ascii', 'Same as --encoding=ASCII. Like -b, but high-bits are "invalid".' do
     $encoding = Encoding::ASCII
   end
 
