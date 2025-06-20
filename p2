@@ -152,16 +152,19 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-## A Character set 
+## Like a `Regexp`, except the `===` method calls `.match?`, instead of `=~` (which sets global
+# variables, and is less efficient).
+class RegexpFasterEqq < Regexp
+  alias === match?
+end
+
 ## Helpers for matching against characters. All that a "Character Set" needs to have is the `===`
-# method defined on it, which allows it to
-## The set of characters an action is taken on. Since CharSet are encoding-dependent, and the
-# encoding is only available after all command-line arguments have been parsed; cahrset needs ===
-class CharSet < Regexp
+# method defined on it, which is used to determine if the character set matches or not.
+module CharSet
   ## A character set which matches _all_ characters.
   ALL = ->char { true }
 
-  ## A character set which matches no characters.
+  ## A character set which matches _no_ characters.
   NONE = ->char { false }
 
   ## A character set which matches characters composed of more than one byte.
@@ -170,56 +173,62 @@ class CharSet < Regexp
   ## A character set which matches characters composed of exactly one byte.
   SINGLEBYTE = ->char { char.bytesize == 1 }
 
-  alias === match?
+  module_function
 
   ## Creates a new CharSet based on the selector
-  def self.build(selector)
+  def build(selector)
     case selector
     when '', '^'      then nil
     when '\A'         then ALL
     when '\N'         then NONE
-    when '\E'         then default
+    when '\E'         then default # if this changes, change `default_charset=`
     when '\m'         then MULTIBYTE
     when '\M'         then SINGLEBYTE
-    when String       then Regexp.new((+"[#{selector}]").force_encoding($encoding)) # TODO: WHY is this frozen in ruby 2.6.10
+    when String       then RegexpFasterEqq.new((+"[#{selector}]").force_encoding($encoding)) # TODO: WHY is this frozen in ruby 2.6.10
     when Regexp, Proc then selector
     else raise "fail: bad charset '#{selector.inspect}'"
     end
   end
 
-  def self.default_charset=(value)
+  @default_charset = nil
+
+  def default_charset=(value)
     fail if @default
-    @default_charset = value
+    # Handle `\E` here to mean "whatever the default is"
+    @default_charset =
+      case value
+      when '\E'    then nil
+      when '', '^' then false
+      else              value
+      end
   end
 
-  def self.build_default_charset!
+  def build_default_charset!
     fail if @default
 
-    # Set the charset to the default charset to begin with, as it's possible that a user might want
-    # to use the default charset themselves.
-    @default = begin
-      # Universal default character class; encode it in whatever the encoding we're using is.
-      regex = (+'[\0-\x1F\x7F').force_encoding $encoding
+    @default =
+      if @default_charset
+        build @default_charset
+      elsif @default_charset == false
+        NONE
+      else
+        # Universal default character class; encode it in whatever the encoding we're using is.
+        regex = (+'[\0-\x1F\x7F').force_encoding $encoding
 
-      # Add the upper range if in binary
-      regex.concat '-\xFF' if $encoding == Encoding::BINARY
+        # Add the upper range if in binary
+        regex.concat '-\xFF' if $encoding == Encoding::BINARY
 
-      # If we're using the default action, and we're using colours, then also add backslash to the
-      # list of escapes. We need to use a double backslash so it interpolates correctly.
-      regex.concat '\\\\' if @default_action == Action::DEFAULT && !$use_color
+        # If we're using the default action, and we're using colours, then also add backslash to the
+        # list of escapes. We need to use a double backslash so it interpolates correctly.
+        regex.concat '\\\\' if Action.default == Action::DEFAULT && !$use_color
 
-      # Finish the character class
-      regex.concat ']'
-      Regexp.new regex
-    end
-
-    # Now, if the default charset is actually given, then construct it
-    if @default_charset
-      @default = CharSet.build(@default_charset)
-    end
+        # Finish the character class
+        regex.concat ']'
+        RegexpFasterEqq.new regex
+      end
   end
 
-  def self.default
+  def default
     @default ||= build_default_charset!
   end
 end
@@ -448,10 +457,10 @@ OptParse.new do |op|
     Action.default = Action::DEFAULT
   end
 
-  op.on '--[no-]escape-charset CHARSET', 'Explicitly set the charset that -p, -d, -., and -x use.',
+  op.on '--[no-]default-charset', '--[no-]escape-charset CHARSET', 'Explicitly set the charset that -p, -d, -., and -x use.',
                                          'If --no-escape-charset is used, only chars matched in SPECIFIC',
                                          'ESCAPES" are used' do |cs|
-    CharSet.default_charset = cs || CharSet::NONE
+    CharSet.default_charset = cs
   end
 
   $escape_surronding_spaces = true
