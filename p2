@@ -98,8 +98,8 @@ module Action
     visualize char
   end
 
-  ## Returns the C-style escape for the character, if it exists. If it doesn't, a warning is printed,
-  # and it falls back on hex escapes
+  ## Returns the C-style escape for the character, if it exists. If it doesn't, a warning is
+  # printed, and it falls back on hex escapes
   C_ESCAPES = ->char do
     unless (c_escape = C_ESCAPES_MAP[char])
       warn "character #{char.inspect} does not have a c escape; falling back on hex escapes"
@@ -176,7 +176,7 @@ module CharSet
   module_function
 
   ## Creates a character set (ie something which has `===` defined) based on `selector`. If the
-  # selector is empty, or `^`, then `nil` is returned (indicating that the selector will never match.)
+  # selector is empty, or `^`, then `nil` is returned (indicating that the selector'll never match.)
   def build(selector)
     case selector
     when '', '^'      then nil
@@ -239,7 +239,13 @@ module CharSet
   end
 end
 
-# Thsi is a module because it's a singleton
+####################################################################################################
+#                                                                                                  #
+#                                             Patterns                                             #
+#                                                                                                  #
+####################################################################################################
+
+## The list of patterns the user has supplied in command-line flags
 module Patterns
   @patterns = []
 
