@@ -143,7 +143,7 @@ module Action
     attr_accessor :error_action
   end
   self.default      = DEFAULT
-  self.error_action = HEX
+  self.error_action = HEX # TODO: add support for this
 end
 
 ####################################################################################################
@@ -312,13 +312,18 @@ USE_COLOR_DEFAULT = $use_color =
 ## Whether POSIX-ly correct defaults should be used.
 IS_POSIXLY_CORRECT = ENV.key?('POSIXLY_CORRECT')
 
-## Fetch escape sequences, if supplied.
-STANDOUT_BEGIN     = ENV.fetch('P_STANDOUT_BEGIN', "\e[7m")
-STANDOUT_END       = ENV.fetch('P_STANDOUT_END',   "\e[27m")
+## Strings to surround all escaped characters with; Defaults to "invert colour"
+STANDOUT_BEGIN = ENV.fetch('P_STANDOUT_BEGIN', "\e[7m")
+STANDOUT_END   = ENV.fetch('P_STANDOUT_END',   "\e[27m")
+
+## Like `STANDOUT_XXX`, but only for encoding errors. Defaults to "red background, light grey
+# foreground"
 STANDOUT_ERR_BEGIN = ENV.fetch('P_STANDOUT_ERR_BEGIN', "\e[37m\e[41m")
 STANDOUT_ERR_END   = ENV.fetch('P_STANDOUT_ERR_END',   "\e[49m\e[39m")
-BOLD_BEGIN         = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if $use_color)
-BOLD_END           = (ENV.fetch('P_BOLD_END',   "\e[0m") if $use_color)
+
+## Bold escape sequences; Bold is only used in help message and headers when files are given.
+BOLD_BEGIN = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if $use_color)
+BOLD_END   = (ENV.fetch('P_BOLD_END',   "\e[0m") if $use_color)
 
 ## Set defaults for globals; user-supplied options can change these.
 $encoding = IS_POSIXLY_CORRECT ? Encoding.find('locale') : Encoding::UTF_8
@@ -327,7 +332,6 @@ $escape_error = false
 $quiet = false
 $trailing_newline = true
 $escape_surronding_spaces = true
-
 
 ####################################################################################################
 #                                                                                                  #
@@ -768,6 +772,8 @@ ESCAPES_CACHE = Hash.new do |hash, key|
   hash[key] =
     if !key.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$malformed_error`.
+
+      # TODO: add support for custom `--encoding-error={hex,octal,delete,etc}`
       visualize(key.hex_bytes, STANDOUT_ERR_BEGIN, STANDOUT_ERR_END)
     else
       Patterns.handle(key)
