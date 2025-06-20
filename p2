@@ -152,10 +152,12 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-## Helpers for matching against characters. All that a "Character Set" needs to have is
+## A Character set 
+## Helpers for matching against characters. All that a "Character Set" needs to have is the `===`
+# method defined on it, which allows it to
 ## The set of characters an action is taken on. Since CharSet are encoding-dependent, and the
 # encoding is only available after all command-line arguments have been parsed; cahrset needs ===
-module CharSet
+class CharSet < Regexp
   ## A character set which matches _all_ characters.
   ALL = ->char { true }
 
@@ -168,10 +170,10 @@ module CharSet
   ## A character set which matches characters composed of exactly one byte.
   SINGLEBYTE = ->char { char.bytesize == 1 }
 
-  module_function
+  alias === match?
 
   ## Creates a new CharSet based on the selector
-  def build(selector)
+  def self.build(selector)
     case selector
     when '', '^'      then nil
     when '\A'         then ALL
@@ -185,12 +187,12 @@ module CharSet
     end
   end
 
-  def default_charset=(value)
+  def self.default_charset=(value)
     fail if @default
     @default_charset = value
   end
 
-  def build_default_charset!
+  def self.build_default_charset!
     fail if @default
 
     # Set the charset to the default charset to begin with, as it's possible that a user might want
@@ -217,7 +219,7 @@ module CharSet
     end
   end
 
-  def default
+  def self.default
     @default ||= build_default_charset!
   end
 end
