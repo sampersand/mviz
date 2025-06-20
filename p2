@@ -366,7 +366,7 @@ OptParse.new do |op|
       -q              Don't output anything. (Useful with -c)
       -1              Print one argument per line, but don't add "prefixes"
       -n              Print spaces between arguments, and omit the trailing newline.
-    #{BOLD_BEGIN}ESCAPES#{BOLD_END} (All are mutually exclusive; upper case is for invalid bytes)
+    #{BOLD_BEGIN}ESCAPES#{BOLD_END} (Mutually exclusive; Uppercase escapes control illegal bytes)
       -x, -X          Print in hex notation
       -o, -O          Print in octal notation
       -d, -D          Delete from the output
@@ -385,7 +385,7 @@ OptParse.new do |op|
       -b              Interpret inputs as binary text
       -A              Interpret inputs as ASCII; like -b, except has invalid bytes
       -8              Interpret inputs as UTF-8
-      -Eencoding      Specify the encoding directly
+      -Eencoding      Specify the (ASCII-compatible) encoding.
     EOS
     exit
   end
@@ -518,11 +518,11 @@ OptParse.new do |op|
   end
 
   op.on '-P', '--invalid-print', 'Like -p, but only for illegal bytes in the encoding' do
-    Action.error = Action::DELETE
+    Action.error = Action::PRINT
   end
 
   op.on '-@', '--invalid-dot', 'Like -., but only for illegal bytes in the encoding' do
-    Action.error = Action::DELETE
+    Action.error = Action::DOT
   end
 
 
@@ -599,8 +599,8 @@ OptParse.new do |op|
     Patterns.add_pattern(cs, Action::HIGHLIGHT)
   end
 
-  op.on '--picture CHARSET', 'Use "pictures" (U+240x-U+242x). Attempts to generate pictures',
-                                       "for chars outside of '\\0-\\x20\\x7F' is an error." do |cs|
+  op.on '--control-picture CHARSET', 'Use "pictures" (U+240x-U+242x). Attempts to generate pictures',
+                                     "for chars outside of '\\0-\\x20\\x7F' is an error." do |cs|
     Patterns.add_pattern(cs, Action::CONTROL_PICTURES)
   end
 
