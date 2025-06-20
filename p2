@@ -40,13 +40,6 @@ PROGRAM_NAME = File.basename($0, '.*')
 def abort(message) super "#{PROGRAM_NAME}: #{message}" end
 def warn(message)  super "#{PROGRAM_NAME}: #{message}" end
 
-## Add a method to `String` to convert its bytes to the `\xHH` notation.
-class String
-  def hex_bytes
-    each_byte.map { |byte| '\x%02X' % byte }.join
-  end
-end
-
 ####################################################################################################
 #                                                                                                  #
 #                                              Action                                              #
@@ -80,7 +73,7 @@ module Action
 
   ## Returns the bytes of the character in hexadecimal format, `\xHH`
   HEX = ->char do
-    visualize char.hex_bytes
+    visualize char.each_byte.map { |byte| '\x%02X' % byte }.join
   end
 
   ## Returns the bytes of the character in octal format, `\OOO`
@@ -140,10 +133,10 @@ module Action
   ## The action to use by default.
   class << self
     attr_accessor :default
-    attr_accessor :error_action
+    attr_accessor :error
   end
   self.default      = DEFAULT
-  self.error_action = HEX # TODO: add support for this
+  self.error = HEX # TODO: add support for this
 end
 
 ####################################################################################################
@@ -189,13 +182,13 @@ module CharSet
     end
   end
 
-  @raw_default_charset = nil
+  @raw_default = nil
 
   ## Set the default charset; This can only be called before `build_default_charset!` is run. If
-  def default_charset=(charset)
+  def raw_default=(charset)
     fail if @default
 
-    @raw_default_charset =
+    @raw_default =
       case charset
       when '\E'    then nil # Handle `\E` here to mean "whatever the default is"
       when '', '^' then false
@@ -209,9 +202,9 @@ module CharSet
     fail if @default
 
     @default =
-      if @raw_default_charset
-        build @raw_default_charset
-      elsif @raw_default_charset == false
+      if @raw_default
+        build @raw_default
+      elsif @raw_default == false
         NONE
       else
         # Universal default character class; encode it in whatever the encoding we're using is.
@@ -300,7 +293,7 @@ end
 ####################################################################################################
 
 ## Whether visual effects should be enabled by default
-USE_COLOR_DEFAULT = $use_color =
+USE_COLOR = $use_color =
   if ENV.fetch('FORCE_COLOR', '') != ''
     true
   elsif ENV.fetch('NO_COLOR', '') != ''
@@ -313,8 +306,8 @@ USE_COLOR_DEFAULT = $use_color =
 IS_POSIXLY_CORRECT = ENV.key?('POSIXLY_CORRECT')
 
 ## Strings to surround all escaped characters with; Defaults to "invert colour"
-STANDOUT_BEGIN = ENV.fetch('P_STANDOUT_BEGIN', "\e[7m")
-STANDOUT_END   = ENV.fetch('P_STANDOUT_END',   "\e[27m")
+STANDOUT_BEGIN = $standout_begin = ENV.fetch('P_STANDOUT_BEGIN', "\e[7m")
+STANDOUT_END   = $standout_end   = ENV.fetch('P_STANDOUT_END',   "\e[27m")
 
 ## Like `STANDOUT_XXX`, but only for encoding errors. Defaults to "red background, light grey
 # foreground"
@@ -343,7 +336,7 @@ OptParse.new do |op|
   op.program_name = PROGRAM_NAME
   op.version = '0.11.1'
   op.banner = <<~BANNER
-  #{STANDOUT_BEGIN if $use_color}usage#{STANDOUT_END if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
+  #{$standout_begin if $use_color}usage#{$standout_end if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
          #{BOLD_BEGIN}#{op.program_name} -f [options] [file ...]#{BOLD_END}  # Read from files
   When no args are given, first form is assumed if stdin is not a tty.
@@ -443,7 +436,7 @@ OptParse.new do |op|
       case w
       when 'always', nil  then true
       when 'never', false then false
-      when 'auto'         then USE_COLOR_DEFAULT
+      when 'auto'         then USE_COLOR
       else fail # Should never happen, as a list of valid options is given via `%w[...]`.
       end
   end
@@ -543,7 +536,7 @@ OptParse.new do |op|
 
   op.on '-a', '--escape-all', "Mark all characters as escaped. (Same as --escape-charset='\\A')",
                               'Does nothing alone; it needs to be used with an "ESCAPES" flag' do
-    CharSet.default = CharSet::ALL
+    CharSet.raw_default = CharSet::ALL
   end
 
   ##################################################################################################
@@ -749,12 +742,12 @@ end
 # Visualizes `string` by surrounding it with the colour escape sequences if colour mode is enabled.
 # Also, sets the variable `$SOMETHING_ESCAPED` regardless of colour mode for `--check-escapes`.
 if $use_color
-  def visualize(string, start=STANDOUT_BEGIN, stop=STANDOUT_END)
+  def visualize(string)
     $SOMETHING_ESCAPED = true
-    "#{start}#{string}#{stop}"
+    "#$standout_begin#{string}#$standout_end"
   end
 else
-  def visualize(string, start=nil, stop=nil)
+  def visualize(string)
     $SOMETHING_ESCAPED = true
     string
   end
@@ -773,8 +766,14 @@ ESCAPES_CACHE = Hash.new do |hash, key|
     if !key.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$malformed_error`.
 
-      # TODO: add support for custom `--encoding-error={hex,octal,delete,etc}`
-      visualize(key.hex_bytes, STANDOUT_ERR_BEGIN, STANDOUT_ERR_END)
+      begin
+        $standout_begin = STANDOUT_ERR_BEGIN
+        $standout_end   = STANDOUT_ERR_END
+        Action.error.call key
+      ensure
+        $standout_begin = STANDOUT_BEGIN
+        $standout_end = STANDOUT_END
+      end
     else
       Patterns.handle(key)
     end
