@@ -104,7 +104,7 @@ module Action
 
   ## Returns Unicode "pictures" for certain characters (0x00 thru 0x20, and 0x7f). Other characters
   # yield a warning with a fallback on hex escapes.
-  PICTURES = ->char do
+  CONTROL_PICTURES = ->char do
     case char
     when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
     when "\x7F"       then visualize "\u{2421}"
@@ -366,13 +366,13 @@ OptParse.new do |op|
       -q              Don't output anything. (Useful with -c)
       -1              Print one argument per line, but don't add "prefixes"
       -n              Print spaces between arguments, and omit the trailing newline.
-    #{BOLD_BEGIN}ESCAPES#{BOLD_END} (All are mutually exclusive)
-      -x, -X          Print escaped chars (invalid bytes) in hex notation
-      -o, -O          Print escaped chars (invalid bytes) in octal notation
-      -d, -D          Delete escaped chars (invalid bytes) from the output
-      -., -@          Replace escaped chars (invalid bytes) with a period ('.')
-      -p, -{          Print escaped chars (invalid bytes) unchanged
-      -P              Replace escaped chars with their "pictures"
+    #{BOLD_BEGIN}ESCAPES#{BOLD_END} (All are mutually exclusive; upper case is for invalid bytes)
+      -x, -X          Print in hex notation
+      -o, -O          Print in octal notation
+      -d, -D          Delete from the output
+      -p, -P          Print unchanged
+      -., -@          Replace with a period ('.')
+      -C              Replace escaped chars with their "control pictures"
     #{BOLD_BEGIN}SPECIFIC ESCAPES#{BOLD_END}
       -l              Don't escape newlines.
       -w              Don't escape newlines, tabs, or spaces
@@ -479,16 +479,16 @@ OptParse.new do |op|
     Action.default = Action::DELETE
   end
 
-  op.on '-.', '--escape-by-dot', "Replace escaped chars with '.'" do
-    Action.default = Action::DOT
-  end
-
   op.on '-p', '--escape-by-print', 'Print escaped chars verbatim' do
     Action.default = Action::PRINT
   end
 
-  op.on '-P', '--escape-by-pictures', 'Print out pictures for some chars; others use hex' do
-    Action.default = Action::PICTURES
+  op.on '-.', '--escape-by-dot', "Replace escaped chars with '.'" do
+    Action.default = Action::DOT
+  end
+
+  op.on '-C', '--escape-by-control-pictures', 'Print out pictures for some chars; others use hex' do
+    Action.default = Action::CONTROL_PICTURES
   end
 
   op.on '--escape-by-default', 'Use the default escape action' do
@@ -517,7 +517,7 @@ OptParse.new do |op|
     Action.error = Action::DELETE
   end
 
-  op.on '-{', '--invalid-print', 'Like -p, but only for illegal bytes in the encoding' do
+  op.on '-P', '--invalid-print', 'Like -p, but only for illegal bytes in the encoding' do
     Action.error = Action::DELETE
   end
 
@@ -544,7 +544,7 @@ OptParse.new do |op|
   end
 
   op.on '-S', '--picture-space', "Escape all spaces with a \"picture\". (Same as --picture=' ')" do
-    Patterns.add_pattern(/ /, Action::PICTURES)
+    Patterns.add_pattern(/ /, Action::CONTROL_PICTURES)
   end
 
   op.on '-B', '--escape-backslashes', "Escape backslashes as '\\\\'. (Same as --c-escape='\\\\')",
@@ -601,7 +601,7 @@ OptParse.new do |op|
 
   op.on '--picture CHARSET', 'Use "pictures" (U+240x-U+242x). Attempts to generate pictures',
                                        "for chars outside of '\\0-\\x20\\x7F' is an error." do |cs|
-    Patterns.add_pattern(cs, Action::PICTURES)
+    Patterns.add_pattern(cs, Action::CONTROL_PICTURES)
   end
 
   op.on '--c-escape CHARSET', 'Like --hex, except c-style escapes (eg \n) are used for the',
