@@ -295,11 +295,11 @@ end
 
 ####################################################################################################
 #                                                                                                  #
-#                                         Parse Arguments                                          #
+#                                  Constants and Global Defaults                                   #
 #                                                                                                  #
 ####################################################################################################
 
-# Whether visual effects should be enabled by default
+## Whether visual effects should be enabled by default
 USE_COLOR_DEFAULT = $use_color =
   if ENV.fetch('FORCE_COLOR', '') != ''
     true
@@ -309,14 +309,31 @@ USE_COLOR_DEFAULT = $use_color =
     $stdout.tty?
   end
 
+## Whether POSIX-ly correct defaults should be used.
 IS_POSIXLY_CORRECT = ENV.key?('POSIXLY_CORRECT')
-# Fetch standout constants (regardless of whether we're using them, as they're used as defaults)
+
+## Fetch escape sequences, if supplied.
 STANDOUT_BEGIN     = ENV.fetch('P_STANDOUT_BEGIN', "\e[7m")
 STANDOUT_END       = ENV.fetch('P_STANDOUT_END',   "\e[27m")
 STANDOUT_ERR_BEGIN = ENV.fetch('P_STANDOUT_ERR_BEGIN', "\e[37m\e[41m")
 STANDOUT_ERR_END   = ENV.fetch('P_STANDOUT_ERR_END',   "\e[49m\e[39m")
 BOLD_BEGIN         = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if $use_color)
 BOLD_END           = (ENV.fetch('P_BOLD_END',   "\e[0m") if $use_color)
+
+## Set defaults for globals; user-supplied options can change these.
+$encoding = IS_POSIXLY_CORRECT ? Encoding.find('locale') : Encoding::UTF_8
+$malformed_error = true
+$escape_error = false
+$quiet = false
+$trailing_newline = true
+$escape_surronding_spaces = true
+
+
+####################################################################################################
+#                                                                                                  #
+#                                         Parse Arguments                                          #
+#                                                                                                  #
+####################################################################################################
 
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
@@ -397,12 +414,10 @@ OptParse.new do |op|
     $files = f
   end
 
-  $malformed_error = true
   op.on '--[no-]malformed-error', 'Invalid chars in the --encoding cause exit status 2. (default)' do |me|
     $malformed_error = me
   end
 
-  $escape_error = false
   op.on '-c', '--[no-]check-escapes', 'Exits with status 1 if any character is escaped. Useful to',
                                       'check inputs programmatically to ensure they are "normal".' do |ee|
     $escape_error = ee
@@ -413,7 +428,6 @@ OptParse.new do |op|
   ##################################################################################################
   op.separator 'OUTPUTS'
 
-  $quiet = false
   op.on '-q', '--[no-]quiet', 'Do not output anything. (Useful with -c or --malformed-error)' do |q|
     $quiet = q
   end
@@ -431,7 +445,6 @@ OptParse.new do |op|
   end
 
   # TODO: Should `--prefixes`, `--one-per-line`, and `--no-prefixes-or-newline` be collapsed?
-  $trailing_newline = true
   op.on '--prefixes', "Add \"prefixes\". (default if stdout's a tty, and args are given)" do
     $prefixes = true
     $trailing_newline = true
@@ -489,7 +502,6 @@ OptParse.new do |op|
     CharSet.default_charset = cs
   end
 
-  $escape_surronding_spaces = true
   op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
     $escape_surronding_spaces = ess
   end
@@ -585,9 +597,6 @@ OptParse.new do |op|
   #                                        Specific Escapes                                        #
   ##################################################################################################
   op.separator 'ENCODINGS', '(default is normally --utf-8. If POSIXLY_CORRECT is set, --locale is the default)'
-
-  # Default value for the encoding
-  $encoding = IS_POSIXLY_CORRECT ? Encoding.find('locale') : Encoding::UTF_8
 
   op.on '-E', '--encoding ENCODING', "Specify the input's encoding. Case-insensitive. Encodings that",
                                      "aren't ASCII-compatible encodings (eg UTF-16) are illegal." do |enc|
