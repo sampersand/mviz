@@ -367,15 +367,17 @@ OptParse.new do |op|
       -1              Print one argument per line, but don't add "prefixes"
       -n              Print spaces between arguments, and omit the trailing newline.
     #{BOLD_BEGIN}ESCAPES#{BOLD_END} (All are mutually exclusive)
-      -x, -o          Print escaped chars in hex/octal notation
-      -d              Delete escaped chars from the output
-      -p              Print escaped chars unchanged
-      -.              Replace escaped chars with a period ('.')
+      -x, -X          Print escaped chars (invalid bytes) in hex notation
+      -o, -O          Print escaped chars (invalid bytes) in octal notation
+      -d, -D          Delete escaped chars (invalid bytes) from the output
+      -., -@          Replace escaped chars (invalid bytes) with a period ('.')
+      -p, -{          Print escaped chars (invalid bytes) unchanged
       -P              Replace escaped chars with their "pictures"
     #{BOLD_BEGIN}SPECIFIC ESCAPES#{BOLD_END}
       -l              Don't escape newlines.
       -w              Don't escape newlines, tabs, or spaces
-      -s, -S          Escape spaces by highlighting it/with "pictures"
+      -s              Escape spaces by highlighting it
+      -S              Escape spaces with "pictures"
       -B              Escape backslashes. (default unless colour or "ESCAPES" given)
       -m              Escape multibyte characters with their Unicode codepoint.
       -a              Escape _every_ character. (Must be used with an "ESCAPES")
@@ -465,8 +467,12 @@ OptParse.new do |op|
 
   op.separator 'ESCAPES', '(Change the default output behaviour. All --escape-by-XXX are mutually exclusive)'
 
-  op.on '-p', '--escape-by-print', 'Print escaped chars verbatim' do
-    Action.default = Action::PRINT
+  op.on '-x', '--escape-by-hex', 'Output hex escape (\xHH) for escaped chars' do
+    Action.default = Action::HEX
+  end
+
+  op.on '-o', '--escape-by-octal', 'Output octal escapes (\###) for escaped chars' do
+    Action.default = Action::OCTAL
   end
 
   op.on '-d', '--escape-by-delete', 'Delete escaped chars' do
@@ -477,12 +483,8 @@ OptParse.new do |op|
     Action.default = Action::DOT
   end
 
-  op.on '-x', '--escape-by-hex', 'Output hex escape (\xHH) for escaped chars' do
-    Action.default = Action::HEX
-  end
-
-  op.on '-o', '--escape-by-octal', 'Output octal escapes (\###) for escaped chars' do
-    Action.default = Action::OCTAL
+  op.on '-p', '--escape-by-print', 'Print escaped chars verbatim' do
+    Action.default = Action::PRINT
   end
 
   op.on '-P', '--escape-by-pictures', 'Print out pictures for some chars; others use hex' do
@@ -494,7 +496,7 @@ OptParse.new do |op|
   end
 
   op.on '--[no-]default-charset', '--[no-]escape-charset CHARSET', 'Explicitly set the charset that -p, -d, -., and -x use.',
-                                         'If --no-escape-charset is used, only chars matched in SPECIFIC',
+                                         'If --no-escape-charset is used, only chars matched in "SPECIFIC',
                                          'ESCAPES" are used' do |cs|
     CharSet.default_charset = cs
   end
@@ -502,6 +504,27 @@ OptParse.new do |op|
   op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
     $escape_surronding_spaces = ess
   end
+
+  op.on '-X', '--invalid-hex', 'Like -x, but only for illegal bytes in the encoding' do
+    Action.error = Action::HEX
+  end
+
+  op.on '-O', '--invalid-octal', 'Like -o, but only for illegal bytes in the encoding' do
+    Action.error = Action::OCTAL
+  end
+
+  op.on '-D', '--invalid-delete', 'Like -d, but only for illegal bytes in the encoding' do
+    Action.error = Action::DELETE
+  end
+
+  op.on '-{', '--invalid-print', 'Like -p, but only for illegal bytes in the encoding' do
+    Action.error = Action::DELETE
+  end
+
+  op.on '-@', '--invalid-dot', 'Like -., but only for illegal bytes in the encoding' do
+    Action.error = Action::DELETE
+  end
+
 
   ##################################################################################################
   #                                           Shorthands                                           #
