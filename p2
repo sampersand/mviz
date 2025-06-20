@@ -175,11 +175,9 @@ module CharSet
 
   module_function
 
-  ## Creates a character set (ie something which has `===` defined) based on `selector`. If the
-  # selector is empty, or `^`, then `nil` is returned (indicating that the selector'll never match.)
+  ## Creates a character set (ie something which has `===` defined) based on `selector`.
   def build(selector)
     case selector
-    when '', '^'      then nil
     when '\A'         then ALL
     when '\N'         then NONE
     when '\E'         then default # if this changes, change `default_charset=`
@@ -247,36 +245,51 @@ end
 
 ## The list of patterns the user has supplied in command-line flags
 module Patterns
-  @patterns = []
+  @raw_patterns = []
 
   module_function
 
+  ## Adds a pattern (comprise of a `CharSet` and its `Action`) to the start of the list of patterns.
+  # This means that later patterns take priority over earlier ones. Should not be called after
+  # `.build!` is called.
   def add_pattern(charset, action)
-    @patterns.prepend [charset, action]
+    fail if @patterns # Ensure that we're called only before `.build!`
+
+    # Ignore charsets which are empty. This isn't just an optimization: Without this check, the
+    # eventual call to `CharSet.build` will fail because `[]` and `[^]` aren't valid regex character
+    # classes.
+    return if charset == '' || charset == '^'
+
+    @raw_patterns.prepend [charset, action]
   end
 
+  ## Finalizes all the patterns, constructing the charsets with the current encoding. Should only
+  # ever be called once, after all user-supplied patterns are added via `add_pattern`.
   def build!
-    fail if @built
-    @built = true
+    fail if @patterns # Ensure that we're only called once.
 
+    # Construct the default charset, so that any user-supplied patterns can reference it.
     CharSet.build_default_charset!
 
-    @patterns.map! do |charset, action|
-      [CharSet.build(charset) || next, action]
-    end
-    @patterns.compact!
+    # Build the charsets via `CharSet.build`.
+    @patterns = @raw_patterns.map { |charset, action| [CharSet.build(charset), action] }
   end
 
+  ## Returns the representation of a character; Should only be called after `.build!`.
   def handle(char)
-    @patterns.each do |condition, escape_method|
-      return escape_method.call(char) if condition === char
+    # No need for a `fail unless @patterns`, as `@patterns.each` will fail if `.build!` wasn't
+    # called first (as `@patterns` will be nil.)
+
+    # Check user-supplied patterns to see if any match
+    @patterns.each do |condition, action|
+      return action.call(char) if condition === char
     end
 
-    if CharSet.default === char
-      Action.default.call(char)
-    else
-      char
-    end
+    # No user-supplied actions match, so check the default one
+    return Action.default.call(char) if CharSet.default === char
+
+    # The default one didn't match either, so just return the character unchanged.
+    char
   end
 end
 
