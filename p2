@@ -152,6 +152,7 @@ end
 #                                                                                                  #
 ####################################################################################################
 
+## Helpers for matching against characters. All that a "Character Set" needs to have is
 ## The set of characters an action is taken on. Since CharSet are encoding-dependent, and the
 # encoding is only available after all command-line arguments have been parsed; cahrset needs ===
 module CharSet
@@ -167,14 +168,15 @@ module CharSet
   ## A character set which matches characters composed of exactly one byte.
   SINGLEBYTE = ->char { char.bytesize == 1 }
 
-  @charsets_which_need_conversions = []
+  module_function
 
-  def self.new(selector, error_if_default=false)
+  ## Creates a new CharSet based on the selector
+  def build(selector)
     case selector
     when '', '^'      then nil
     when '\A'         then ALL
     when '\N'         then NONE
-    when '\E'         then error_if_default ? abort("can't use \\E in default charset") : default_charset_computed
+    when '\E'         then default
     when '\m'         then MULTIBYTE
     when '\M'         then SINGLEBYTE
     when String       then Regexp.new((+"[#{selector}]").force_encoding($encoding)) # TODO: WHY is this frozen in ruby 2.6.10
@@ -183,38 +185,40 @@ module CharSet
     end
   end
 
-  def self.default=(value)
-    fail if @default_charset_computed
+  def default_charset=(value)
+    fail if @default
     @default_charset = value
   end
 
-  def self.build_default_charset!
-    fail if @default_charset_computed
+  def build_default_charset!
+    fail if @default
 
-    @default_charset_computed =
-      if @default_charset
-        create_charset @default_charset, true
-      elsif @default_charset == false
-        NONE
-      else
-        # Universal default character class; encode it in whatever the encoding we're using is.
-        regex = (+'[\0-\x1F\x7F').force_encoding $encoding
+    # Set the charset to the default charset to begin with, as it's possible that a user might want
+    # to use the default charset themselves.
+    @default = begin
+      # Universal default character class; encode it in whatever the encoding we're using is.
+      regex = (+'[\0-\x1F\x7F').force_encoding $encoding
 
-        # Add the upper range if in binary
-        regex.concat '-\xFF' if $encoding == Encoding::BINARY
+      # Add the upper range if in binary
+      regex.concat '-\xFF' if $encoding == Encoding::BINARY
 
-        # If we're using the default action, and we're using colours, then also add backslash to the
-        # list of escapes. We need to use a double backslash so it interpolates correctly.
-        regex.concat '\\\\' if @default_action == Action::DEFAULT && !$use_color
+      # If we're using the default action, and we're using colours, then also add backslash to the
+      # list of escapes. We need to use a double backslash so it interpolates correctly.
+      regex.concat '\\\\' if @default_action == Action::DEFAULT && !$use_color
 
-        # Finish the character class
-        regex.concat ']'
-        Regexp.new regex
-      end
+      # Finish the character class
+      regex.concat ']'
+      Regexp.new regex
+    end
+
+    # Now, if the default charset is actually given, then construct it
+    if @default_charset
+      @default = CharSet.build(@default_charset)
+    end
   end
 
-  def self.default
-    @default_charset_computed or fail
+  def default
+    @default ||= build_default_charset!
   end
 end
 
@@ -228,11 +232,15 @@ module Patterns
   end
 
   def build!
+    fail if @built
+    @built = true
+
     CharSet.build_default_charset!
 
     @patterns.map! do |charset, action|
-      [CharSet.new(charset), action]
+      [CharSet.build(charset) || next, action]
     end
+    @patterns.compact!
   end
 
   def handle(char)
@@ -441,7 +449,7 @@ OptParse.new do |op|
   op.on '--[no-]escape-charset CHARSET', 'Explicitly set the charset that -p, -d, -., and -x use.',
                                          'If --no-escape-charset is used, only chars matched in SPECIFIC',
                                          'ESCAPES" are used' do |cs|
-    CharSet.default = cs || CharSet::NONE
+    CharSet.default_charset = cs || CharSet::NONE
   end
 
   $escape_surronding_spaces = true
