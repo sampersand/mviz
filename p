@@ -511,34 +511,6 @@ OptParse.new do |op|
     exit
   end
 
-  op.on '-x', '--hex', 'Output hex escape (\xHH) for escaped chars' do
-    Action.default = Action::HEX
-  end
-
-  op.on '-o', '--octal', 'Output octal escapes (\###) for escaped chars' do
-    Action.default = Action::OCTAL
-  end
-
-  op.on '-d', '--delete', 'Delete escaped chars' do
-    Action.default = Action::DELETE
-  end
-
-  op.on '-p', '--print', 'Print escaped chars verbatim' do
-    Action.default = Action::PRINT
-  end
-
-  op.on '-.', '--dot', "Replace escaped chars with '.'" do
-    Action.default = Action::DOT
-  end
-
-  op.on '-r', '--replace', "Replace escaped chars with the replacement character, #{Action::REPLACEMENT_CHARACTER_ASCII}" do
-    Action.default = Action::REPLACE
-  end
-
-  op.on '-C', '--control-pictures', 'Print out pictures for some chars; others use hex' do
-    Action.default = Action::CONTROL_PICTURES
-  end
-
   # No need for `--default` anymore, because you can just `--default-action=default`
   # op.on '--default', 'Use the default escape action' do
   #   Action.default = Action::DEFAULT
@@ -554,35 +526,68 @@ OptParse.new do |op|
     $escape_surronding_spaces = ess
   end
 
-  op.on '-X', '--_inva_hex', 'Like -x, but only for illegal bytes in the encoding' do
-    Action.error = Action::HEX
-  end
-
-  op.on '-O', '--_inva_octal', 'Like -o, but only for illegal bytes in the encoding' do
-    Action.error = Action::OCTAL
-  end
-
-  op.on '-D', '--_inva_delete', 'Like -d, but only for illegal bytes in the encoding' do
-    Action.error = Action::DELETE
-  end
-
-  op.on '-P', '--_inva_print', 'Like -p, but only for illegal bytes in the encoding' do
-    Action.error = Action::PRINT
-  end
-
-  op.on '-@', '--_inva_dot', 'Like -., but only for illegal bytes in the encoding' do
-    Action.error = Action::DOT
-  end
-
-  op.on '-R', '--_inva_replace', 'Like -r, but only for illegal bytes in the encoding' do
-    Action.error = Action::REPLACE
-  end
-
   ##################################################################################################
   #                                           Shorthands                                           #
   ##################################################################################################
 
-  op.separator 'SHORTHANDS'
+  op.separator 'SHORTHANDS', '(All of these are conveniences and are shorthands for --do, --default, or --invalid)'
+
+  op.on '-x', '--hex', 'Same as --default=hex; Output hex escape (\xHH)' do
+    Action.default = Action::HEX
+  end
+
+  op.on '-o', '--octal', 'Same as --default=octal; Output octal escapes (\###)' do
+    Action.default = Action::OCTAL
+  end
+
+  op.on '-d', '--delete', 'Same as --default=delete; Delete escaped chars' do
+    Action.default = Action::DELETE
+  end
+
+  op.on '-p', '--print', 'Same as --default=print; Print escaped chars verbatim' do
+    Action.default = Action::PRINT
+  end
+
+  op.on '-r', '--replace', "Same as --default=replace; Replace escaped chars with #{Action::REPLACEMENT_CHARACTER_ASCII}" do
+    Action.default = Action::REPLACE
+  end
+
+  op.on '-.', '--dot', "Same as --default=dot; Replace escaped chars with '.'" do
+    Action.default = Action::DOT
+  end
+
+  op.on '-C', '--control-pictures', 'Same as --default=control-pictures. Print out "pictures" for',
+                                    'some chars. Warns on others (and uses hex).' do
+    Action.default = Action::CONTROL_PICTURES
+  end
+
+  op.on ''
+  op.on '-X', '--invalid-hex', 'Same as --invalid=hex. (Like -x, but only for invalid bytes in the encoding)' do
+    Action.error = Action::HEX
+  end
+
+  op.on '-O', '--invalid-octal', 'Same as --invalid=octal. (Like -o, but only for invalid bytes in the encoding)' do
+    Action.error = Action::OCTAL
+  end
+
+  op.on '-D', '--invalid-delete', 'Same as --invalid=delete. (Like -d, but only for invalid bytes in the encoding)' do
+    Action.error = Action::DELETE
+  end
+
+  op.on '-P', '--invalid-print', 'Same as --invalid=print. (Like -p, but only for invalid bytes in the encoding)' do
+    Action.error = Action::PRINT
+  end
+
+  op.on '-@', '--invalid-dot', 'Same as --invalid=dot. (Like -., but only for invalid bytes in the encoding)' do
+    Action.error = Action::DOT
+  end
+
+  op.on '-R', '--invalid-replace', 'Same as --invalid=replace. (Like -r, but only for invalid bytes in the encoding)' do
+    Action.error = Action::REPLACE
+  end
+
+  op.on ''
+
   op.on '-l', '--print-newlines', "Don't escape newline. (Same as --print='\\n')" do
     Patterns.add_pattern(/\n/, Action::PRINT)
   end
