@@ -588,7 +588,10 @@ OptParse.new do |op|
   #                                            Escapes                                             #
   ##################################################################################################
 
-  op.section 'INVALID ESCAPES', '(Change the default output behaviour. All --escape-by-XXX are mutually exclusive)'
+  op.section 'MALFORMED ESCAPES'#, '(Change the default output behaviour. All --escape-by-XXX are mutually exclusive)'
+  op.on 'Like the "ESCAPES" section, except these apply to malformed bytes for the given encoding.'
+  op.on 'Not all escape actions are possible, as some (eg codepoints) dont make sense. The shorthand'
+  op.on 'flags are just upper cases of their equivalent normal-escape forms.'
 
   # op.accept Action, /\A\w+\z/ do |name|
   #   Action.get_action name
@@ -644,11 +647,11 @@ OptParse.new do |op|
     Patterns.add_pattern(/[\n\t ]/, Action::PRINT)
   end
 
-  op.on '-s', '--highlight-space', "Escape all spaces with highlights. (Same as --highlight=' ')" do
+  op.on '-s', '--highlight-space', "Escape spaces with highlights. (Same as --highlight=' ')" do
     Patterns.add_pattern(/ /, Action::HIGHLIGHT)
   end
 
-  op.on '-S', '--picture-space', "Escape all spaces with a \"picture\". (Same as --picture=' ')" do
+  op.on '-S', '--control-picture-space', "Escape spaces with a \"picture\". (Same as --control-picture=' ')" do
     Patterns.add_pattern(/ /, Action::CONTROL_PICTURES)
   end
 
