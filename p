@@ -139,10 +139,10 @@ module Action
     end
   end
 
-  VALID_ACTIONS = constants.filter_map { |name|
+  VALID_ACTIONS = constants.map { |name|
     a = Action.const_get(name)
-    a.is_a?(Proc) and [name.to_s.downcase.tr('_','-'), a]
-  }.to_h
+    a.is_a?(Proc) ? [name.to_s.downcase.tr('_','-'), a] : nil
+  }.compact.to_h
 
   ## The action to use by default.
   class << self
@@ -151,6 +151,10 @@ module Action
   end
   self.default      = DEFAULT
   self.error = HEX # TODO: add support for this
+
+  def self.get_action(name)
+    VALID_ACTIONS[name.downcase] or raise OptionParser::InvalidArgument, name
+  end
 end
 
 ####################################################################################################
@@ -484,14 +488,14 @@ OptParse.new do |op|
   op.separator 'ESCAPES', '(Change the default output behaviour. All --escape-by-XXX are mutually exclusive)'
 
   op.accept Action, /\A\w+\z/ do |name|
-    Action::VALID_ACTIONS[name.downcase] or raise OptionParser::InvalidArgument, name
+    Action.get_action name
   end
 
   op.on '--default-action=ACTION', Action, 'Specify the default action. Valid options are: <TODO>' do |action|
     Action.default = action
   end
 
-  op.on '--invalid-action=ACTION', Action, 'Specify the invalid action. Valid options are: <TODO>' do |action|
+  op.on '--invalid=ACTION', Action, 'Specify the invalid action. Valid options are: <TODO>' do |action|
     Action.error = action
   end
 
@@ -610,6 +614,10 @@ OptParse.new do |op|
 
   # We don't have an `op.accept(:charset)` or something similar because the encoding may be set
   # _after_ the charset is encountered; so we do all the checking at the end.
+
+  op.on '--action=WHAT', /\A(\w+);(.*)/ do |(_full, name, charset)|
+    Patterns.add_pattern charset, Action.get_action(name)
+  end
 
   op.on '--print CHARSET', 'Print characters, unchanged, which match CHARSET' do |cs|
     Patterns.add_pattern(cs, Action::PRINT)
