@@ -253,6 +253,7 @@ module Patterns
     # classes.
     return if charset == '' || charset == '^'
 
+    # Add the charset and its action to the list of raw patterns
     @raw_patterns.prepend [charset, action]
   end
 
