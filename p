@@ -494,10 +494,11 @@ OptParse.new do |op|
   op.section 'ESCAPES'#, '(Ties go to the last one specified. Without args, uses default charset)'
   op.on 'Specify how characters should be escaped. Flags which optionally take a CHARSET set the default'
   op.on 'action if no charset is supplied. Actions with explicit charsets are checked first, and ties go to'
-  op.on 'the last one specified. If no charset matches, the default one is used.'
+  op.on 'the last one specified. If no charset matches, the default one is used. Shorthand options are like'
+  op.on 'the their corresponding long-form one, except they don\'t take an argument, and only work on the default charset.'
 
   op.on '--[no-]default-charset CHARSET', 'Explicitly set the default charset that flags without CHARSET',
-                                          'values usee. If --no-default-charset is used, only flags which',
+                                          'values use. If --no-default-charset is used, only flags which',
                                           'explicitly give a charset are used, and everything else is',
                                           'printed out verbatim.' do |cs|
     CharSet.default_charset = cs
@@ -509,79 +510,79 @@ OptParse.new do |op|
   end
 
   op.on '-p' do Action.default = Action::PRINT end
-  op.on '--print[=CHARSET]', 'Print characters, unchanged, which match CHARSET. Unlike all of',
-                             'the other actions, using --print will not mark values as',
-                             "\"escaped\" for the purposes of --check-escapes." do |cs|
-    Patterns.add_pattern(cs, Action::PRINT)
+  op.on '--print[=CHARSET]', 'Print characters, unchanged, without escaping them. Unlike the',
+                             'other actions, using --print will not mark values as "escaped"',
+                             'for the purposes of --check-escapes.' do |charset|
+    Patterns.add_pattern(charset, Action::PRINT)
   end
 
   op.on '-d' do Action.default = Action::DELETE end
-  op.on '--delete[=CHARSET]', 'Delete characters which match CHARSET from the output by not',
-                              'printing anything. Deleted characters are considered "escaped"',
-                              'for the purposes of --check-escape.' do |cs|
-    Patterns.add_pattern(cs, Action::DELETE)
+  op.on '--delete[=CHARSET]', 'Delete characters from the output by not printing anything.',
+                              'Deleted characters are considered "escaped" for the purposes',
+                              'of --check-escape.' do |charset|
+    Patterns.add_pattern(charset, Action::DELETE)
   end
 
   op.on '-.' do Action.default = Action::DOT end
-  op.on '--dot[=CHARSET]', "Replaces CHARSET with a period ('.')" do |cs|
-    Patterns.add_pattern(cs, Action::DOT)
+  op.on '--dot[=CHARSET]', 'Replaces characters by simply printing a single period (`.`).',
+                           '(Note: Multibyte characters are still represented by a single',
+                           'period.)' do |charset|
+    Patterns.add_pattern(charset, Action::DOT)
   end
+
+  op.on '-r' do Action.default = Action::REPLACE end
+  op.on '--replace[=CHARSET]', 'Identical to --dot, except instead of a period, the replacement',
+                               "character (#{Action::REPLACEMENT_CHARACTER_ASCII}) is printed instead." do |charset|
+    Patterns.add_pattern(charset, Action::REPLACE)
+  end
+
+  op.on '-x' do Action.default = Action::HEX end
+  op.on '--hex[=CHARSET]', 'Replaces characters with their hex value (\xHH). Multibyte',
+                           'characters will have each of their bytes printed, in order they',
+                           'were received.' do |charset|
+    Patterns.add_pattern(charset, Action::HEX)
+  end
+
+  op.on '-o' do Action.default = Action::OCTAL end
+  op.on '--octal[=CHARSET]', 'Like --hex, except octal escapes (\###) are used instead. The',
+                             'output is always padded to three bytes (so NUL is \000, not \0)' do |charset|
+    Patterns.add_pattern(charset, Action::OCTAL)
+  end
+
+  op.on '-C' do Action.default = Action::CONTROL_PICTURES end
+  op.on '--control-picture[=CHARSET]', 'Print out "control pictures" (U+240x-U+242x) corresponding to',
+                                       'the character. Note that only \x00-\x20 and \x7F have control',
+                                       'pictures assigned to them, and any other characters will yield',
+                                       'a warning (and fall back to --hex.)' do |charset|
+    Patterns.add_pattern(charset, Action::CONTROL_PICTURES)
+  end
+
   op.on ''
 
-  op.on '-r' do
-    Action.default = Action::REPLACE
+  op.on '--codepoint[=CHARSET]', 'Replaces chars with their UTF-8 codepoints (\u{...}). This only',
+                                 'works if the encoding is UTF-8. See also --multibyte-codepoints'  do |charset|
+    # TODO: check if encoding is utf-8, and warn if it isn't
+    Patterns.add_pattern(charset, Action::CODEPOINTS)
   end
-  op.on '--replace[=CHARSET]', "Replaces CHARSET with the replacement character (#{Action::REPLACEMENT_CHARACTER_ASCII})" do |cs|
-    Patterns.add_pattern(cs, Action::REPLACE)
-  end
+
   op.on ''
+  op.on '--highlight[=CHARSET]', 'Prints the character unchanged, but considers it "escaped".',
+                                 '(Thus, visual effects are added to it like any other escape,',
+                                 'and --check-escapes considers it an escaped character.)' do |charset|
+    Patterns.add_pattern(charset, Action::HIGHLIGHT)
+  end
 
-  op.on '-x' do
-    Action.default = Action::HEX
-  end
-  op.on '--hex[=CHARSET]', 'Replaces characters with their hex value (\xHH)' do |cs|
-    Patterns.add_pattern(cs, Action::HEX)
-  end
   op.on ''
-
-  op.on '-o' do
-    Action.default = Action::OCTAL
-  end
-  op.on '--octal[=CHARSET]', 'Replaces characters with their octal escapes (\###)' do |cs|
-    Patterns.add_pattern(cs, Action::OCTAL)
-  end
-  op.on ''
-
-  op.on '-C' do
-    Action.default = Action::CONTROL_PICTURES
-  end
-  op.on '--codepoint[=CHARSET]', 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
-    Patterns.add_pattern(cs, Action::CODEPOINTS)
-  end
-  op.on ''
-
-  op.on '--highlight[=CHARSET]', 'Prints the char unchanged, but visual effects are added to it.' do |cs|
-    Patterns.add_pattern(cs, Action::HIGHLIGHT)
-  end
-
-  op.on '--control-picture[=CHARSET]', 'Use "pictures" (U+240x-U+242x). Attempts to generate pictures',
-                                     "for chars outside of '\\0-\\x20\\x7F' is an error." do |cs|
-    Patterns.add_pattern(cs, Action::CONTROL_PICTURES)
-  end
-
   op.on '--c-escape[=CHARSET]', 'Like --hex, except c-style escapes (eg \n) are used for the',
-                              "following chars: #{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}" do |cs|
-    Patterns.add_pattern(cs, Action::C_ESCAPES)
+                              "following chars: #{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}" do |charset|
+    Patterns.add_pattern(charset, Action::C_ESCAPES)
   end
 
-  op.on '--default[=CHARSET]', 'Use the default patterns for chars in CHARSET' do |cs|
-    Patterns.add_pattern(cs, Action::DEFAULT)
+  op.on ''
+  op.on '--default[=CHARSET]', 'Use the default patterns for chars in CHARSET' do |charset|
+    Patterns.add_pattern(charset, Action::DEFAULT)
   end
 
-  op.separator ''
-
-
-  puts op.help; exit
 
   ##################################################################################################
   #                                            Escapes                                             #
