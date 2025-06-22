@@ -264,6 +264,11 @@ module Patterns
   # This means that later patterns take priority over earlier ones. Should not be called after
   # `.build!` is called.
   def add_pattern(charset, action)
+    if charset.nil?
+      Action.default = action
+      return
+    end
+
     fail if @patterns # Ensure that we're called only before `.build!`
 
     # Ignore charsets which are empty. This isn't just an optimization: Without this check, the
@@ -504,30 +509,6 @@ OptParse.new do |op|
     exit
   end
 
-  op.on '-x', '--escape-by-hex', 'Output hex escape (\xHH) for escaped chars' do
-    Action.default = Action::HEX
-  end
-
-  op.on '-o', '--escape-by-octal', 'Output octal escapes (\###) for escaped chars' do
-    Action.default = Action::OCTAL
-  end
-
-  op.on '-d', '--escape-by-delete', 'Delete escaped chars' do
-    Action.default = Action::DELETE
-  end
-
-  op.on '-p', '--escape-by-print', 'Print escaped chars verbatim' do
-    Action.default = Action::PRINT
-  end
-
-  op.on '-.', '--escape-by-dot', "Replace escaped chars with '.'" do
-    Action.default = Action::DOT
-  end
-
-  op.on '-r', '--escape-by-replace', "Replace escaped chars with the replacement character, #{Action::REPLACEMENT_CHARACTER_ASCII}" do
-    Action.default = Action::REPLACE
-  end
-
   op.on '-C', '--escape-by-control-pictures', 'Print out pictures for some chars; others use hex' do
     Action.default = Action::CONTROL_PICTURES
   end
@@ -610,58 +591,79 @@ OptParse.new do |op|
   #                                        Specific Escapes                                        #
   ##################################################################################################
 
-  op.separator 'SPECIFIC ESCAPES', '(Takes precedence over "ESCAPES"; Ties go to the last one specified)'
+  op.separator 'SPECIFIC ESCAPES', '(Takes precedence over "ESCAPES"; Ties go to the last one specified. Without args, uses default charset)'
 
   # We don't have an `op.accept(:charset)` or something similar because the encoding may be set
   # _after_ the charset is encountered; so we do all the checking at the end.
 
-  op.on '--action=WHAT', /\A(\w+);(.*)/ do |(_full, name, charset)|
-    Patterns.add_pattern charset, Action.get_action(name)
-  end
+  # op.on '--action=WHAT', /\A(\w+);(.*)/ do |(_full, name, charset)|
+  #   Patterns.add_pattern charset, Action.get_action(name)
+  # end
 
-  op.on '--print CHARSET', 'Print characters, unchanged, which match CHARSET' do |cs|
+
+  op.on '--print[=CHARSET]', 'Print characters, unchanged, which match CHARSET' do |cs|
     Patterns.add_pattern(cs, Action::PRINT)
   end
+  op.on '-p', 'Same as --print, except only works on the default charset' do
+    Action.default = Action::PRINT
+  end
 
-  op.on '--delete CHARSET', 'Delete characters which match CHARSET from the output.' do |cs|
+  op.on '--delete[=CHARSET]', 'Delete characters which match CHARSET from the output.' do |cs|
     Patterns.add_pattern(cs, Action::DELETE)
   end
+  op.on '-d', 'Same as --delete, except only works on the default charset' do
+    Action.default = Action::DELETE
+  end
 
-  op.on '--dot CHARSET', "Replaces CHARSET with a period ('.')" do |cs|
+  op.on '--dot[=CHARSET]', "Replaces CHARSET with a period ('.')" do |cs|
     Patterns.add_pattern(cs, Action::DOT)
   end
-
-  op.on '--replace CHARSET', "Replaces CHARSET with the replacement character (#{Action::REPLACEMENT_CHARACTER_ASCII})" do |cs|
-    Patterns.add_pattern(cs, Action::REPLACE)
+  op.on '-.', 'Same as --dot, except only works on the default charset' do
+    Action.default = Action::DOT
   end
 
-  op.on '--hex CHARSET', 'Replaces characters with their hex value (\xHH)' do |cs|
+  op.on '--replace[=CHARSET]', "Replaces CHARSET with the replacement character (#{Action::REPLACEMENT_CHARACTER_ASCII})" do |cs|
+    Patterns.add_pattern(cs, Action::REPLACE)
+  end
+  op.on '-r', 'Same as --replace, except only works on the default charset' do
+    Action.default = Action::REPLACE
+  end
+
+  op.on '--hex[=CHARSET]', 'Replaces characters with their hex value (\xHH)' do |cs|
     Patterns.add_pattern(cs, Action::HEX)
   end
 
-  op.on '--octal CHARSET', 'Replaces characters with their octal escapes (\###)' do |cs|
+  op.on '-x', 'Same as --replace, except only works on the default charset' do
+    Action.default = Action::HEX
+  end
+
+  op.on '--octal[=CHARSET]', 'Replaces characters with their octal escapes (\###)' do |cs|
     Patterns.add_pattern(cs, Action::OCTAL)
   end
 
-  op.on '--codepoint CHARSET', 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
+  op.on '-o', '--escape-by-octal', 'Output octal escapes (\###) for escaped chars' do
+    Action.default = Action::OCTAL
+  end
+
+  op.on '--codepoint[=CHARSET]', 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
     Patterns.add_pattern(cs, Action::CODEPOINTS)
   end
 
-  op.on '--highlight CHARSET', 'Prints the char unchanged, but visual effects are added to it.' do |cs|
+  op.on '--highlight[=CHARSET]', 'Prints the char unchanged, but visual effects are added to it.' do |cs|
     Patterns.add_pattern(cs, Action::HIGHLIGHT)
   end
 
-  op.on '--control-picture CHARSET', 'Use "pictures" (U+240x-U+242x). Attempts to generate pictures',
+  op.on '--control-picture[=CHARSET]', 'Use "pictures" (U+240x-U+242x). Attempts to generate pictures',
                                      "for chars outside of '\\0-\\x20\\x7F' is an error." do |cs|
     Patterns.add_pattern(cs, Action::CONTROL_PICTURES)
   end
 
-  op.on '--c-escape CHARSET', 'Like --hex, except c-style escapes (eg \n) are used for the',
+  op.on '--c-escape[=CHARSET]', 'Like --hex, except c-style escapes (eg \n) are used for the',
                               "following chars: #{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}" do |cs|
     Patterns.add_pattern(cs, Action::C_ESCAPES)
   end
 
-  op.on '--default CHARSET', 'Use the default patterns for chars in CHARSET' do |cs|
+  op.on '--default[=CHARSET]', 'Use the default patterns for chars in CHARSET' do |cs|
     Patterns.add_pattern(cs, Action::DEFAULT)
   end
 
