@@ -55,6 +55,10 @@ module Action
     "\v" => '\v', "\f" => '\f', "\r" => '\r', "\e" => '\e', "\\" => '\\\\',
   }
 
+  # Used with `REPLACE`, to be the character we replace things with.
+  REPLACEMENT_CHARACTER = '�'
+  REPLACEMENT_CHARACTER_ASCII = '\uFFFD'
+
   ## Returns the character unchanged
   PRINT = ->char do
     char
@@ -69,6 +73,11 @@ module Action
   ## Returns a single `.`
   DOT = ->_char do
     visualize '.'
+  end
+
+  ## Returns the replacement character, `REPLACEMENT_CHARACTER`
+  REPLACE = ->_char do
+    visualize REPLACEMENT_CHARACTER
   end
 
   ## Returns the bytes of the character in hexadecimal format, `\xHH`
@@ -373,6 +382,7 @@ OptParse.new do |op|
       -d, -D          Delete from the output
       -p, -P          Print unchanged
       -., -@          Replace with a period ('.')
+      -r, -R          Replace with the replacement character (#{Action::REPLACEMENT_CHARACTER_ASCII})
       -C              Replace escaped chars with their "control pictures"
     #{BOLD_BEGIN}SPECIFIC ESCAPES#{BOLD_END}
       -l              Don't escape newlines.
@@ -488,6 +498,10 @@ OptParse.new do |op|
     Action.default = Action::DOT
   end
 
+  op.on '-r', '--escape-by-replace', "Replace escaped chars with the replacement character, #{Action::REPLACEMENT_CHARACTER_ASCII}" do
+    Action.default = Action::REPLACE
+  end
+
   op.on '-C', '--escape-by-control-pictures', 'Print out pictures for some chars; others use hex' do
     Action.default = Action::CONTROL_PICTURES
   end
@@ -524,6 +538,10 @@ OptParse.new do |op|
 
   op.on '-@', '--invalid-dot', 'Like -., but only for illegal bytes in the encoding' do
     Action.error = Action::DOT
+  end
+
+  op.on '-R', '--invalid-replace', 'Like -r, but only for illegal bytes in the encoding' do
+    Action.error = Action::REPLACE
   end
 
 
@@ -582,6 +600,10 @@ OptParse.new do |op|
 
   op.on '--dot CHARSET', "Replaces CHARSET with a period ('.')" do |cs|
     Patterns.add_pattern(cs, Action::DOT)
+  end
+
+  op.on '--replace CHARSET', "Replaces CHARSET with the replacement character (#{Action::REPLACEMENT_CHARACTER_ASCII})" do |cs|
+    Patterns.add_pattern(cs, Action::REPLACE)
   end
 
   op.on '--hex CHARSET', 'Replaces characters with their hex value (\xHH)' do |cs|
