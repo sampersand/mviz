@@ -139,7 +139,10 @@ module Action
     end
   end
 
-  VALID_ACTIONS = constants.select { Action.const_get(_1).is_a?(Proc) }
+  VALID_ACTIONS = constants.filter_map { |name|
+    a = Action.const_get(name)
+    a.is_a?(Proc) and [name.to_s.downcase.tr('_','-'), a]
+  }.to_h
 
   ## The action to use by default.
   class << self
@@ -481,9 +484,7 @@ OptParse.new do |op|
   op.separator 'ESCAPES', '(Change the default output behaviour. All --escape-by-XXX are mutually exclusive)'
 
   op.accept Action, /\A\w+\z/ do |name|
-    action = Action.const_get(name.upcase) rescue nil
-    raise OptionParser::InvalidArgument, name unless action.is_a? Proc
-    action
+    Action::VALID_ACTIONS[name.downcase] or raise OptionParser::InvalidArgument, name
   end
 
   op.on '--default-action=ACTION', Action, 'Specify the default action. Valid options are: <TODO>' do |action|
@@ -492,6 +493,11 @@ OptParse.new do |op|
 
   op.on '--invalid-action=ACTION', Action, 'Specify the invalid action. Valid options are: <TODO>' do |action|
     Action.error = action
+  end
+
+  op.on '--list-actions', 'List all actions that can be supplied to ACTIONS, then exit' do
+    puts "Valid actions: #{Action::VALID_ACTIONS.keys.join(", ")}"
+    exit
   end
 
   op.on '-x', '--escape-by-hex', 'Output hex escape (\xHH) for escaped chars' do
