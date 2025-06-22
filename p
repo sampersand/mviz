@@ -532,90 +532,91 @@ OptParse.new do |op|
 
   op.separator 'SHORTHANDS', '(All of these are conveniences and are shorthands for --do, --default, or --invalid)'
 
-  op.on '-x', '--hex', 'Same as --default=hex; Output hex escape (\xHH)' do
+  op.on '-x', '--hex', 'Output hex escape (\xHH) [--default=hex]' do
     Action.default = Action::HEX
   end
 
-  op.on '-o', '--octal', 'Same as --default=octal; Output octal escapes (\###)' do
+  op.on '-o', '--octal', 'Output octal escapes (\###) [--default=octal]' do
     Action.default = Action::OCTAL
   end
 
-  op.on '-d', '--delete', 'Same as --default=delete; Delete escaped chars' do
+  op.on '-d', '--delete', 'Delete escaped chars [--default=delete]' do
     Action.default = Action::DELETE
   end
 
-  op.on '-p', '--print', 'Same as --default=print; Print escaped chars verbatim' do
+  op.on '-p', '--print', 'Print escaped chars verbatim [--default=print]' do
     Action.default = Action::PRINT
   end
 
-  op.on '-r', '--replace', "Same as --default=replace; Replace escaped chars with #{Action::REPLACEMENT_CHARACTER_ASCII}" do
+  op.on '-r', '--replace', "Replace escaped chars with #{Action::REPLACEMENT_CHARACTER_ASCII} [--default=replace]" do
     Action.default = Action::REPLACE
   end
 
-  op.on '-.', '--dot', "Same as --default=dot; Replace escaped chars with '.'" do
+  op.on '-.', '--dot', "Replace escaped chars with '.' [--default=dot]" do
     Action.default = Action::DOT
   end
 
-  op.on '-C', '--control-pictures', 'Same as --default=control-pictures. Print out "pictures" for',
-                                    'some chars. Warns on others (and uses hex).' do
+  op.on '-C', '--control-pictures', 'Print out "pictures" for some chars, and warns on others. Use',
+                                    'with -a/-8, and default charset. [--default=control-pictures]' do
     Action.default = Action::CONTROL_PICTURES
   end
 
   op.on ''
-  op.on '-X', '--invalid-hex', 'Same as --invalid=hex. (Like -x, but only for invalid bytes in the encoding)' do
+  op.on '-X', '--invalid-hex', 'Like -x, but only for malformed bytes [--invalid=hex]' do
     Action.error = Action::HEX
   end
 
-  op.on '-O', '--invalid-octal', 'Same as --invalid=octal. (Like -o, but only for invalid bytes in the encoding)' do
+  op.on '-O', '--invalid-octal', 'Like -o, but only for malformed bytes [--invalid=octal]' do
     Action.error = Action::OCTAL
   end
 
-  op.on '-D', '--invalid-delete', 'Same as --invalid=delete. (Like -d, but only for invalid bytes in the encoding)' do
+  op.on '-D', '--invalid-delete', 'Like -d, but only for malformed bytes [--invalid=delete]' do
     Action.error = Action::DELETE
   end
 
-  op.on '-P', '--invalid-print', 'Same as --invalid=print. (Like -p, but only for invalid bytes in the encoding)' do
+  op.on '-P', '--invalid-print', 'Like -p, but only for malformed bytes [--invalid=print]' do
     Action.error = Action::PRINT
   end
 
-  op.on '-@', '--invalid-dot', 'Same as --invalid=dot. (Like -., but only for invalid bytes in the encoding)' do
+  op.on '-@', '--invalid-dot', 'Like -., but only for malformed bytes [--invalid=dot]' do
     Action.error = Action::DOT
   end
 
-  op.on '-R', '--invalid-replace', 'Same as --invalid=replace. (Like -r, but only for invalid bytes in the encoding)' do
+  op.on '-R', '--invalid-replace', 'Like -r, but only for malformed bytes [--invalid=replace]' do
     Action.error = Action::REPLACE
   end
 
   op.on ''
 
-  op.on '-l', '--print-newlines', "Don't escape newline. (Same as --print='\\n')" do
+  op.on '-l', '--print-newlines', "Don't escape newline. [--do='print;\\n']" do
     Patterns.add_pattern(/\n/, Action::PRINT)
   end
 
-  op.on '-w', '--print-whitespace', "Don't escape newline, tab, or space. (Same as --print='\\n\\t ')" do
+  op.on '-w', '--print-whitespace', "Don't escape newline, tab, or space. [--do='print;\\n\\t ']" do
     Patterns.add_pattern(/[\n\t ]/, Action::PRINT)
   end
 
-  op.on '-s', '--highlight-space', "Escape all spaces with highlights. (Same as --highlight=' ')" do
+  op.on '-s', '--highlight-space', "Escape all spaces with highlights. [--do='highlight; ']" do
     Patterns.add_pattern(/ /, Action::HIGHLIGHT)
   end
 
-  op.on '-S', '--picture-space', "Escape all spaces with a \"picture\". (Same as --picture=' ')" do
+  op.on '-S', '--picture-space', "Escape all spaces with a \"picture\". [--do='picture; ']" do
     Patterns.add_pattern(/ /, Action::CONTROL_PICTURES)
   end
 
-  op.on '-B', '-\\', '--escape-backslashes', "Escape backslashes as '\\\\'. (Same as --c-escape='\\\\')",
-                                      '(Default if not in colour mode, and no --escape-by was given)' do |eb|
+  op.on '-B', '-\\', '--escape-backslashes', "Escape backslashes as '\\\\'. (Default if not in colour mode, and",
+                                             "no --escape-by was given). [--do='c-escape;\\\\']" do |eb|
     Patterns.add_pattern(/\\/, Action::C_ESCAPES)
   end
 
-  op.on '-m', '--multibyte-codepoints', "Use codepoints for multibyte chars. (Same as --codepoint='\\m')",
-                                        '(Not useful in single-byte-only encodings)' do
+  op.on '-m', '--multibyte-codepoints', 'Use codepoints for multibyte chars. (Not useful in single-byte',
+                                        "encodings. [Same as --do='codepoint;\\m']" do
     Patterns.add_pattern(CharSet::MULTIBYTE, Action::CODEPOINTS)
   end
 
-  op.on '-A', '--escape-all', "Mark all characters as escaped. (Same as --escape-charset='\\A')",
-                              'Does nothing alone; it needs to be used with an "ESCAPES" flag' do
+  op.on '-A', '--escape-all', 'Changes the default charset to be match _all_ characters. Does',
+                              'nothing alone, as the default action prints most characters',
+                              "verbatim. [--default-charset='\\A']" do
     CharSet.raw_default = CharSet::ALL
   end
 
@@ -649,19 +650,19 @@ OptParse.new do |op|
     exit
   end
 
-  op.on '-b', '--binary', '--bytes', 'Same as --encoding=binary. (Escapes high-bit bytes)' do
+  op.on '-b', '--binary', '--bytes', 'Escapes _all_ bytes [--encoding=binary]' do
     $encoding = Encoding::BINARY
   end
 
-  op.on '-a', '--ascii', 'Same as --encoding=ASCII. Like -b, but high-bits are "invalid".' do
+  op.on '-a', '--ascii', 'Like -b, but high-bits are "invalid". [--encoding=ASCII]' do
     $encoding = Encoding::ASCII
   end
 
-  op.on '-8', '--utf-8', 'Same as --encoding=UTF-8. (default unless POSIXLY_CORRECT set)' do
+  op.on '-8', '--utf-8', 'Expect UTF-8; default unless POSIXLY_CORRECT [--encoding=UTF-8]' do
     $encoding = Encoding::UTF_8
   end
 
-  op.on '--locale', 'Same as --encoding=locale. (Chooses encoding based on env vars)' do
+  op.on '--locale', 'Chooses encoding based on env vars. [--encoding=locale]' do
     $encoding = Encoding.find('locale')
   end
 
