@@ -139,6 +139,8 @@ module Action
     end
   end
 
+  VALID_ACTIONS = constants.select { Action.const_get(_1).is_a?(Proc) }
+
   ## The action to use by default.
   class << self
     attr_accessor :default
@@ -478,6 +480,20 @@ OptParse.new do |op|
 
   op.separator 'ESCAPES', '(Change the default output behaviour. All --escape-by-XXX are mutually exclusive)'
 
+  op.accept Action, /\A\w+\z/ do |name|
+    action = Action.const_get(name.upcase) rescue nil
+    raise OptionParser::InvalidArgument, name unless action.is_a? Proc
+    action
+  end
+
+  op.on '--default-action=ACTION', Action, 'Specify the default action. Valid options are: <TODO>' do |action|
+    Action.default = action
+  end
+
+  op.on '--invalid-action=ACTION', Action, 'Specify the invalid action. Valid options are: <TODO>' do |action|
+    Action.error = action
+  end
+
   op.on '-x', '--escape-by-hex', 'Output hex escape (\xHH) for escaped chars' do
     Action.default = Action::HEX
   end
@@ -543,7 +559,6 @@ OptParse.new do |op|
   op.on '-R', '--invalid-replace', 'Like -r, but only for illegal bytes in the encoding' do
     Action.error = Action::REPLACE
   end
-
 
   ##################################################################################################
   #                                           Shorthands                                           #
