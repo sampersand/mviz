@@ -508,33 +508,57 @@ OptParse.new do |op|
     $escape_surronding_spaces = ess
   end
 
-  op.on '--print[=CHARSET]', 'Print characters, unchanged, which match CHARSET' do |cs|
+  op.on '-p' do Action.default = Action::PRINT end
+  op.on '--print[=CHARSET]', 'Print characters, unchanged, which match CHARSET. Unlike all of',
+                             'the other actions, using --print will not mark values as',
+                             "\"escaped\" for the purposes of --check-escapes." do |cs|
     Patterns.add_pattern(cs, Action::PRINT)
   end
 
-  op.on '--delete[=CHARSET]', 'Delete characters which match CHARSET from the output.' do |cs|
+  op.on '-d' do Action.default = Action::DELETE end
+  op.on '--delete[=CHARSET]', 'Delete characters which match CHARSET from the output by not',
+                              'printing anything. Deleted characters are considered "escaped"',
+                              'for the purposes of --check-escape.' do |cs|
     Patterns.add_pattern(cs, Action::DELETE)
   end
 
+  op.on '-.' do Action.default = Action::DOT end
   op.on '--dot[=CHARSET]', "Replaces CHARSET with a period ('.')" do |cs|
     Patterns.add_pattern(cs, Action::DOT)
   end
+  op.on ''
 
+  op.on '-r' do
+    Action.default = Action::REPLACE
+  end
   op.on '--replace[=CHARSET]', "Replaces CHARSET with the replacement character (#{Action::REPLACEMENT_CHARACTER_ASCII})" do |cs|
     Patterns.add_pattern(cs, Action::REPLACE)
   end
+  op.on ''
 
+  op.on '-x' do
+    Action.default = Action::HEX
+  end
   op.on '--hex[=CHARSET]', 'Replaces characters with their hex value (\xHH)' do |cs|
     Patterns.add_pattern(cs, Action::HEX)
   end
+  op.on ''
 
+  op.on '-o' do
+    Action.default = Action::OCTAL
+  end
   op.on '--octal[=CHARSET]', 'Replaces characters with their octal escapes (\###)' do |cs|
     Patterns.add_pattern(cs, Action::OCTAL)
   end
+  op.on ''
 
+  op.on '-C' do
+    Action.default = Action::CONTROL_PICTURES
+  end
   op.on '--codepoint[=CHARSET]', 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
     Patterns.add_pattern(cs, Action::CODEPOINTS)
   end
+  op.on ''
 
   op.on '--highlight[=CHARSET]', 'Prints the char unchanged, but visual effects are added to it.' do |cs|
     Patterns.add_pattern(cs, Action::HIGHLIGHT)
@@ -556,33 +580,7 @@ OptParse.new do |op|
 
   op.separator ''
 
-  op.on '-p', 'Same as --print, except it never takes an argument (works on default charset)' do
-    Action.default = Action::PRINT
-  end
 
-  op.on '-d', 'Same as --delete, except it never takes an argument (works on default charset)' do
-    Action.default = Action::DELETE
-  end
-
-  op.on '-.', 'Same as --dot, except it never takes an argument (works on default charset)' do
-    Action.default = Action::DOT
-  end
-
-  op.on '-r', 'Same as --replace, except it never takes an argument (works on default charset)' do
-    Action.default = Action::REPLACE
-  end
-
-  op.on '-x', 'Same as --hex, except it never takes an argument (works on default charset)' do
-    Action.default = Action::HEX
-  end
-
-  op.on '-o', 'Same as --octal, except it never takes an argument (works on default charset)' do
-    Action.default = Action::OCTAL
-  end
-
-  op.on '-C', 'Same as --control-picture, except it never takes an argument (works on default charset)' do
-    Action.default = Action::CONTROL_PICTURES
-  end
   puts op.help; exit
 
   ##################################################################################################
