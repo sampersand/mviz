@@ -491,15 +491,22 @@ OptParse.new do |op|
     Action.get_action name
   end
 
-  op.on '--default-action=ACTION', Action, 'Specify the default action. Valid options are: <TODO>' do |action|
+  op.on '--do=ACTION;CHARSET', /\A(\w+);(.*)/, 'Specify an action to do for a given charset. Takes precedence',
+                                               'over the default action; Ties go to the last-specified one.' do |(_full, name, charset)|
+    Patterns.add_pattern charset, Action.get_action(name)
+  end
+
+
+  op.on '--default=ACTION', Action, 'Specify the default action' do |action|
     Action.default = action
   end
 
-  op.on '--invalid=ACTION', Action, 'Specify the invalid action. Valid options are: <TODO>' do |action|
+  op.on '--invalid=ACTION', Action, 'Specify the invalid action. --codepoints doesn\'t make sense' do |action|
+    raise OptionParser::InvalidArgument if action == Action::CODEPOINTS
     Action.error = action
   end
 
-  op.on '--list-actions', 'List all actions that can be supplied to ACTIONS, then exit' do
+  op.on '--list-actions', 'List all actions that can be supplied to ACTION, then exit' do
     puts "Valid actions: #{Action::VALID_ACTIONS.keys.join(", ")}"
     exit
   end
@@ -537,7 +544,7 @@ OptParse.new do |op|
   #   Action.default = Action::DEFAULT
   # end
 
-  op.on '--[no-]default-charset', 'Explicitly set the charset that -p, -d, -., and -x use.',
+  op.on '--[no-]default-charset[=CHARSET]', 'Explicitly set the charset that -p, -d, -., and -x use.',
                                   'If --no-escape-charset is used, only chars matched in "SPECIFIC',
                                   'ESCAPES" are used' do |cs|
     CharSet.default_charset = cs
@@ -547,27 +554,27 @@ OptParse.new do |op|
     $escape_surronding_spaces = ess
   end
 
-  op.on '-X', '--invalid-hex', 'Like -x, but only for illegal bytes in the encoding' do
+  op.on '-X', '--_inva_hex', 'Like -x, but only for illegal bytes in the encoding' do
     Action.error = Action::HEX
   end
 
-  op.on '-O', '--invalid-octal', 'Like -o, but only for illegal bytes in the encoding' do
+  op.on '-O', '--_inva_octal', 'Like -o, but only for illegal bytes in the encoding' do
     Action.error = Action::OCTAL
   end
 
-  op.on '-D', '--invalid-delete', 'Like -d, but only for illegal bytes in the encoding' do
+  op.on '-D', '--_inva_delete', 'Like -d, but only for illegal bytes in the encoding' do
     Action.error = Action::DELETE
   end
 
-  op.on '-P', '--invalid-print', 'Like -p, but only for illegal bytes in the encoding' do
+  op.on '-P', '--_inva_print', 'Like -p, but only for illegal bytes in the encoding' do
     Action.error = Action::PRINT
   end
 
-  op.on '-@', '--invalid-dot', 'Like -., but only for illegal bytes in the encoding' do
+  op.on '-@', '--_inva_dot', 'Like -., but only for illegal bytes in the encoding' do
     Action.error = Action::DOT
   end
 
-  op.on '-R', '--invalid-replace', 'Like -r, but only for illegal bytes in the encoding' do
+  op.on '-R', '--_inva_replace', 'Like -r, but only for illegal bytes in the encoding' do
     Action.error = Action::REPLACE
   end
 
@@ -607,64 +614,14 @@ OptParse.new do |op|
     CharSet.raw_default = CharSet::ALL
   end
 
-  ##################################################################################################
-  #                                        Specific Escapes                                        #
-  ##################################################################################################
+  # ##################################################################################################
+  # #                                        Specific Escapes                                        #
+  # ##################################################################################################
 
-  op.separator 'SPECIFIC ESCAPES', '(Takes precedence over "ESCAPES"; Ties go to the last one specified)'
+  # op.separator 'SPECIFIC ESCAPES', '(Takes precedence over "ESCAPES"; Ties go to the last one specified)'
 
-  # We don't have an `op.accept(:charset)` or something similar because the encoding may be set
-  # _after_ the charset is encountered; so we do all the checking at the end.
-
-  op.on '--action=ACTION;CHARSET', /\A(\w+);(.*)/, 'Specify an action to do for a given charset' do |(_full, name, charset)|
-    Patterns.add_pattern charset, Action.get_action(name)
-  end
-
-  op.on '--do-print CHARSET', 'Print characters, unchanged, which match CHARSET' do |cs|
-    Patterns.add_pattern(cs, Action::PRINT)
-  end
-
-  op.on '--do-delete CHARSET', 'Delete characters which match CHARSET from the output.' do |cs|
-    Patterns.add_pattern(cs, Action::DELETE)
-  end
-
-  op.on '--do-dot CHARSET', "Replaces CHARSET with a period ('.')" do |cs|
-    Patterns.add_pattern(cs, Action::DOT)
-  end
-
-  op.on '--do-replace CHARSET', "Replaces CHARSET with the replacement character (#{Action::REPLACEMENT_CHARACTER_ASCII})" do |cs|
-    Patterns.add_pattern(cs, Action::REPLACE)
-  end
-
-  op.on '--do-hex CHARSET', 'Replaces characters with their hex value (\xHH)' do |cs|
-    Patterns.add_pattern(cs, Action::HEX)
-  end
-
-  op.on '--do-octal CHARSET', 'Replaces characters with their octal escapes (\###)' do |cs|
-    Patterns.add_pattern(cs, Action::OCTAL)
-  end
-
-  op.on '--do-codepoint CHARSET', 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
-    Patterns.add_pattern(cs, Action::CODEPOINTS)
-  end
-
-  op.on '--do-highlight CHARSET', 'Prints the char unchanged, but visual effects are added to it.' do |cs|
-    Patterns.add_pattern(cs, Action::HIGHLIGHT)
-  end
-
-  op.on '--do-control-picture CHARSET', 'Use "pictures" (U+240x-U+242x). Attempts to generate pictures',
-                                     "for chars outside of '\\0-\\x20\\x7F' is an error." do |cs|
-    Patterns.add_pattern(cs, Action::CONTROL_PICTURES)
-  end
-
-  op.on '--do-c-escape CHARSET', 'Like --hex, except c-style escapes (eg \n) are used for the',
-                              "following chars: #{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}" do |cs|
-    Patterns.add_pattern(cs, Action::C_ESCAPES)
-  end
-
-  op.on '--do-default CHARSET', 'Use the default patterns for chars in CHARSET' do |cs|
-    Patterns.add_pattern(cs, Action::DEFAULT)
-  end
+  # # We don't have an `op.accept(:charset)` or something similar because the encoding may be set
+  # # _after_ the charset is encountered; so we do all the checking at the end.
 
   ##################################################################################################
   #                                        Specific Escapes                                        #
@@ -747,22 +704,22 @@ OptParse.new do |op|
   EOS
 
   op.separator 'ACTIONS'
-  op.on <<~'EOS'
+  op.on <<~"EOS"
     An 'ACTION' is something that's done when certain characters are encountered. Most of the actions
     have shorthands that interact with the default charset. ACTIONs are case-insensitive when specified.
     Specific actions (ie non-default ones) take precedence over actoins that affect the default charset.
         print            Print characters, unchanged
         delete           Delete characters
         dot              Replaces characters with a period ('.')
-        replace          Replaces characters with the replacement character (\uFFFD)
-        hex              Replaces characters with their hex value (\xHH)
-        octal            Replaces characters with their octal escapes (\###)
-        codepoint        Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m
+        replace          Replaces characters with the replacement character (#{Action::REPLACEMENT_CHARACTER_ASCII})
+        hex              Replaces characters with their hex value (\\xHH)
+        octal            Replaces characters with their octal escapes (\\###)
+        codepoint        Replaces chars with their UTF-8 codepoints (ie \\u{...}). See -m
         highlight        Prints the char unchanged, but visual effects are added to it.
         control-picture  Use "pictures" (U+240x-U+242x). Attempts to generate pictures
-                           for chars outside of '\0-\x20\x7F' yields a warning.
-        c-escape         Like --hex, except c-style escapes (eg \n) are used for the
-                           following chars: \0\a\b\t\n\v\f\r\e\\
+                           for chars outside of '\\0-\\x20\\x7F' yields a warning.
+        c-escape         Like --hex, except c-style escapes (eg \\n) are used for the
+                           following chars: #{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}
         default          Use the default patterns for characters
   EOS
 
