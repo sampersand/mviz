@@ -369,8 +369,8 @@ OptParse.new do |op|
   op.on_head 'A program to escape "weird" characters'
 
   # Define a custom `separator` function to add bold to each section
-  def op.separator(title, additional = nil)
-    super "\n#{BOLD_BEGIN}#{title}#{BOLD_END}#{additional && ' '}#{additional}"
+  def op.section(title, additional = nil)
+    separator "\n#{BOLD_BEGIN}#{title}#{BOLD_END}#{additional && ' '}#{additional}"
   end
 
   # We can't use an `op.accept :CHARSET` here to create regex patterns because we only know the
@@ -379,7 +379,7 @@ OptParse.new do |op|
   ##################################################################################################
   #                                        Generic Options                                         #
   ##################################################################################################
-  op.separator 'GENERIC OPTIONS'
+  op.section 'GENERIC OPTIONS'
 
   op.on '-h', 'Print a shorter help message and exit' do
     puts <<~EOS
@@ -434,23 +434,15 @@ OptParse.new do |op|
     $DEBUG = $VERBOSE = true
   end
 
-  op.on '-f', '--[no-]files', 'Interpret trailing options as filenames to read' do |f|
+  op.on '-f', '--[no-]files', 'Interpret trailing options as filenames to read, instead of as',
+                              'literal strings.'  do |f|
     $files = f
-  end
-
-  op.on '--[no-]malformed-error', 'Invalid chars in the --encoding cause exit status 2. (default)' do |me|
-    $malformed_error = me
-  end
-
-  op.on '-c', '--[no-]check-escapes', 'Exits with status 1 if any character is escaped. Useful to',
-                                      'check inputs programmatically to ensure they are "normal".' do |ee|
-    $escape_error = ee
   end
 
   ##################################################################################################
   #                                            Outputs                                             #
   ##################################################################################################
-  op.separator 'OUTPUTS'
+  op.section 'OUTPUTS & ERROR CHECKING'
 
   op.on '-q', '--[no-]quiet', 'Do not output anything. (Useful with -c or --malformed-error)' do |q|
     $quiet = q
@@ -486,46 +478,135 @@ OptParse.new do |op|
     $trailing_newline = false
   end
 
+  op.on '--[no-]malformed-error', 'Invalid chars in the --encoding cause exit status 2. (default)' do |me|
+    $malformed_error = me
+  end
+
+  op.on '-c', '--[no-]check-escapes', 'Exits with status 1 if any character is escaped. Useful to',
+                                      'check inputs programmatically to ensure they are "normal".' do |ee|
+    $escape_error = ee
+  end
+
+  ##################################################################################################
+  #                                        Specific Escapes                                        #
+  ##################################################################################################
+
+  op.section 'ESCAPES'#, '(Ties go to the last one specified. Without args, uses default charset)'
+  op.on 'Specify how characters should be escaped. Flags which optionally take a CHARSET set the default'
+  op.on 'action if no charset is supplied. Actions with explicit charsets are checked first, and ties go to'
+  op.on 'the last one specified. If no charset matches, the default one is used.'
+
+  op.on '--[no-]default-charset CHARSET', 'Explicitly set the default charset that flags without CHARSET',
+                                          'values usee. If --no-default-charset is used, only flags which',
+                                          'explicitly give a charset are used, and everything else is',
+                                          'printed out verbatim.' do |cs|
+    CharSet.default_charset = cs
+  end
+
+  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces in strings. Doesn't work with",
+                                           "the --file option. (default)" do |ess|
+    $escape_surronding_spaces = ess
+  end
+
+  op.on '--print[=CHARSET]', 'Print characters, unchanged, which match CHARSET' do |cs|
+    Patterns.add_pattern(cs, Action::PRINT)
+  end
+
+  op.on '--delete[=CHARSET]', 'Delete characters which match CHARSET from the output.' do |cs|
+    Patterns.add_pattern(cs, Action::DELETE)
+  end
+
+  op.on '--dot[=CHARSET]', "Replaces CHARSET with a period ('.')" do |cs|
+    Patterns.add_pattern(cs, Action::DOT)
+  end
+
+  op.on '--replace[=CHARSET]', "Replaces CHARSET with the replacement character (#{Action::REPLACEMENT_CHARACTER_ASCII})" do |cs|
+    Patterns.add_pattern(cs, Action::REPLACE)
+  end
+
+  op.on '--hex[=CHARSET]', 'Replaces characters with their hex value (\xHH)' do |cs|
+    Patterns.add_pattern(cs, Action::HEX)
+  end
+
+  op.on '--octal[=CHARSET]', 'Replaces characters with their octal escapes (\###)' do |cs|
+    Patterns.add_pattern(cs, Action::OCTAL)
+  end
+
+  op.on '--codepoint[=CHARSET]', 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
+    Patterns.add_pattern(cs, Action::CODEPOINTS)
+  end
+
+  op.on '--highlight[=CHARSET]', 'Prints the char unchanged, but visual effects are added to it.' do |cs|
+    Patterns.add_pattern(cs, Action::HIGHLIGHT)
+  end
+
+  op.on '--control-picture[=CHARSET]', 'Use "pictures" (U+240x-U+242x). Attempts to generate pictures',
+                                     "for chars outside of '\\0-\\x20\\x7F' is an error." do |cs|
+    Patterns.add_pattern(cs, Action::CONTROL_PICTURES)
+  end
+
+  op.on '--c-escape[=CHARSET]', 'Like --hex, except c-style escapes (eg \n) are used for the',
+                              "following chars: #{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}" do |cs|
+    Patterns.add_pattern(cs, Action::C_ESCAPES)
+  end
+
+  op.on '--default[=CHARSET]', 'Use the default patterns for chars in CHARSET' do |cs|
+    Patterns.add_pattern(cs, Action::DEFAULT)
+  end
+
+  op.separator ''
+
+  op.on '-p', 'Same as --print, except it never takes an argument (works on default charset)' do
+    Action.default = Action::PRINT
+  end
+
+  op.on '-d', 'Same as --delete, except it never takes an argument (works on default charset)' do
+    Action.default = Action::DELETE
+  end
+
+  op.on '-.', 'Same as --dot, except it never takes an argument (works on default charset)' do
+    Action.default = Action::DOT
+  end
+
+  op.on '-r', 'Same as --replace, except it never takes an argument (works on default charset)' do
+    Action.default = Action::REPLACE
+  end
+
+  op.on '-x', 'Same as --hex, except it never takes an argument (works on default charset)' do
+    Action.default = Action::HEX
+  end
+
+  op.on '-o', 'Same as --octal, except it never takes an argument (works on default charset)' do
+    Action.default = Action::OCTAL
+  end
+
+  op.on '-C', 'Same as --control-picture, except it never takes an argument (works on default charset)' do
+    Action.default = Action::CONTROL_PICTURES
+  end
+  puts op.help; exit
+
   ##################################################################################################
   #                                            Escapes                                             #
   ##################################################################################################
 
-  op.separator 'ESCAPES', '(Change the default output behaviour. All --escape-by-XXX are mutually exclusive)'
+  op.section 'INVALID ESCAPES', '(Change the default output behaviour. All --escape-by-XXX are mutually exclusive)'
 
-  op.accept Action, /\A\w+\z/ do |name|
-    Action.get_action name
-  end
+  # op.accept Action, /\A\w+\z/ do |name|
+  #   Action.get_action name
+  # end
 
-  op.on '--default-action=ACTION', Action, 'Specify the default action. Valid options are: <TODO>' do |action|
-    Action.default = action
-  end
+  # op.on '--default-action=ACTION', Action, 'Specify the default action. Valid options are: <TODO>' do |action|
+  #   Action.default = action
+  # end
 
-  op.on '--invalid=ACTION', Action, 'Specify the invalid action. Valid options are: <TODO>' do |action|
-    Action.error = action
-  end
+  # op.on '--invalid=ACTION', Action, 'Specify the invalid action. Valid options are: <TODO>' do |action|
+  #   Action.error = action
+  # end
 
-  op.on '--list-actions', 'List all actions that can be supplied to ACTIONS, then exit' do
-    puts "Valid actions: #{Action::VALID_ACTIONS.keys.join(", ")}"
-    exit
-  end
-
-  op.on '-C', '--escape-by-control-pictures', 'Print out pictures for some chars; others use hex' do
-    Action.default = Action::CONTROL_PICTURES
-  end
-
-  op.on '--escape-by-default', 'Use the default escape action' do
-    Action.default = Action::DEFAULT
-  end
-
-  op.on '--[no-]default-charset', '--[no-]escape-charset CHARSET', 'Explicitly set the charset that -p, -d, -., and -x use.',
-                                         'If --no-escape-charset is used, only chars matched in "SPECIFIC',
-                                         'ESCAPES" are used' do |cs|
-    CharSet.default_charset = cs
-  end
-
-  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces. Doesn't work with -f (default)" do |ess|
-    $escape_surronding_spaces = ess
-  end
+  # op.on '--list-actions', 'List all actions that can be supplied to ACTIONS, then exit' do
+  #   puts "Valid actions: #{Action::VALID_ACTIONS.keys.join(", ")}"
+  #   exit
+  # end
 
   op.on '-X', '--invalid-hex', 'Like -x, but only for illegal bytes in the encoding' do
     Action.error = Action::HEX
@@ -555,7 +636,7 @@ OptParse.new do |op|
   #                                           Shorthands                                           #
   ##################################################################################################
 
-  op.separator 'SHORTHANDS'
+  op.section 'SHORTHANDS'
   op.on '-l', '--print-newlines', "Don't escape newline. (Same as --print='\\n')" do
     Patterns.add_pattern(/\n/, Action::PRINT)
   end
@@ -590,87 +671,7 @@ OptParse.new do |op|
   ##################################################################################################
   #                                        Specific Escapes                                        #
   ##################################################################################################
-
-  op.separator 'SPECIFIC ESCAPES', '(Takes precedence over "ESCAPES"; Ties go to the last one specified. Without args, uses default charset)'
-
-  # We don't have an `op.accept(:charset)` or something similar because the encoding may be set
-  # _after_ the charset is encountered; so we do all the checking at the end.
-
-  # op.on '--action=WHAT', /\A(\w+);(.*)/ do |(_full, name, charset)|
-  #   Patterns.add_pattern charset, Action.get_action(name)
-  # end
-
-
-  op.on '--print[=CHARSET]', 'Print characters, unchanged, which match CHARSET' do |cs|
-    Patterns.add_pattern(cs, Action::PRINT)
-  end
-  op.on '-p', 'Same as --print, except only works on the default charset' do
-    Action.default = Action::PRINT
-  end
-
-  op.on '--delete[=CHARSET]', 'Delete characters which match CHARSET from the output.' do |cs|
-    Patterns.add_pattern(cs, Action::DELETE)
-  end
-  op.on '-d', 'Same as --delete, except only works on the default charset' do
-    Action.default = Action::DELETE
-  end
-
-  op.on '--dot[=CHARSET]', "Replaces CHARSET with a period ('.')" do |cs|
-    Patterns.add_pattern(cs, Action::DOT)
-  end
-  op.on '-.', 'Same as --dot, except only works on the default charset' do
-    Action.default = Action::DOT
-  end
-
-  op.on '--replace[=CHARSET]', "Replaces CHARSET with the replacement character (#{Action::REPLACEMENT_CHARACTER_ASCII})" do |cs|
-    Patterns.add_pattern(cs, Action::REPLACE)
-  end
-  op.on '-r', 'Same as --replace, except only works on the default charset' do
-    Action.default = Action::REPLACE
-  end
-
-  op.on '--hex[=CHARSET]', 'Replaces characters with their hex value (\xHH)' do |cs|
-    Patterns.add_pattern(cs, Action::HEX)
-  end
-
-  op.on '-x', 'Same as --replace, except only works on the default charset' do
-    Action.default = Action::HEX
-  end
-
-  op.on '--octal[=CHARSET]', 'Replaces characters with their octal escapes (\###)' do |cs|
-    Patterns.add_pattern(cs, Action::OCTAL)
-  end
-
-  op.on '-o', '--escape-by-octal', 'Output octal escapes (\###) for escaped chars' do
-    Action.default = Action::OCTAL
-  end
-
-  op.on '--codepoint[=CHARSET]', 'Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m' do |cs|
-    Patterns.add_pattern(cs, Action::CODEPOINTS)
-  end
-
-  op.on '--highlight[=CHARSET]', 'Prints the char unchanged, but visual effects are added to it.' do |cs|
-    Patterns.add_pattern(cs, Action::HIGHLIGHT)
-  end
-
-  op.on '--control-picture[=CHARSET]', 'Use "pictures" (U+240x-U+242x). Attempts to generate pictures',
-                                     "for chars outside of '\\0-\\x20\\x7F' is an error." do |cs|
-    Patterns.add_pattern(cs, Action::CONTROL_PICTURES)
-  end
-
-  op.on '--c-escape[=CHARSET]', 'Like --hex, except c-style escapes (eg \n) are used for the',
-                              "following chars: #{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}" do |cs|
-    Patterns.add_pattern(cs, Action::C_ESCAPES)
-  end
-
-  op.on '--default[=CHARSET]', 'Use the default patterns for chars in CHARSET' do |cs|
-    Patterns.add_pattern(cs, Action::DEFAULT)
-  end
-
-  ##################################################################################################
-  #                                        Specific Escapes                                        #
-  ##################################################################################################
-  op.separator 'ENCODINGS', '(default is normally --utf-8. If POSIXLY_CORRECT is set, --locale is the default)'
+  op.section 'ENCODINGS', '(default is normally --utf-8. If POSIXLY_CORRECT is set, --locale is the default)'
 
   op.on '-E', '--encoding ENCODING', "Specify the input's encoding. Case-insensitive. Encodings that",
                                      "aren't ASCII-compatible encodings (eg UTF-16) are illegal." do |enc|
@@ -707,7 +708,7 @@ OptParse.new do |op|
   ##################################################################################################
   #                                        Environment Vars                                        #
   ##################################################################################################
-  op.separator 'ENVIRONMENT VARIABLES'
+  op.section 'ENVIRONMENT VARIABLES'
   op.on <<-'EOS' # Note: `-EOS` not `~EOS` to keep leading spaces
     FORCE_COLOR, NO_COLOR
       Controls `--color=auto`. If FORCE_COLOR is set and nonempty, acts like `--color=always`. Else,
@@ -734,7 +735,7 @@ OptParse.new do |op|
   #                                      CHARSET Description                                       #
   ##################################################################################################
 
-  op.separator 'CHARSETS'
+  op.section 'CHARSETS'
   op.on <<~'EOS'
     A 'CHARSET' is a regex character without the surrounding brackets (for example, --delete='^a-z' will
     only output lowercase letters.) In addition to normal escapes (eg '\n' for newlines, '\w' for "word"
@@ -747,7 +748,7 @@ OptParse.new do |op|
     If more than pattern matches, the last one supplied on the command line wins.
   EOS
 
-  op.separator 'EXIT CODES'
+  op.section 'EXIT CODES'
   op.on <<~'EOS'
     Specific exit codes are used:
       - 0    No problems encountered
