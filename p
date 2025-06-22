@@ -504,41 +504,42 @@ OptParse.new do |op|
     exit
   end
 
-  op.on '-x', '--escape-by-hex', 'Output hex escape (\xHH) for escaped chars' do
+  op.on '-x', '--hex', 'Output hex escape (\xHH) for escaped chars' do
     Action.default = Action::HEX
   end
 
-  op.on '-o', '--escape-by-octal', 'Output octal escapes (\###) for escaped chars' do
+  op.on '-o', '--octal', 'Output octal escapes (\###) for escaped chars' do
     Action.default = Action::OCTAL
   end
 
-  op.on '-d', '--escape-by-delete', 'Delete escaped chars' do
+  op.on '-d', '--delete', 'Delete escaped chars' do
     Action.default = Action::DELETE
   end
 
-  op.on '-p', '--escape-by-print', 'Print escaped chars verbatim' do
+  op.on '-p', '--print', 'Print escaped chars verbatim' do
     Action.default = Action::PRINT
   end
 
-  op.on '-.', '--escape-by-dot', "Replace escaped chars with '.'" do
+  op.on '-.', '--dot', "Replace escaped chars with '.'" do
     Action.default = Action::DOT
   end
 
-  op.on '-r', '--escape-by-replace', "Replace escaped chars with the replacement character, #{Action::REPLACEMENT_CHARACTER_ASCII}" do
+  op.on '-r', '--replace', "Replace escaped chars with the replacement character, #{Action::REPLACEMENT_CHARACTER_ASCII}" do
     Action.default = Action::REPLACE
   end
 
-  op.on '-C', '--escape-by-control-pictures', 'Print out pictures for some chars; others use hex' do
+  op.on '-C', '--control-pictures', 'Print out pictures for some chars; others use hex' do
     Action.default = Action::CONTROL_PICTURES
   end
 
-  op.on '--escape-by-default', 'Use the default escape action' do
-    Action.default = Action::DEFAULT
-  end
+  # No need for `--default` anymore, because you can just `--default-action=default`
+  # op.on '--default', 'Use the default escape action' do
+  #   Action.default = Action::DEFAULT
+  # end
 
-  op.on '--[no-]default-charset', '--[no-]escape-charset CHARSET', 'Explicitly set the charset that -p, -d, -., and -x use.',
-                                         'If --no-escape-charset is used, only chars matched in "SPECIFIC',
-                                         'ESCAPES" are used' do |cs|
+  op.on '--[no-]default-charset', 'Explicitly set the charset that -p, -d, -., and -x use.',
+                                  'If --no-escape-charset is used, only chars matched in "SPECIFIC',
+                                  'ESCAPES" are used' do |cs|
     CharSet.default_charset = cs
   end
 
@@ -743,6 +744,26 @@ OptParse.new do |op|
       - '\M' matches all single-byte characters (i.e. anything \m doesn't match)
       - '\E' matches the charset "ESCAPES" uses (so `--hex='\E'` is equivalent to `--escape-by-hex`)
     If more than pattern matches, the last one supplied on the command line wins.
+  EOS
+
+  op.separator 'ACTIONS'
+  op.on <<~'EOS'
+    An 'ACTION' is something that's done when certain characters are encountered. Most of the actions
+    have shorthands that interact with the default charset. ACTIONs are case-insensitive when specified.
+    Specific actions (ie non-default ones) take precedence over actoins that affect the default charset.
+        print            Print characters, unchanged
+        delete           Delete characters
+        dot              Replaces characters with a period ('.')
+        replace          Replaces characters with the replacement character (\uFFFD)
+        hex              Replaces characters with their hex value (\xHH)
+        octal            Replaces characters with their octal escapes (\###)
+        codepoint        Replaces chars with their UTF-8 codepoints (ie \u{...}). See -m
+        highlight        Prints the char unchanged, but visual effects are added to it.
+        control-picture  Use "pictures" (U+240x-U+242x). Attempts to generate pictures
+                           for chars outside of '\0-\x20\x7F' yields a warning.
+        c-escape         Like --hex, except c-style escapes (eg \n) are used for the
+                           following chars: \0\a\b\t\n\v\f\r\e\\
+        default          Use the default patterns for characters
   EOS
 
   op.separator 'EXIT CODES'
