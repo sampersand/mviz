@@ -149,12 +149,8 @@ module Action
     attr_accessor :default
     attr_accessor :error
   end
-  self.default      = DEFAULT
-  self.error = HEX # TODO: add support for this
-
-  def self.get_action(name)
-    VALID_ACTIONS[name.downcase] or raise OptionParser::InvalidArgument, name
-  end
+  self.default = DEFAULT
+  self.error   = HEX
 end
 
 ####################################################################################################
@@ -553,7 +549,7 @@ OptParse.new do |op|
   op.on '--control-picture[=CHARSET]', 'Print out "control pictures" (U+240x-U+242x) corresponding to',
                                        'the character. Note that only \x00-\x20 and \x7F have control',
                                        'pictures assigned to them, and any other characters will yield',
-                                       'a warning (and fall back to --hex.)' do |charset|
+                                       'a warning (and fall back to --hex).' do |charset|
     Patterns.add_pattern(charset, Action::CONTROL_PICTURES)
   end
 
@@ -573,8 +569,9 @@ OptParse.new do |op|
   end
 
   op.on ''
-  op.on '--c-escape[=CHARSET]', 'Like --hex, except c-style escapes (eg \n) are used for the',
-                              "following chars: #{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}" do |charset|
+  op.on '--c-escape[=CHARSET]', 'Use c-style escapes for the following characters. (Any other',
+                                'characters will yield a warning, and fall back to --hex.):',
+                                "#{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}" do |charset|
     Patterns.add_pattern(charset, Action::C_ESCAPES)
   end
 
@@ -639,7 +636,7 @@ OptParse.new do |op|
   ##################################################################################################
 
   op.section 'SHORTHANDS'
-  op.on '-l', '--print-newlines', "Don't escape newline. (Same as --print='\\n')" do
+  op.on '-l', '--print-newlines', "Don't escape newlines. (Same as --print='\\n')" do
     Patterns.add_pattern(/\n/, Action::PRINT)
   end
 
