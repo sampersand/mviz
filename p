@@ -187,7 +187,7 @@ module CharSet
     case selector
     when '\A'         then ALL
     when '\N'         then NONE
-    when '\E'         then default # if this changes, change `default_charset=`
+    when '\@'         then default # if this changes, change `default_charset=`
     when '\m'         then MULTIBYTE
     when '\M'         then SINGLEBYTE
     when String       then RegexpFasterEqq.new((+"[#{selector}]").force_encoding($encoding)) # TODO: WHY is this frozen in ruby 2.6.10
@@ -204,7 +204,7 @@ module CharSet
 
     @raw_default =
       case charset
-      when '\E'    then nil # Handle `\E` here to mean "whatever the default is"
+      when '\@'    then nil # Handle `\@` here to mean "whatever the default is"
       when '', '^' then false
       else              charset
       end
@@ -743,7 +743,7 @@ OptParse.new do |op|
       - '\N' matches no chars  (so `--delete='\N'` would never delete a character)
       - '\m' matches multibyte characters (only useful if input data is multibyte like, UTF-8.)
       - '\M' matches all single-byte characters (i.e. anything \m doesn't match)
-      - '\E' matches the charset "ESCAPES" uses (so `--hex='\E'` is equivalent to `--escape-by-hex`)
+      - '\@' matches the charset "ESCAPES" uses (so `--hex='\@'` is equivalent to `--escape-by-hex`)
     If more than pattern matches, the last one supplied on the command line wins.
   EOS
 
