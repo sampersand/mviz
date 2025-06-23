@@ -384,8 +384,7 @@ OptParse.new do |op|
       -f              Interpret all arguments as filenames, not strings
       -c              Check if any escapes are printed, and exit nonzero if so.
       -q              Don't output anything. (Useful with -c)
-      -1              Print one argument per line, but don't add "prefixes"
-      -n              Print spaces between arguments, and omit the trailing newline.
+      -1 / -n         Disable prefixes; Separate arguments with newlines / spaces.
     #{BOLD_BEGIN}ESCAPES#{BOLD_END} (Mutually exclusive; Uppercase escapes control illegal bytes)
       -x, -X          Print in hex notation
       -o, -O          Print in octal notation
@@ -403,9 +402,7 @@ OptParse.new do |op|
       -m              Escape multibyte characters with their Unicode codepoint.
       -A              Escape _every_ character. (Must be used with an "ESCAPES")
     #{BOLD_BEGIN}INPUT DATA#{BOLD_END}
-      -b              Interpret inputs as binary text
-      -a              Interpret inputs as ASCII; like -b, except has invalid bytes
-      -8              Interpret inputs as UTF-8
+      -b / -A / -8    Interpret inputs as binary text / ASCII / UTF-8.
       -Eencoding      Specify the (ASCII-compatible) encoding.
     EOS
     exit
@@ -590,23 +587,6 @@ OptParse.new do |op|
   op.on 'Not all escape actions are possible, as some (eg codepoints) dont make sense. The shorthand'
   op.on 'flags are just upper cases of their equivalent normal-escape forms.'
 
-  # op.accept Action, /\A\w+\z/ do |name|
-  #   Action.get_action name
-  # end
-
-  # op.on '--default-action=ACTION', Action, 'Specify the default action. Valid options are: <TODO>' do |action|
-  #   Action.default = action
-  # end
-
-  # op.on '--invalid=ACTION', Action, 'Specify the invalid action. Valid options are: <TODO>' do |action|
-  #   Action.error = action
-  # end
-
-  # op.on '--list-actions', 'List all actions that can be supplied to ACTIONS, then exit' do
-  #   puts "Valid actions: #{Action::VALID_ACTIONS.keys.join(", ")}"
-  #   exit
-  # end
-
   op.on '-X', '--invalid-hex', 'Like -x, but only for illegal bytes in the encoding' do
     Action.error = Action::HEX
   end
@@ -662,7 +642,7 @@ OptParse.new do |op|
     Patterns.add_pattern(CharSet::MULTIBYTE, Action::CODEPOINTS)
   end
 
-  op.on '-A', '--escape-all', "Mark all characters as escaped. (Same as --escape-charset='\\A')",
+  op.on '-a', '--escape-all', "Mark all characters as escaped. (Same as --escape-charset='\\A')",
                               'Does nothing alone; it needs to be used with an "ESCAPES" flag' do
     CharSet.raw_default = CharSet::ALL
   end
@@ -692,7 +672,7 @@ OptParse.new do |op|
     $encoding = Encoding::BINARY
   end
 
-  op.on '-a', '--ascii', 'Same as --encoding=ASCII. Like -b, but high-bits are "invalid".' do
+  op.on '-A', '--ascii', 'Same as --encoding=ASCII. Like -b, but high-bits are "invalid".' do
     $encoding = Encoding::ASCII
   end
 
