@@ -8,7 +8,9 @@ p - visualize invisible and invalid bytes in different encodings.
 SYNOPSIS
 ========
 <!-- TODO: IS THERE A WAY TO GET this in three separate forms? -->
-**p** `[-f] [options] [string/file ...]`
+**p** [**options**] \
+**p** [**options**] [_string_ _..._] \
+**p** -f [**options**] [_file_ _..._]
 
 DESCRIPTION
 ===========
@@ -59,6 +61,8 @@ GENERIC OPTIONS
 ESCAPES
 ====
 Specify how characters should be escaped. Flags which optionally take a **CHARSET** set the default action if no charset is supplied. Actions with explicit charsets are checked first, and ties go to the last one specified. If no charset matches, the default one is used. Shorthand options are like the their corresponding long-form one, except they don't take an argument, and only work on the default charset.
+
+If more than pattern matches, the last one supplied on the command line wins.
 
 **`--default-charset`=_CHARSET_**
 : Explicitly set the default charset that flags without **_CHARSET_** values use. The default value is `\x00-\x1F\x7F`, with an additional `\x80-\xFF` if the binary **ENCODING** is used. Additionally, if not using colors and using the default action, backslash (`\\`) is added to this charset list.
@@ -129,49 +133,49 @@ SHORTHANDS
 ==========
 
 **`-l`**, **`--print-newlines`**
-: Don't escape newlines. (Same as --print='\n')
+: Don't escape newlines. (Same as \--print='\n')
 
 **`-w`**, **`--print-whitespace`**
-: Don't escape newline, tab, or space. (Same as --print='\n\t ')
+: Don't escape newline, tab, or space. (Same as \--print='\n\t ')
 
 **`-s`**, **`--highlight-space`**
-: Escape spaces with highlights. (Same as --highlight=' ')
+: Escape spaces with highlights. (Same as \--highlight=' ')
 
 **`-S`**, **`--control-picture-space`**
-: Escape spaces with a "picture". (Same as --control-picture=' ')
+: Escape spaces with a "picture". (Same as \--control-picture=' ')
 
 **`-B`**, **`--escape-backslashes`**
-: Escape backslashes as '\\'. (Same as --c-escape='\\') (Default if not in colour mode, and no --escape-by was given)
+: Escape backslashes as '\\'. (Same as \--c-escape='\\') (Default if not in colour mode, and no \--escape-by was given)
 
 **`-m`**, **`--multibyte-codepoints`**
-: Use codepoints for multibyte chars. (Same as --codepoint='\m'). (Not useful in single-byte-only encodings)
+: Use codepoints for multibyte chars. (Same as \--codepoint='\m'). (Not useful in single-byte-only encodings)
 
 **`-a`**, **`--escape-all`**
-: Mark all characters as escaped. (Same as --escape-charset='\A') Does nothing alone; it needs to be used with an "ESCAPES" flag
+: Mark all characters as escaped. (Same as \--escape-charset='\A') Does nothing alone; it needs to be used with an "ESCAPES" flag
 
 
 ENCODINGS
 =========
-(default is normally --utf-8. If POSIXLY_CORRECT is set, --locale is the default)
+(default is normally `--utf-8`. If POSIXLY_CORRECT is set, `--locale` is the default)
 
 
 **`-E` _ENCODING_**, **`--encoding=`_ENCODING_**
-: Specify the input's encoding. Case-insensitive. Encodings that aren't ASCII-compatible encodings (eg UTF-16) are illegal.
+: Specify the input's encoding, which is case-insensitive. The encoding must be ASCII-compatible; encodings which aren't (eg UTF-16) yield a fatal error. See `--list-encodings` for a list of encodings that can be specified.
 
 **`--list-encodings`**
-: List all possible encodings, and exit
+: List all possible encodings, and exit with status 0.
 
 **`-b`**, **`--binary`**, **`--bytes`**
-: Same as --encoding=binary. (Escapes high-bit bytes)
+: Same as `--encoding=binary`. This encoding considers all bytes "valid," and specifying it changes the `--default-charset` to also escape all high-bit bytes (ie `\x80-\xFF`).
 
 **`-A`**, **`--ascii`**
-: Same as --encoding=ASCII. Like -b, but high-bits are "invalid".
+: Same as `--encoding=ASCII`. Like `--binary`/`--bytes`, but but high-bits are considered "invalid".
 
 **`-8`**, **`--utf-8`**
-: Same as --encoding=UTF-8. (default unless POSIXLY_CORRECT set)
+: Same as `--encoding=UTF-8`. The default, unless the environment variable variable _POSIXLY_CORRECT_ is set.
 
 **`--locale`**
-: Same as --encoding=locale. (Chooses encoding based on env vars)
+: Same as `--encoding=locale`. This chooses the encoding based on the environment variables _LC_ALL_, _LC_CTYPE_, and _LANG_ (in that order). If the encoding is not valid, or none of the variables are present, `US-ASCII` is used as a default.
 
 ENVIRONMENT
 ======
@@ -184,25 +188,26 @@ The following environment variables affect the execution of `p`:
 : If present, changes the default `--encoding` to be `locale` (cf locale(1).), and also disables parsing switches after arguments (e.g. passing in `foo -x` as arguments will not interpret `-x` as a switch).
 
 `P_STANDOUT_BEGIN`, `P_STANDOUT_END`
-: Beginning and ending escape sequences for --color; Usually don't need to be set, as they have sane defaults.
+: Beginning and ending escape sequences for \--color; Usually don't need to be set, as they have sane defaults.
 
 `P_STANDOUT_ERR_BEGIN`, `P_STANDOUT_ERR_END`
-: Like P_STANDOUT_BEGIN/P_STANDOUT_END, except for invalid bytes (eg 0xC3 in --utf-8)
+: Like P_STANDOUT_BEGIN/P_STANDOUT_END, except for invalid bytes (eg 0xC3 in \--utf-8)
 
 `LC_ALL, LC_CTYPE, LANG`
-: Checked (in that order) for the encoding when --encoding=locale is used.
+: Checked (in that order) for the encoding when \--encoding=locale is used.
 
 CHARSETS
 ========
-A 'CHARSET' is a regex character without the surrounding brackets (for example, --delete='^a-z' will only output lowercase letters.) In addition to normal escapes (eg '\n' for newlines, '\w' for "word" characters, etc), some other special sequences are accepted:
+A "_CHARSET_" is a way to specify a range of characters. They're based off Regular Expression character classes, with a few additional options escapes available in addition to the regular escapes (eg `\n` to escape a newline, or `\w` for "word" characters). To use these escapes they must be the _entire_ regex (so eg `^\E` doesn't work):
 
-  - '\\A' matches all chars (so `--print='\A'` would print out every character)
-  - '\\N' matches no chars  (so `--delete='\N'` would never delete a character)
-  - '\\m' matches multibyte characters (only useful if input data is multibyte like, UTF-8.)
-  - '\\M' matches all single-byte characters (i.e. anything \m doesn't match)
-  - '\\E' matches the charset "ESCAPES" uses (so `--hex='\E'` is equivalent to `--escape-by-hex`)
+  - `\A` matches all chars (so `--print='\A'` would print out every character)
+  - `\N` matches no chars  (so `--delete='\N'` would never delete a character)
+  - `\m` matches multibyte characters (only useful if input data is multibyte like, UTF-8.)
+  - `\M` matches all single-byte characters (i.e. anything \m doesn't match)
+  - `\E` matches the "default charset" (see `--default-charset`) (so `--hex='\E'` is equivalent to `--hex`.)
 
-If more than pattern matches, the last one supplied on the command line wins.
+(Under the hood, the character classes use ruby's regular expression engine, and so anything that's valid)
+
 
 EXIT STATUS
 ===========

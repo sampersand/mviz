@@ -5,7 +5,15 @@
 p \- visualize invisible and invalid bytes in different encodings.
 .SH SYNOPSIS
 .PP
-\f[B]p\f[R] \f[CR][\-f] [options] [string/file ...]\f[R]
+\f[B]p\f[R] [\f[B]options\f[R]]
+.PD 0
+.P
+.PD
+\f[B]p\f[R] [\f[B]options\f[R]] [\f[I]string\f[R] \f[I]\&...\f[R]]
+.PD 0
+.P
+.PD
+\f[B]p\f[R] \-f [\f[B]options\f[R]] [\f[I]file\f[R] \f[I]\&...\f[R]]
 .SH DESCRIPTION
 \f[B]p\f[R] is an \(lqescaper,\(rq converting bytes from their source
 representation to a more human\-understandable one.
@@ -106,6 +114,9 @@ If no charset matches, the default one is used.
 Shorthand options are like the their corresponding long\-form one,
 except they don\(cqt take an argument, and only work on the default
 charset.
+.PP
+If more than pattern matches, the last one supplied on the command line
+wins.
 .TP
 \f[B]\f[CB]\-\-default\-charset\f[B]=\f[BI]CHARSET\f[B]\f[R]
 Explicitly set the default charset that flags without
@@ -213,62 +224,71 @@ Like \f[CR]\-r\f[R], but only for illegal bytes in the encoding.
 .TP
 \f[B]\f[CB]\-l\f[B]\f[R], \f[B]\f[CB]\-\-print\-newlines\f[B]\f[R]
 Don\(cqt escape newlines.
-(Same as \(enprint=`')
+(Same as \-\-print=`')
 .TP
 \f[B]\f[CB]\-w\f[B]\f[R], \f[B]\f[CB]\-\-print\-whitespace\f[B]\f[R]
 Don\(cqt escape newline, tab, or space.
-(Same as \(enprint=\(cq)
+(Same as \-\-print=\(cq)
 .TP
 \f[B]\f[CB]\-s\f[B]\f[R], \f[B]\f[CB]\-\-highlight\-space\f[B]\f[R]
 Escape spaces with highlights.
-(Same as \(enhighlight=\(cq \(cq)
+(Same as \-\-highlight=\(cq \(cq)
 .TP
 \f[B]\f[CB]\-S\f[B]\f[R], \f[B]\f[CB]\-\-control\-picture\-space\f[B]\f[R]
 Escape spaces with a \(lqpicture\(rq.
-(Same as \(encontrol\-picture=\(cq \(cq)
+(Same as \-\-control\-picture=\(cq \(cq)
 .TP
 \f[B]\f[CB]\-B\f[B]\f[R], \f[B]\f[CB]\-\-escape\-backslashes\f[B]\f[R]
 Escape backslashes as `\(rs'.
-(Same as \(enc\-escape=`\(rs') (Default if not in colour mode, and no
-\(enescape\-by was given)
+(Same as \-\-c\-escape=`\(rs') (Default if not in colour mode, and no
+\-\-escape\-by was given)
 .TP
 \f[B]\f[CB]\-m\f[B]\f[R], \f[B]\f[CB]\-\-multibyte\-codepoints\f[B]\f[R]
 Use codepoints for multibyte chars.
-(Same as \(encodepoint=`').
+(Same as \-\-codepoint=`').
 (Not useful in single\-byte\-only encodings)
 .TP
 \f[B]\f[CB]\-a\f[B]\f[R], \f[B]\f[CB]\-\-escape\-all\f[B]\f[R]
 Mark all characters as escaped.
-(Same as \(enescape\-charset=`') Does nothing alone; it needs to be used
+(Same as \-\-escape\-charset=`') Does nothing alone; it needs to be used
 with an \(lqESCAPES\(rq flag
 .SH ENCODINGS
-(default is normally \(enutf\-8.
-If POSIXLY_CORRECT is set, \(enlocale is the default)
+(default is normally \f[CR]\-\-utf\-8\f[R].
+If POSIXLY_CORRECT is set, \f[CR]\-\-locale\f[R] is the default)
 .TP
 \f[B]\f[CB]\-E\f[B] \f[BI]ENCODING\f[B]\f[R], \f[B]\f[CB]\-\-encoding=\f[B]\f[BI]ENCODING\f[B]\f[R]
-Specify the input\(cqs encoding.
-Case\-insensitive.
-Encodings that aren\(cqt ASCII\-compatible encodings (eg UTF\-16) are
-illegal.
+Specify the input\(cqs encoding, which is case\-insensitive.
+The encoding must be ASCII\-compatible; encodings which aren\(cqt (eg
+UTF\-16) yield a fatal error.
+See \f[CR]\-\-list\-encodings\f[R] for a list of encodings that can be
+specified.
 .TP
 \f[B]\f[CB]\-\-list\-encodings\f[B]\f[R]
-List all possible encodings, and exit
+List all possible encodings, and exit with status 0.
 .TP
 \f[B]\f[CB]\-b\f[B]\f[R], \f[B]\f[CB]\-\-binary\f[B]\f[R], \f[B]\f[CB]\-\-bytes\f[B]\f[R]
-Same as \(enencoding=binary.
-(Escapes high\-bit bytes)
+Same as \f[CR]\-\-encoding=binary\f[R].
+This encoding considers all bytes \(lqvalid,\(rq and specifying it
+changes the \f[CR]\-\-default\-charset\f[R] to also escape all high\-bit
+bytes (ie \f[CR]\(rsx80\-\(rsxFF\f[R]).
 .TP
 \f[B]\f[CB]\-A\f[B]\f[R], \f[B]\f[CB]\-\-ascii\f[B]\f[R]
-Same as \(enencoding=ASCII.
-Like \-b, but high\-bits are \(lqinvalid\(rq.
+Same as \f[CR]\-\-encoding=ASCII\f[R].
+Like \f[CR]\-\-binary\f[R]/\f[CR]\-\-bytes\f[R], but but high\-bits are
+considered \(lqinvalid\(rq.
 .TP
 \f[B]\f[CB]\-8\f[B]\f[R], \f[B]\f[CB]\-\-utf\-8\f[B]\f[R]
-Same as \(enencoding=UTF\-8.
-(default unless POSIXLY_CORRECT set)
+Same as \f[CR]\-\-encoding=UTF\-8\f[R].
+The default, unless the environment variable variable
+\f[I]POSIXLY_CORRECT\f[R] is set.
 .TP
 \f[B]\f[CB]\-\-locale\f[B]\f[R]
-Same as \(enencoding=locale.
-(Chooses encoding based on env vars)
+Same as \f[CR]\-\-encoding=locale\f[R].
+This chooses the encoding based on the environment variables
+\f[I]LC_ALL\f[R], \f[I]LC_CTYPE\f[R], and \f[I]LANG\f[R] (in that
+order).
+If the encoding is not valid, or none of the variables are present,
+\f[CR]US\-ASCII\f[R] is used as a default.
 .SH ENVIRONMENT
 The following environment variables affect the execution of
 \f[CR]p\f[R]:
@@ -289,44 +309,51 @@ after arguments (e.g.\ passing in \f[CR]foo \-x\f[R] as arguments will
 not interpret \f[CR]\-x\f[R] as a switch).
 .TP
 \f[CR]P_STANDOUT_BEGIN\f[R], \f[CR]P_STANDOUT_END\f[R]
-Beginning and ending escape sequences for \(encolor; Usually don\(cqt
+Beginning and ending escape sequences for \-\-color; Usually don\(cqt
 need to be set, as they have sane defaults.
 .TP
 \f[CR]P_STANDOUT_ERR_BEGIN\f[R], \f[CR]P_STANDOUT_ERR_END\f[R]
 Like P_STANDOUT_BEGIN/P_STANDOUT_END, except for invalid bytes (eg 0xC3
-in \(enutf\-8)
+in \-\-utf\-8)
 .TP
 \f[CR]LC_ALL, LC_CTYPE, LANG\f[R]
-Checked (in that order) for the encoding when \(enencoding=locale is
+Checked (in that order) for the encoding when \-\-encoding=locale is
 used.
 .SH CHARSETS
-: A `CHARSET' is a regex character without the surrounding brackets (for
-example, \(endelete=`\(haa\-z' will only output lowercase letters.)
-In addition to normal escapes (eg `' for newlines, `' for \(lqword\(rq
-characters, etc), some other special sequences are accepted:
+A \(lq\f[I]CHARSET\f[R]\(rq is a way to specify a range of characters.
+They\(cqre based off Regular Expression character classes, with a few
+additional options escapes available in addition to the regular escapes
+(eg \f[CR]\(rsn\f[R] to escape a newline, or \f[CR]\(rsw\f[R] for
+\(lqword\(rq characters).
+To use these escapes they must be the \f[I]entire\f[R] regex (so eg
+\f[CR]\(ha\(rsE\f[R] doesn\(cqt work):
 .IP \(bu 2
-`\(rsA' matches all chars (so \f[CR]\-\-print=\(aq\(rsA\(aq\f[R] would
-print out every character)
+\f[CR]\(rsA\f[R] matches all chars (so
+\f[CR]\-\-print=\(aq\(rsA\(aq\f[R] would print out every character)
 .IP \(bu 2
-`\(rsN' matches no chars (so \f[CR]\-\-delete=\(aq\(rsN\(aq\f[R] would
-never delete a character)
+\f[CR]\(rsN\f[R] matches no chars (so
+\f[CR]\-\-delete=\(aq\(rsN\(aq\f[R] would never delete a character)
 .IP \(bu 2
-`\(rsm' matches multibyte characters (only useful if input data is
-multibyte like, UTF\-8.)
+\f[CR]\(rsm\f[R] matches multibyte characters (only useful if input data
+is multibyte like, UTF\-8.)
 .IP \(bu 2
-`\(rsM' matches all single\-byte characters (i.e.\ anything doesn\(cqt
-match)
+\f[CR]\(rsM\f[R] matches all single\-byte characters (i.e.\ anything
+doesn\(cqt match)
 .IP \(bu 2
-`\(rsE' matches the charset \(lqESCAPES\(rq uses (so
-\f[CR]\-\-hex=\(aq\(rsE\(aq\f[R] is equivalent to
-\f[CR]\-\-escape\-by\-hex\f[R])
+\f[CR]\(rsE\f[R] matches the \(lqdefault charset\(rq (see
+\f[CR]\-\-default\-charset\f[R]) (so \f[CR]\-\-hex=\(aq\(rsE\(aq\f[R] is
+equivalent to \f[CR]\-\-hex\f[R].)
 .PP
-: If more than pattern matches, the last one supplied on the command
-line wins.
-.PP
-EXIT CODES Specific exit codes are used: \- 0 No problems encountered \-
-1 A problem opening a file given with \f[CR]\-f\f[R] \- 2 Command\-line
-usage error
+(Under the hood, the character classes use ruby\(cqs regular expression
+engine, and so anything that\(cqs valid)
+.SH EXIT STATUS
+Specific exit codes are used:
+.IP \(bu 2
+0 No problems encountered
+.IP \(bu 2
+1 A problem opening a file given with \f[CR]\-f\f[R]
+.IP \(bu 2
+2 Command\-line usage error
 .SH BUGS
 Bugs can be reported and filed at https://github.com/sampersand/p/
 .PP
