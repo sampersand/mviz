@@ -3,30 +3,33 @@
 .Dd August 31, 2020
 .Dt P 1
 .Os
+
 .Sh NAME
 .Nm p
 .Nd visualize invisible and invalid bytes in different encodings.
+
 .Sh SYNOPSIS
-.PP
-\f[B]p\f[R] [\f[B]options\f[R]]
-.PD 0
-.P
-.PD
-\f[B]p\f[R] [\f[B]options\f[R]] [\f[I]string\f[R] \f[I]\&...\f[R]]
-.PD 0
-.P
-.PD
-\f[B]p\f[R] \-f [\f[B]options\f[R]] [\f[I]file\f[R] \f[I]\&...\f[R]]
-.SH DESCRIPTION
+.Nm
+.Op options
+.Nm
+.Op options
+.Ar string
+.Op Ar ...
+.Nm
+.Fl f
+.Op options
+.Op Ar files ...
+
+.Sh DESCRIPTION
 \f[B]p\f[R] is an \(lqescaper,\(rq converting bytes from their source
 representation to a more human\-understandable one.
 There are many options to control which bytes are converted (which, by
 default, is invisible ASCII bytes, and invalid UTF\-8) and also how the
 bytes are visualized.
-.PP
+
 \f[B]p\f[R] is designed with sane defaults, and most users don\(cqt need
 to muck around with the.
-.PP
+
 \f[B]p\f[R] normally works on a \(lqdefault charset,\(rq which all the
 short\-forms (eg \f[CR]\-x\f[R]) and value\-less flags (eg
 \f[CR]\-\-hex\f[R]) work on by default.
@@ -34,21 +37,22 @@ This charset can be changed with
 \f[CR]\-\-default\-charset=CHARSET\f[R], or disabled entirely with
 \f[CR]\-\-no\-default\-charset\f[R] (where only explicitly\-selected
 options are used).
-.PP
+
 In addition to the default charset, options for specific ranges (eg
 \f[CR]\-\-delete=a\-d\f[R]) may be specified; these take priority over
 the default, and are evaluated in a last\-specified\-first\-evaluated
 order.
-.SH GENERIC OPTIONS
-.TP
-\f[B]\f[CB]\-h\f[B]\f[R], \f[B]\f[CB]\-\-help\f[B]\f[R]
+
+.Sh OPTIONS
+.Bl -tag -width flag
+.It Fl h , Fl Fl help
 Show the help message and exit.
 \f[CR]\-h\f[R] Shows a shorter help message.
-.TP
-\f[B]\f[CB]\-\-version\f[B]\f[R]
+
+.It Fl Fl version
 Print the version and exit.
-.TP
-\f[B]\f[CB]\-f\f[B]\f[R], \f[B]\f[CB]\-\-files\f[B]\f[R], \f[B]\f[CB]\-\-no\-files\f[B]\f[R]
+
+.It Fl f , Fl Fl files , Fl Fl no-files
 Interpret trailing options as filenames to read.
 Without this option, contrary to UNIX\-philosophy, all arguments are
 interpreted as string literals, and are escaped as\-is.
@@ -57,27 +61,27 @@ visualize strings, not files).
 The \f[CR]\-\-no\-files\f[R] option disables an earlier
 \f[CR]\-\-files\f[R], causing all arguments to be interpreted as string
 literals again.
-.TP
-\f[B]\f[CB]\-\-malformed\-error\f[B]\f[R], \f[B]\f[CB]\-\-no\-malformed\-error\f[B]\f[R]
+
+.It Fl Fl malformed-error , Fl Fl no-malformed-error
 (Enabled by default.)
 Causes the program to exit with status code \f[CR]1\f[R] if any invalid
 characters for the \f[B]ENCODING\f[R] are encountered.
 This will not abort the program prematurely, and simply changes the
 final status.
-.TP
-\f[B]\f[CB]\-c\f[B]\f[R], \f[B]\f[CB]\-\-check\-escapes\f[B]\f[R], \f[B]\f[CB]\-\-no\-check\-escapes\f[B]\f[R]
+
+.It Fl c , Fl Fl check-escapes , Fl Fl no-check-escapes
 Causes the program to exit with status code \f[CR]1\f[R] if
 \f[I]any\f[R] character is escaped.
 Note that the \f[CR]\-\-print\f[R] \f[B]ACTION\f[R] is not considered
 \(lqescaping\(rq a character.
-.TP
-\f[B]\f[CB]\-q\f[B]\f[R], \f[B]\f[CB]\-\-quiet\f[B]\f[R], \f[B]\f[CB]\-\-no\-quiet\f[B]\f[R]
+
+.It Fl q , Fl Fl quiet , Fl Fl no-quiet
 Do not output anything.
 Useful with \f[CR]\-\-check\-escapes\f[R] and
 \f[CR]\-\-malformed\-error\f[R] to programmatically see if an input is
 \(lqnormal.\(rq
-.TP
-\f[B]\f[CB]\-\-color\f[B]\f[R], \f[B]\f[CB]\-\-no\-color\f[B]\f[R], \f[B]\f[CB]\-\-color=\f[B]\f[BI]auto/always/never\f[B]\f[R]
+
+.It Fl Fl color , Fl Fl no-color , Fl Fl color= Ns Ar auto/always/never
 Changes the visual effects, including both usage messages and
 \(lqstandouts\(rq added to escaped characters.
 \f[CR]\-\-color\f[R] (and \f[CR]\-\-color=always\f[R]) enables them,
@@ -89,8 +93,8 @@ then colors are enabled.
 Second, if \f[CR]NO_COLOR\f[R] is present in the environment and
 non\-empty, then colors are disabled.
 Lastly, colors are enabled if stdout is a tty.
-.TP
-\f[B]\f[CB]\-\-prefixes\f[B]\f[R]
+
+.It Fl Fl prefixes
 (Defaults to enable if stdout is a tty, and any arguments are given.)
 Adds \(lqprefixes\(rq to arguments.
 For string arguments (ie without \f[CR]\-\-files\f[R]), this is their
@@ -98,16 +102,18 @@ positional number (after all flags are removed).
 For files, this is a header containing the name of the file.
 Mutually exclusive with \f[CR]\-\-one\-per\-line\f[R] and
 \f[CR]\-\-no\-prefixes\-or\-newline\f[R].
-.TP
-\f[B]\f[CB]\-1\f[B]\f[R], \f[B]\f[CB]\-\-one\-per\-line\f[B]\f[R]
+
+.It Fl 1 , Fl Fl one-per-line
 (Defaults when \f[CR]\-\-prefixes\f[R] isn\(cqt.)
 Print each argument on its own line.
 Mutually exclusive with \f[CR]\-\-prefixes\f[R] and
 \f[CR]\-\-no\-prefixes\-or\-newline\f[R]
-.TP
-\f[B]\f[CB]\-n\f[B]\f[R], \f[B]\f[CB]\-\-no\-prefixes\-or\-newline\f[B]\f[R]
+
+.It Fl n , Fl Fl no-prefixes-or-newline
 Disables prefixes, and separates arguments with spaces.
-.SH ESCAPES
+
+.Ss ESCAPES
+.Bl -tag -width flag
 Specify how characters should be escaped.
 Flags which optionally take a \f[B]CHARSET\f[R] set the default action
 if no charset is supplied.
@@ -117,11 +123,11 @@ If no charset matches, the default one is used.
 Shorthand options are like the their corresponding long\-form one,
 except they don\(cqt take an argument, and only work on the default
 charset.
-.PP
+.\" .PP
 If more than pattern matches, the last one supplied on the command line
 wins.
-.TP
-\f[B]\f[CB]\-\-default\-charset\f[B]=\f[BI]CHARSET\f[B]\f[R]
+
+.It Fl Fl default-charset= Ns Ar CHARSET
 Explicitly set the default charset that flags without
 \f[B]\f[BI]CHARSET\f[B]\f[R] values use.
 The default value is \f[CR]\(rsx00\-\(rsx1F\(rsx7F\f[R], with an
@@ -129,75 +135,77 @@ additional \f[CR]\(rsx80\-\(rsxFF\f[R] if the binary \f[B]ENCODING\f[R]
 is used.
 Additionally, if not using colors and using the default action,
 backslash (\f[CR]\(rs\(rs\f[R]) is added to this charset list.
-.TP
-\f[B]\f[CB]\-\-no\-default\-charset\f[B]\f[R]
-Disables the default charset so that only \f[B]ESCAPES\f[R] woth
+
+.It Fl Fl no-default-charset
+Disables the default charset so that only \f[B]ESCAPES\f[R] with
 explicit charsets are used.
-.TP
-\f[B]\f[CB]\-\-escape\-surrounding\-space\f[B]\f[R], \f[B]\f[CB]\-\-no\-escape\-surrounding\-space\f[B]\f[R]
+
+.It Fl Fl escape-surrounding-space , Fl Fl no-escape-surrounding-space
 (Defaults to enabled) A convenience flag that doesn\(cqt really fit
 anywhere else: Unlike all the other escapes, this explicitly only works
 on leading and trailing spaces in strings, and only when the
 \f[CR]\-\-file\f[R] option is not given.
 This lets you visualize leading/trailing spaces in shell variables (eg
 \f[CR]p \(dq$foo\(dq\f[R])
-.TP
-\f[B]\f[CB]\-p\f[B]\f[R], \f[B]\f[CB]\-\-print\f[B]\f[R], \f[B]\f[CB]\-\-print=\f[B]\f[BI]CHARSET\f[B]\f[R]
+
+.It Fl p , Fl Fl print , Fl Fl print= Ns Ar CHARSET
 Print characters, unchanged, without escaping them.
 Unlike the other actions, using \f[CR]\-\-print\f[R] will not mark
 values as \(lqescaped\(rq for the purposes of
 \f[CR]\-\-check\-escapes\f[R].
-.TP
-\f[B]\f[CB]\-d\f[B]\f[R], \f[B]\f[CB]\-\-delete\f[B]\f[R], \f[B]\f[CB]\-\-delete=\f[B]\f[BI]CHARSET\f[B]\f[R]
+
+.It Fl d , Fl Fl delete , Fl Fl delete= Ns Ar CHARSET
 Delete characters from the output by not printing anything.
 Deleted characters are considered \(lqescaped\(rq for the purposes of
 \f[CR]\-\-check\-escape\f[R].
-.TP
-\f[B]\f[CB]\-.\f[B]\f[R], \f[B]\f[CB]\-\-dot\f[B]\f[R], \f[B]\f[CB]\-\-dot=\f[B]\f[BI]CHARSET\f[B]\f[R]
+
+.It Fl . , Fl Fl dot , Fl Fl dot= Ns Ar CHARSET
 Replaces characters by simply printing a single period (\f[CR].\f[R]).
 (Note: Multibyte characters are still represented by a single period.)
-.TP
-\f[B]\f[CB]\-r\f[B]\f[R], \f[B]\f[CB]\-\-replace\f[B]\f[R], \f[B]\f[CB]\-\-replace=\f[B]\f[BI]CHARSET\f[B]\f[R]
+
+.It Fl r , Fl Fl replace , Fl Fl replace= Ns Ar CHARSET
 Identical to \f[CR]\-\-dot\f[R], except instead of a period, the
 replacement character (\f[CR]\(rsuFFFD\f[R]) is printed instead.
-.TP
-\f[B]\f[CB]\-x\f[B]\f[R], \f[B]\f[CB]\-\-hex\f[B]\f[R], \f[B]\f[CB]\-\-hex=\f[B]\f[BI]CHARSET\f[B]\f[R]
+
+.It Fl x , Fl Fl hex , Fl Fl hex= Ns Ar CHARSET
 Replaces characters with their hex value (\f[CR]\(rsxHH\f[R]).
 Multibyte characters will have each of their bytes printed, in order
 they were received.
-.TP
-\f[B]\f[CB]\-o\f[B]\f[R], \f[B]\f[CB]\-\-octal\f[B]\f[R], \f[B]\f[CB]\-\-octal=\f[B]\f[BI]CHARSET\f[B]\f[R]
+
+.It Fl o , Fl Fl octal , Fl Fl octal= Ns Ar CHARSET
 Like \f[CR]\-\-hex\f[R], except octal escapes (\f[CR]\(rs###\f[R]) are
 used instead.
 The output is always padded to three bytes (so NUL is
 \f[CR]\(rs000\f[R], not \f[CR]\(rs0\f[R]).
-.TP
-\f[B]\f[CB]\-C\f[B]\f[R], \f[B]\f[CB]\-\-control\-picture\f[B]\f[R], \f[B]\f[CB]\-\-control\-picture=\f[B]\f[BI]CHARSET\f[B]\f[R]
+
+.It Fl C , Fl Fl control-picture , Fl Fl control-picture= Ns Ar CHARSET
 Print out \(lqcontrol pictures\(rq
 (\f[CR]U+240x\f[R]\-\f[CR]U+242x\f[R]) corresponding to the character.
 Note that only \f[CR]\(rsx00\-\(rsx20\f[R] and \f[CR]\(rsx7F\f[R] have
 control pictures assigned to them, and any other characters will yield a
 warning (and fall back to \f[CR]\-\-hex\f[R]).
-.TP
-\f[B]\f[CB]\-\-codepoint\f[B]\f[R], \f[B]\f[CB]\-\-codepoint=\f[B]\f[BI]CHARSET\f[B]\f[R]
+
+.It Fl Fl codepoint , Fl Fl codepoint= Ns Ar CHARSET
 Replaces chars with their UTF\-8 codepoints (\f[CR]\(rsu{...}\f[R]).
 This only works if the encoding is UTF\-8.
 See also \f[CR]\-\-multibyte\-codepoints\f[R]
-.TP
-\f[B]\f[CB]\-\-highlight\f[B]\f[R], \f[B]\f[CB]\-\-highlight=\f[B]\f[BI]CHARSET\f[B]\f[R]
+
+.It Fl Fl highlight , Fl Fl highlight= Ns Ar CHARSET
 Prints the character unchanged, but considers it \(lqescaped\(rq.
 (Thus, visual effects are added to it like any other escape, and
 \f[CR]\-\-check\-escapes\f[R] considers it an escaped character.)
-.TP
-\f[B]\f[CB]\-\-c\-escape\f[B]\f[R], \f[B]\f[CB]\-\-c\-escape=\f[B]\f[BI]CHARSET\f[B]\f[R]
+
+.It Fl Fl c-escape , Fl Fl c-escape= Ns Ar CHARSET
 Use c\-style escapes for the following characters.
 (Any other characters will yield a warning, and fall back to
 \f[CR]\-\-hex\f[R].):
 \f[CR]\(rs0\(rsa\(rsb\(rst\(rsn\(rsv\(rsf\(rsr\(rse\(rs\(rs\f[R]
-.TP
-\f[B]\f[CB]\-\-default\f[B]\f[R], \f[B]\f[CB]\-\-default=\f[B]\f[BI]CHARSET\f[B]\f[R]
+
+.It Fl Fl default , Fl Fl default= Ns Ar CHARSET
 Use the default patterns for chars in \f[B]CHARSET\f[R]
-.SH MALFORMED ESCAPES
+
+.Ss MALFORMED ESCAPES
+.Bl -tag -width flag
 Escapes for malformed bytes in the encoding.
 Like the \(lqESCAPES\(rq section, except these apply to malformed bytes
 for the given encoding.
@@ -205,62 +213,62 @@ Not all escape actions are possible, as some (eg codepoints) dont make
 sense.
 The shorthand flags are just upper cases of their equivalent
 normal\-escape forms.
-.TP
-\f[B]\f[CB]\-X\f[B]\f[R], \f[B]\f[CB]\-\-invalid\-hex\f[B]\f[R]
+
+.It Fl X , Fl Fl invalid-hex
 Like \f[CR]\-x\f[R], but only for illegal bytes in the encoding.
-.TP
-\f[B]\f[CB]\-O\f[B]\f[R], \f[B]\f[CB]\-\-invalid\-octal\f[B]\f[R]
+
+.It Fl O , Fl Fl invalid-octal
 Like \f[CR]\-o\f[R], but only for illegal bytes in the encoding.
-.TP
-\f[B]\f[CB]\-D\f[B]\f[R], \f[B]\f[CB]\-\-invalid\-delete\f[B]\f[R]
+
+.It Fl D , Fl Fl invalid-delete
 Like \f[CR]\-d\f[R], but only for illegal bytes in the encoding.
-.TP
-\f[B]\f[CB]\-P\f[B]\f[R], \f[B]\f[CB]\-\-invalid\-print\f[B]\f[R]
+
+.It Fl P , Fl Fl invalid-print
 Like \f[CR]\-p\f[R], but only for illegal bytes in the encoding.
-.TP
-\f[B]\f[CB]\-\(at\f[B]\f[R], \f[B]\f[CB]\-\-invalid\-dot\f[B]\f[R]
+
+.It Fl @ , Fl Fl invalid-dot
 Like \f[CR]\-.\f[R], but only for illegal bytes in the encoding.
-.TP
-\f[B]\f[CB]\-R\f[B]\f[R], \f[B]\f[CB]\-\-invalid\-replace\f[B]\f[R]
+
+.It Fl R , Fl Fl invalid-replace
 Like \f[CR]\-r\f[R], but only for illegal bytes in the encoding.
-.SH SHORTHANDS
-.TP
-\f[B]\f[CB]\-l\f[B]\f[R], \f[B]\f[CB]\-\-print\-newlines\f[B]\f[R]
+
+.Ss SHORTHANDS
+.Bl -tag -width flag
+.It Fl l , Fl Fl print\-newlines
 Don\(cqt escape newlines.
 (Same as \-\-print=`')
-.TP
-\f[B]\f[CB]\-w\f[B]\f[R], \f[B]\f[CB]\-\-print\-whitespace\f[B]\f[R]
+
+.It Fl w , Fl Fl print\-whitespace
 Don\(cqt escape newline, tab, or space.
 (Same as \-\-print=\(cq)
-.TP
-\f[B]\f[CB]\-s\f[B]\f[R], \f[B]\f[CB]\-\-highlight\-space\f[B]\f[R]
+
+.It Fl s , Fl Fl highlight\-space
 Escape spaces with highlights.
 (Same as \-\-highlight=\(cq \(cq)
-.TP
-\f[B]\f[CB]\-S\f[B]\f[R], \f[B]\f[CB]\-\-control\-picture\-space\f[B]\f[R]
+
+.It Fl S , Fl Fl control\-picture\-space
 Escape spaces with a \(lqpicture\(rq.
 (Same as \-\-control\-picture=\(cq \(cq)
-.TP
-\f[B]\f[CB]\-B\f[B]\f[R], \f[B]\f[CB]\-\-escape\-backslashes\f[B]\f[R]
+
+.It Fl B , Fl Fl escape\-backslashes
 Escape backslashes as `\(rs'.
 (Same as \-\-c\-escape=`\(rs') (Default if not in colour mode, and no
 \-\-escape\-by was given)
-.TP
-\f[B]\f[CB]\-m\f[B]\f[R], \f[B]\f[CB]\-\-multibyte\-codepoints\f[B]\f[R]
+
+.It Fl m , Fl Fl multibyte\-codepoints
 Use codepoints for multibyte chars.
 (Same as \-\-codepoint=`').
 (Not useful in single\-byte\-only encodings)
-.TP
-\f[B]\f[CB]\-a\f[B]\f[R], \f[B]\f[CB]\-\-escape\-all\f[B]\f[R]
+
+.It Fl a , Fl Fl escape\-all
 Mark all characters as escaped.
 (Same as \-\-escape\-charset=`') Does nothing alone; it needs to be used
 with an \(lqESCAPES\(rq flag
 
-.Sh ENCODINGS
-.\" .Ss foo
+.Ss ENCODINGS
+.Bl -tag -width indent
 (default is normally \f[CR]\-\-utf\-8\f[R].
 If POSIXLY_CORRECT is set, \f[CR]\-\-locale\f[R] is the default)
-.Bl -tag -width indent
 
 .It Fl E Ar encoding , Fl Fl encoding= Ns Ar encoding
 Specify the input\(cqs encoding, which is case\-insensitive.
