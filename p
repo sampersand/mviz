@@ -354,7 +354,7 @@ $escape_surronding_spaces = true
 
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
-  op.version = '0.12.1'
+  op.version = '0.12.2'
   op.banner = <<~BANNER
   #{$standout_begin if $use_color}usage#{$standout_end if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
@@ -386,21 +386,19 @@ OptParse.new do |op|
       -q              Don't output anything. (Useful with -c)
       -1 / -n         Disable prefixes; Separate arguments with newlines / spaces.
     #{BOLD_BEGIN}ESCAPES#{BOLD_END} (Mutually exclusive; Uppercase escapes control illegal bytes)
-      -x, -X          Print in hex notation
-      -o, -O          Print in octal notation
-      -d, -D          Delete from the output
-      -p, -P          Print unchanged
-      -., -@          Replace with a period ('.')
-      -r, -R          Replace with the replacement character (#{Action::REPLACEMENT_CHARACTER_ASCII})
+      -x (-X)         Print in hex notation
+      -o (-O)         Print in octal notation
+      -d (-D)         Delete from the output
+      -p (-P)         Print unchanged
+      -. (-@)         Replace with a period ('.')
+      -r (-R)         Replace with the replacement character (#{Action::REPLACEMENT_CHARACTER_ASCII})
       -C              Replace escaped chars with their "control pictures"
     #{BOLD_BEGIN}SPECIFIC ESCAPES#{BOLD_END}
-      -l              Don't escape newlines.
-      -w              Don't escape newlines, tabs, or spaces
-      -s              Escape spaces by highlighting it
-      -S              Escape spaces with "pictures"
+      -l / -w         Don't escape newlines / newlines, tabs, or spaces.
+      -s / -S         Escape spaces by highlighting it / with "pictures".
       -B and -\\       Escape backslashes. (default unless colour or "ESCAPES" given)
       -m              Escape multibyte characters with their Unicode codepoint.
-      -A              Escape _every_ character. (Must be used with an "ESCAPES")
+      -a              Escape _every_ character. (Must be used with an "ESCAPES")
     #{BOLD_BEGIN}INPUT DATA#{BOLD_END}
       -b / -A / -8    Interpret inputs as binary text / ASCII / UTF-8.
       -Eencoding      Specify the (ASCII-compatible) encoding.
@@ -582,7 +580,7 @@ OptParse.new do |op|
   #                                            Escapes                                             #
   ##################################################################################################
 
-  op.section 'MALFORMED ESCAPES'#, '(Change the default output behaviour. All --escape-by-XXX are mutually exclusive)'
+  op.section 'MALFORMED ESCAPES', 'Escapes for malformed bytes in the encoding'
   op.on 'Like the "ESCAPES" section, except these apply to malformed bytes for the given encoding.'
   op.on 'Not all escape actions are possible, as some (eg codepoints) dont make sense. The shorthand'
   op.on 'flags are just upper cases of their equivalent normal-escape forms.'
