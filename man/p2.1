@@ -1,0 +1,41 @@
+.Dd June 29, 2025
+.Dt P 1
+.Os
+.Sh NAME
+.Nm p
+.Nd visualize invisible and invalid bytes in different encodings.
+.Sh SYNOPSIS
+.Nm
+.Op Fl options
+.Op Fl 1 | n
+.Op Fl x | o | d | p | . | r | C
+.Op Fl X | O | D | P | @ | R
+.Op Fl lwsSBma
+.Op Fl b | A | 8
+.Ar
+.Nm unlink
+.Op Fl -
+.Ar file
+
+.\"   --help          Print a longer help message with more options
+.\"   -f              Interpret all arguments as filenames, not strings
+.\"   -c              Check if any escapes are printed, and exit nonzero if so.
+.\"   -q              Don't output anything. (Useful with -c)
+.\"   -1 / -n         Disable prefixes; Separate arguments with newlines / spaces.
+.\" ESCAPES (Mutually exclusive; Uppercase escapes control illegal bytes)
+.\"   -x (-X)         Print in hex notation
+.\"   -o (-O)         Print in octal notation
+.\"   -d (-D)         Delete from the output
+.\"   -p (-P)         Print unchanged
+.\"   -. (-@)         Replace with a period ('.')
+.\"   -r (-R)         Replace with the replacement character (\uFFFD)
+.\"   -C              Replace escaped chars with their "control pictures"
+.\" SPECIFIC ESCAPES
+.\"   -l / -w         Don't escape newlines / newlines, tabs, or spaces.
+.\"   -s / -S         Escape spaces by highlighting it / with "pictures".
+.\"   -B and -\       Escape backslashes. (default unless colour or "ESCAPES" given)
+.\"   -m              Escape multibyte characters with their Unicode codepoint.
+.\"   -a              Escape _every_ character. (Must be used with an "ESCAPES")
+.\" INPUT DATA (UTF-8 is default unless POSIXLY_CORRECT is set)
+.\"   -b / -A / -8    Interpret inputs as binary text / ASCII / UTF-8.
+.\"   -E encoding     Specify the (ASCII-compatible) encoding.

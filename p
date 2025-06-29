@@ -821,6 +821,7 @@ ESCAPES_CACHE = Hash.new do |hash, key|
     if !key.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$malformed_error`.
 
+      # Replace the global variables for just this invocation.
       begin
         $standout_begin = STANDOUT_ERR_BEGIN
         $standout_end   = STANDOUT_ERR_END

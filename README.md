@@ -102,3 +102,6 @@ If a character is to be escaped, it goes through the following steps:
 ---
 allenc=( $(i --list-encodings | awk '{$1=$2=""; print}' | tr ',' '\n' | tr -d ' ') )
  -->
+
+# TODO
+- `--no-prefixes-or-newline` and co: fix their names and update associated documentatoin
