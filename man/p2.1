@@ -256,40 +256,39 @@ Mark all characters as escaped.
 (Same as \-\-escape\-charset=`') Does nothing alone; it needs to be used
 with an \(lqESCAPES\(rq flag
 
-.Sh OPTIONS
+.Sh ENCODINGS
 .\" .Ss foo
 (default is normally \f[CR]\-\-utf\-8\f[R].
 If POSIXLY_CORRECT is set, \f[CR]\-\-locale\f[R] is the default)
+.Bl -tag -width indent
 
-.It Fl m Ar arch Ns Op : Ns Ar machine
-.TP
-\f[B]\f[CB]\-E\f[B] \f[BI]ENCODING\f[B]\f[R], \f[B]\f[CB]\-\-encoding=\f[B]\f[BI]ENCODING\f[B]\f[R]
+.It Fl E Ar encoding , Fl Fl encoding= Ns Ar encoding
 Specify the input\(cqs encoding, which is case\-insensitive.
 The encoding must be ASCII\-compatible; encodings which aren\(cqt (eg
 UTF\-16) yield a fatal error.
 See \f[CR]\-\-list\-encodings\f[R] for a list of encodings that can be
 specified.
-.TP
-\f[B]\f[CB]\-\-list\-encodings\f[B]\f[R]
+
+.It Fl Fl list-encodings
 List all possible encodings, and exit with status 0.
-.TP
-\f[B]\f[CB]\-b\f[B]\f[R], \f[B]\f[CB]\-\-binary\f[B]\f[R], \f[B]\f[CB]\-\-bytes\f[B]\f[R]
+
+.It Fl b , Fl Fl bytes , Fl Fl binary
 Same as \f[CR]\-\-encoding=binary\f[R].
 This encoding considers all bytes \(lqvalid,\(rq and specifying it
 changes the \f[CR]\-\-default\-charset\f[R] to also escape all high\-bit
 bytes (ie \f[CR]\(rsx80\-\(rsxFF\f[R]).
-.TP
-\f[B]\f[CB]\-A\f[B]\f[R], \f[B]\f[CB]\-\-ascii\f[B]\f[R]
+
+.It Fl A , Fl Fl ascii
 Same as \f[CR]\-\-encoding=ASCII\f[R].
 Like \f[CR]\-\-binary\f[R]/\f[CR]\-\-bytes\f[R], but but high\-bits are
 considered \(lqinvalid\(rq.
-.TP
-\f[B]\f[CB]\-8\f[B]\f[R], \f[B]\f[CB]\-\-utf\-8\f[B]\f[R]
+
+.It Fl 8 , Fl Fl utf-8
 Same as \f[CR]\-\-encoding=UTF\-8\f[R].
 The default, unless the environment variable variable
 \f[I]POSIXLY_CORRECT\f[R] is set.
-.TP
-\f[B]\f[CB]\-\-locale\f[B]\f[R]
+
+.It Fl Fl locale
 Same as \f[CR]\-\-encoding=locale\f[R].
 This chooses the encoding based on the environment variables
 \f[I]LC_ALL\f[R], \f[I]LC_CTYPE\f[R], and \f[I]LANG\f[R] (in that
