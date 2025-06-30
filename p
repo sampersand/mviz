@@ -631,7 +631,7 @@ OptParse.new do |op|
   end
 
   op.on '-B', '-\\', '--escape-backslashes', "Escape backslashes as '\\\\'. (Same as --c-escape='\\\\')",
-                                      '(Default if not in colour mode, and no --escape-by was given)' do |eb|
+                                      '(Default if not in colour mode, and no --escape-by was given). (-\\ is deprecated)' do |eb|
     Patterns.add_pattern(/\\/, Action::C_ESCAPES)
   end
 

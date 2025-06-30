@@ -28,10 +28,11 @@ There are many options to control which bytes are converted (which, by
 default, is invisible ASCII bytes, and invalid UTF\-8) and also how the
 bytes are visualized.
 
-\f[B]p\f[R] is designed with sane defaults, and most users don\(cqt need
+\[Nm is designed with sane defaults, and most users don\(cqt need
 to muck around with the.
 
-\f[B]p\f[R] normally works on a \(lqdefault charset,\(rq which all the
+.Nm
+normally works on a \(lqdefault charset,\(rq which all the
 short\-forms (eg \f[CR]\-x\f[R]) and value\-less flags (eg
 \f[CR]\-\-hex\f[R]) work on by default.
 This charset can be changed with
@@ -46,33 +47,40 @@ order.
 
 .Sh OPTIONS
 .Bl -tag -width flag
+
 .It Fl h , Fl Fl help
-Show the help message and exit.
-\f[CR]\-h\f[R] Shows a shorter help message.
+Show a help message and exit.
+.Fl h
+shows a shorter help message. Unlike other utilities, supplying no arguments doesn't print out usage in
+.Nm
+as that's valid.
 
 .It Fl Fl version
-Print the version and exit.
+Print the version of
+.Nm
+and exit.
 
 .It Fl f , Fl Fl files , Fl Fl no-files
-Interpret trailing options as filenames to read.
-Without this option, contrary to UNIX\-philosophy, all arguments are
-interpreted as string literals, and are escaped as\-is.
-(This is because by the most common use\-case for \f[CR]p\f[R] is to
-visualize strings, not files).
-The \f[CR]\-\-no\-files\f[R] option disables an earlier
-\f[CR]\-\-files\f[R], causing all arguments to be interpreted as string
+Interpret trailing options as filenames to read. Without this option, contrary to UNIX-philosophy, all arguments are interpreted as string literals, and are escaped as-is. (This is because by the most common use-case for
+.Nm
+is to visualize strings, not files).
+
+The
+.Fl Fl no-files
+option disables an earlier
+.Fl Fl files Ns
+, causing all arguments to be interpreted as string
 literals again.
 
 .It Fl Fl malformed-error , Fl Fl no-malformed-error
-(Enabled by default.)
-Causes the program to exit with status code \f[CR]1\f[R] if any invalid
+(Enabled by default.) Causes the program to exit with status code \f[CR]1\f[R] if any invalid
 characters for the \f[B]ENCODING\f[R] are encountered.
 This will not abort the program prematurely, and simply changes the
 final status.
 
 .It Fl c , Fl Fl check-escapes , Fl Fl no-check-escapes
 Causes the program to exit with status code \f[CR]1\f[R] if
-\f[I]any\f[R] character is escaped.
+\f[B]any\f[R] character is escaped.
 Note that the \f[CR]\-\-print\f[R] \f[B]ACTION\f[R] is not considered
 \(lqescaping\(rq a character.
 
@@ -83,7 +91,7 @@ Useful with \f[CR]\-\-check\-escapes\f[R] and
 \(lqnormal.\(rq
 
 .It Fl Fl color , Fl Fl no-color , Fl Fl color= Ns Ar auto/always/never
-Changes the visual effects, including both usage messages and
+Controls "visual effects," used both help messages and "standouts"
 \(lqstandouts\(rq added to escaped characters.
 \f[CR]\-\-color\f[R] (and \f[CR]\-\-color=always\f[R]) enables them,
 \f[CR]\-\-no\-color\f[R] (and \f[CR]\-\-color=never\f[R]) disables them,
@@ -237,11 +245,11 @@ Like \f[CR]\-r\f[R], but only for illegal bytes in the encoding.
 .Bl -tag -width flag
 .It Fl l , Fl Fl print\-newlines
 Don\(cqt escape newlines.
-(Same as \-\-print=`')
+(Same as \-\-print='\en')
 
 .It Fl w , Fl Fl print\-whitespace
 Don\(cqt escape newline, tab, or space.
-(Same as \-\-print=\(cq)
+(Same as \-\-print='\en\et\ ')
 
 .It Fl s , Fl Fl highlight\-space
 Escape spaces with highlights.
@@ -252,8 +260,8 @@ Escape spaces with a \(lqpicture\(rq.
 (Same as \-\-control\-picture=\(cq \(cq)
 
 .It Fl B , Fl Fl escape\-backslashes
-Escape backslashes as `\(rs'.
-(Same as \-\-c\-escape=`\(rs') (Default if not in colour mode, and no
+Escape backslashes as `\e\e'.
+(Same as \-\-c\-escape=`\e\e') (Default if not in colour mode, and no
 \-\-escape\-by was given)
 
 .It Fl m , Fl Fl multibyte\-codepoints
