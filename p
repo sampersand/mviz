@@ -3,8 +3,6 @@ exec env ruby -S -Ebinary "$0" "$@"
 #!ruby
 # -*- encoding: UTF-8; frozen-string-literal: true -*-
 
-###### TODO: rename from `charset` to `pattern`, to match the readme.
-
 =begin Notes on the above
 The first three lines (the shebang, `exec env`, and `#!ruby`) are there so that we can specify the
 `-Ebinary` flag, which specifies that all command-line arguments should be binary-encoded; If we
@@ -157,7 +155,7 @@ end
 
 ####################################################################################################
 #                                                                                                  #
-#                                             CharSet                                              #
+#                                             Pattern                                              #
 #                                                                                                  #
 ####################################################################################################
 
@@ -169,7 +167,7 @@ end
 
 ## Helpers for matching against characters. All that a "Character Set" needs to have is the `===`
 # method defined on it, which is used to determine if the character set matches or not.
-module CharSet
+module Pattern
   ## A character set which matches _all_ characters.
   ALL = ->char { true }
 
@@ -191,32 +189,32 @@ module CharSet
     case selector
     when '\A'         then ALL
     when '\N'         then NONE
-    when '\@'         then default # if this changes, change `default_charset=`
+    when '\@'         then default # if this changes, change `default_pattern=`
     when '\m'         then MULTIBYTE
     when '\M'         then SINGLEBYTE
     when String       then RegexpFasterEqq.new((+"[#{selector}]").force_encoding($encoding)) # TODO: WHY is this frozen in ruby 2.6.10
     when Regexp, Proc then selector
-    else raise "fail: bad charset '#{selector.inspect}'"
+    else raise "fail: bad pattern '#{selector.inspect}'"
     end
   end
 
   @raw_default = nil
 
-  ## Set the default charset; This can only be called before `build_default_charset!` is run. If
-  def raw_default=(charset)
+  ## Set the default pattern; This can only be called before `build_default_pattern!` is run. If
+  def raw_default=(pattern)
     fail if @default
 
     @raw_default =
-      case charset
+      case pattern
       when '\@'    then nil # Handle `\@` here to mean "whatever the default is"
       when '', '^' then false
-      else              charset
+      else              pattern
       end
   end
 
-  ## Constructs the default charset; This should only ever be called once, after any calls to the
-  # `default_charset=` method have been performed.
-  def build_default_charset!
+  ## Constructs the default pattern; This should only ever be called once, after any calls to the
+  # `default_pattern=` method have been performed.
+  def build_default_pattern!
     fail if @default
 
     @default =
@@ -241,8 +239,8 @@ module CharSet
       end
   end
 
-  ## Get the default charset; This should only be called after `build_default_charset!` is called,
-  # as the encoding for the charset isn't known until all command-line options are parsed.
+  ## Get the default pattern; This should only be called after `build_default_pattern!` is called,
+  # as the encoding for the pattern isn't known until all command-line options are parsed.
   def default
     @default or fail
   end
@@ -250,46 +248,46 @@ end
 
 ####################################################################################################
 #                                                                                                  #
-#                                             Patterns                                             #
+#                                             PatternAndAction                                             #
 #                                                                                                  #
 ####################################################################################################
 
 ## The list of patterns the user has supplied in command-line flags
-module Patterns
+module PatternAndAction
   @raw_patterns = []
 
   module_function
 
-  ## Adds a pattern (comprise of a `CharSet` and its `Action`) to the start of the list of patterns.
+  ## Adds a pattern (comprise of a `Pattern` and its `Action`) to the start of the list of patterns.
   # This means that later patterns take priority over earlier ones. Should not be called after
   # `.build!` is called.
-  def add_pattern(charset, action)
-    if charset.nil?
+  def add_pattern_and_action(pattern, action)
+    if pattern.nil?
       Action.default = action
       return
     end
 
     fail if @patterns # Ensure that we're called only before `.build!`
 
-    # Ignore charsets which are empty. This isn't just an optimization: Without this check, the
-    # eventual call to `CharSet.build` will fail because `[]` and `[^]` aren't valid regex character
+    # Ignore patterns which are empty. This isn't just an optimization: Without this check, the
+    # eventual call to `Pattern.build` will fail because `[]` and `[^]` aren't valid regex character
     # classes.
-    return if charset == '' || charset == '^'
+    return if pattern == '' || pattern == '^'
 
-    # Add the charset and its action to the list of raw patterns
-    @raw_patterns.prepend [charset, action]
+    # Add the pattern and its action to the list of raw patterns
+    @raw_patterns.prepend [pattern, action]
   end
 
-  ## Finalizes all the patterns, constructing the charsets with the current encoding. Should only
-  # ever be called once, after all user-supplied patterns are added via `add_pattern`.
+  ## Finalizes all the patterns, constructing the patterns with the current encoding. Should only
+  # ever be called once, after all user-supplied patterns are added via `add_pattern_and_action`.
   def build!
     fail if @patterns # Ensure that we're only called once.
 
-    # Construct the default charset, so that any user-supplied patterns can reference it.
-    CharSet.build_default_charset!
+    # Construct the default pattern, so that any user-supplied patterns can reference it.
+    Pattern.build_default_pattern!
 
-    # Build the charsets via `CharSet.build`.
-    @patterns = @raw_patterns.map { |charset, action| [CharSet.build(charset), action] }
+    # Build the patterns via `Pattern.build`.
+    @patterns = @raw_patterns.map { |pattern, action| [Pattern.build(pattern), action] }
   end
 
   ## Returns the representation of a character; Should only be called after `.build!`.
@@ -303,7 +301,7 @@ module Patterns
     end
 
     # No user-supplied actions match, so check the default one
-    return Action.default.call(char) if CharSet.default === char
+    return Action.default.call(char) if Pattern.default === char
 
     # The default one didn't match either, so just return the character unchanged.
     char
@@ -490,103 +488,90 @@ OptParse.new do |op|
   #                                        Specific Escapes                                        #
   ##################################################################################################
 
-  op.section 'ESCAPES'#, '(Ties go to the last one specified. Without args, uses default charset)'
+  op.section 'ESCAPES'#, '(Ties go to the last one specified. Without args, uses default pattern)'
   op.on 'Specify how characters should be escaped. Flags which optionally take a CHARSET set the default'
-  op.on 'action if no charset is supplied. Actions with explicit charsets are checked first, and ties go to'
-  op.on 'the last one specified. If no charset matches, the default one is used. Shorthand options are like'
-  op.on 'the their corresponding long-form one, except they don\'t take an argument, and only work on the default charset.'
+  op.on 'action if no pattern is supplied. Actions with explicit patterns are checked first, and ties go to'
+  op.on 'the last one specified. If no pattern matches, the default one is used. Shorthand options are like'
+  op.on 'the their corresponding long-form one, except they don\'t take an argument, and only work on the default pattern.'
 
   op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces in strings. Doesn't work with",
                                            "the --file option. (default)" do |ess|
     $escape_surronding_spaces = ess
   end
 
-  op.on '-p' do Action.default = Action::PRINT end
-  op.on '--print[=CHARSET]', 'Print characters, unchanged, without escaping them. Unlike the',
+  op.on '--print=PATTERN', 'Print characters, unchanged, without escaping them. Unlike the',
                              'other actions, using --print will not mark values as "escaped"',
-                             'for the purposes of --check-escapes.' do |charset|
-    Patterns.add_pattern(charset, Action::PRINT)
+                             'for the purposes of --check-escapes.' do |pattern|
+    PatternAndAction.add_pattern_and_action(pattern, Action::PRINT)
   end
 
-  op.on '-d' do Action.default = Action::DELETE end
-  op.on '--delete[=CHARSET]', 'Delete characters from the output by not printing anything.',
+  op.on '--delete=PATTERN', 'Delete characters from the output by not printing anything.',
                               'Deleted characters are considered "escaped" for the purposes',
-                              'of --check-escape.' do |charset|
-    Patterns.add_pattern(charset, Action::DELETE)
+                              'of --check-escape.' do |pattern|
+    PatternAndAction.add_pattern_and_action(pattern, Action::DELETE)
   end
 
-  op.on '-.' do Action.default = Action::DOT end
-  op.on '--dot[=CHARSET]', 'Replaces characters by simply printing a single period (`.`).',
+  op.on '--dot=PATTERN', 'Replaces characters by simply printing a single period (`.`).',
                            '(Note: Multibyte characters are still represented by a single',
-                           'period.)' do |charset|
-    Patterns.add_pattern(charset, Action::DOT)
+                           'period.)' do |pattern|
+    PatternAndAction.add_pattern_and_action(pattern, Action::DOT)
   end
 
-  op.on '-r' do Action.default = Action::REPLACE end
-  op.on '--replace[=CHARSET]', 'Identical to --dot, except instead of a period, the replacement',
-                               "character (#{Action::REPLACEMENT_CHARACTER_ASCII}) is printed instead." do |charset|
-    Patterns.add_pattern(charset, Action::REPLACE)
+  op.on '--replace=PATTERN', 'Identical to --dot, except instead of a period, the replacement',
+                               "character (#{Action::REPLACEMENT_CHARACTER_ASCII}) is printed instead." do |pattern|
+    PatternAndAction.add_pattern_and_action(pattern, Action::REPLACE)
   end
 
-  op.on '-x' do Action.default = Action::HEX end
-  op.on '--hex[=CHARSET]', 'Replaces characters with their hex value (\xHH). Multibyte',
+  op.on '--hex=PATTERN', 'Replaces characters with their hex value (\xHH). Multibyte',
                            'characters will have each of their bytes printed, in order they',
-                           'were received.' do |charset|
-    Patterns.add_pattern(charset, Action::HEX)
+                           'were received.' do |pattern|
+    PatternAndAction.add_pattern_and_action(pattern, Action::HEX)
   end
 
-  op.on '-o' do Action.default = Action::OCTAL end
-  op.on '--octal[=CHARSET]', 'Like --hex, except octal escapes (\###) are used instead. The',
-                             'output is always padded to three bytes (so NUL is \000, not \0)' do |charset|
-    Patterns.add_pattern(charset, Action::OCTAL)
+  op.on '--octal=PATTERN', 'Like --hex, except octal escapes (\###) are used instead. The',
+                             'output is always padded to three bytes (so NUL is \000, not \0)' do |pattern|
+    PatternAndAction.add_pattern_and_action(pattern, Action::OCTAL)
   end
 
-  op.on '-C' do Action.default = Action::CONTROL_PICTURE end
-  op.on '--control-picture[=CHARSET]', 'Print out "control pictures" (U+240x-U+242x) corresponding to',
+  op.on '--control-picture=PATTERN', 'Print out "control pictures" (U+240x-U+242x) corresponding to',
                                        'the character. Note that only \x00-\x20 and \x7F have control',
                                        'pictures assigned to them, and any other characters will yield',
-                                       'a warning (and fall back to --hex).' do |charset|
-    Patterns.add_pattern(charset, Action::CONTROL_PICTURE)
+                                       'a warning (and fall back to --hex).' do |pattern|
+    PatternAndAction.add_pattern_and_action(pattern, Action::CONTROL_PICTURE)
   end
 
-  op.on ''
-
-  op.on '--codepoint[=CHARSET]', 'Replaces chars with their UTF-8 codepoints (\u{...}). This only',
-                                 'works if the encoding is UTF-8. See also --multibyte-codepoints'  do |charset|
+  op.on '--codepoint=PATTERN', 'Replaces chars with their UTF-8 codepoints (\u{...}). This only',
+                                 'works if the encoding is UTF-8. See also --multibyte-codepoints'  do |pattern|
     # TODO: check if encoding is utf-8, and warn if it isn't
-    Patterns.add_pattern(charset, Action::CODEPOINTS)
+    PatternAndAction.add_pattern_and_action(pattern, Action::CODEPOINTS)
   end
 
-  op.on ''
-  op.on '--highlight[=CHARSET]', 'Prints the character unchanged, but considers it "escaped".',
+  op.on '--highlight=PATTERN', 'Prints the character unchanged, but considers it "escaped".',
                                  '(Thus, visual effects are added to it like any other escape,',
-                                 'and --check-escapes considers it an escaped character.)' do |charset|
-    Patterns.add_pattern(charset, Action::HIGHLIGHT)
+                                 'and --check-escapes considers it an escaped character.)' do |pattern|
+    PatternAndAction.add_pattern_and_action(pattern, Action::HIGHLIGHT)
   end
 
-  op.on ''
-  op.on '--c-escape[=CHARSET]', 'Use c-style escapes for the following characters. (Any other',
+  op.on '--c-escape=PATTERN', 'Use c-style escapes for the following characters. (Any other',
                                 'characters will yield a warning, and fall back to --hex.):',
-                                "#{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}" do |charset|
-    Patterns.add_pattern(charset, Action::C_ESCAPES)
+                                "#{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}" do |pattern|
+    PatternAndAction.add_pattern_and_action(pattern, Action::C_ESCAPES)
   end
 
-  op.on ''
-  op.on '--default[=CHARSET]', 'Use the default patterns for chars in CHARSET' do |charset|
-    Patterns.add_pattern(charset, Action::DEFAULT)
+  op.on '--default=PATTERN', 'Use the default patterns for chars in CHARSET' do |pattern|
+    PatternAndAction.add_pattern_and_action(pattern, Action::DEFAULT)
   end
-
 
   ##################################################################################################
   ##################################################################################################
 
   op.section 'DEFAULT ESCAPES'
 
-  op.on '--[no-]default-charset CHARSET', 'Explicitly set the default charset that flags without CHARSET',
-                                          'values use. If --no-default-charset is used, only flags which',
-                                          'explicitly give a charset are used, and everything else is',
+  op.on '--[no-]default-pattern CHARSET', 'Explicitly set the default pattern that flags without CHARSET',
+                                          'values use. If --no-default-pattern is used, only flags which',
+                                          'explicitly give a pattern are used, and everything else is',
                                           'printed out verbatim.' do |cs|
-    CharSet.default_charset = cs
+    Pattern.default_pattern = cs
   end
 
 
@@ -668,34 +653,34 @@ OptParse.new do |op|
 
   op.section 'SHORTHANDS'
   op.on '-l', '--print-newlines', "Don't escape newlines. (Same as --print='\\n')" do
-    Patterns.add_pattern(/\n/, Action::PRINT)
+    PatternAndAction.add_pattern_and_action(/\n/, Action::PRINT)
   end
 
   op.on '-w', '--print-whitespace', "Don't escape newline, tab, or space. (Same as --print='\\n\\t ')" do
-    Patterns.add_pattern(/[\n\t ]/, Action::PRINT)
+    PatternAndAction.add_pattern_and_action(/[\n\t ]/, Action::PRINT)
   end
 
   op.on '-s', '--highlight-space', "Escape spaces with highlights. (Same as --highlight=' ')" do
-    Patterns.add_pattern(/ /, Action::HIGHLIGHT)
+    PatternAndAction.add_pattern_and_action(/ /, Action::HIGHLIGHT)
   end
 
   op.on '-S', '--control-picture-space', "Escape spaces with a \"picture\". (Same as --control-picture=' ')" do
-    Patterns.add_pattern(/ /, Action::CONTROL_PICTURE)
+    PatternAndAction.add_pattern_and_action(/ /, Action::CONTROL_PICTURE)
   end
 
   op.on '-B', '-\\', '--escape-backslashes', "Escape backslashes as '\\\\'. (Same as --c-escape='\\\\')",
                                       '(Default if not in colour mode, and no --escape-by was given). (-\\ is deprecated)' do |eb|
-    Patterns.add_pattern(/\\/, Action::C_ESCAPES)
+    PatternAndAction.add_pattern_and_action(/\\/, Action::C_ESCAPES)
   end
 
   op.on '-m', '--multibyte-codepoints', "Use codepoints for multibyte chars. (Same as --codepoint='\\m')",
                                         '(Not useful in single-byte-only encodings)' do
-    Patterns.add_pattern(CharSet::MULTIBYTE, Action::CODEPOINTS)
+    PatternAndAction.add_pattern_and_action(Pattern::MULTIBYTE, Action::CODEPOINTS)
   end
 
-  op.on '-a', '--escape-all', "Mark all characters as escaped. (Same as --escape-charset='\\A')",
+  op.on '-a', '--escape-all', "Mark all characters as escaped. (Same as --escape-pattern='\\A')",
                               'Does nothing alone; it needs to be used with an "ESCAPES" flag' do
-    CharSet.raw_default = CharSet::ALL
+    Pattern.raw_default = Pattern::ALL
   end
 
   ##################################################################################################
@@ -774,7 +759,7 @@ OptParse.new do |op|
       - '\N' matches no chars  (so `--delete='\N'` would never delete a character)
       - '\m' matches multibyte characters (only useful if input data is multibyte like, UTF-8.)
       - '\M' matches all single-byte characters (i.e. anything \m doesn't match)
-      - '\@' matches the charset "ESCAPES" uses (so `--hex='\@'` is equivalent to `--escape-by-hex`)
+      - '\@' matches the pattern "ESCAPES" uses (so `--hex='\@'` is equivalent to `--escape-by-hex`)
     If more than pattern matches, the last one supplied on the command line wins.
   EOS
 
@@ -811,7 +796,7 @@ defined? $prefixes or $prefixes = $stdout.tty? && (!$*.empty? || (defined?($file
 defined? $files    or $files = !$stdin.tty? && $*.empty?
 $quiet and $stdout = File.open(File::NULL, 'w')
 
-Patterns.build!
+PatternAndAction.build!
 
 ## Force `$trailing_newline` to be set if `$prefixes` are set, as otherwise there wouldn't be a
 # newline between each header, which is weird.
@@ -890,7 +875,7 @@ ESCAPES_CACHE = Hash.new do |hash, key|
         $standout_end = STANDOUT_END
       end
     else
-      Patterns.handle(key)
+      PatternAndAction.handle(key)
     end
 end
 
