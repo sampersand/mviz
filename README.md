@@ -109,15 +109,15 @@ Normally, the default pattern is just `\x00-\x1F\x7F`—that is, all of the "wei
 ## Actions
 Actions are how characters are escaped. There's a lot of them, and they can be used either as arguments to flags (eg `--invalid-action=octal`) or specified explicitly (eg via `--highlight=a-z`):
 
-| name | value |
+| Name | Description |
 |------|-------|
 | `print` | Print characters, unchanged, without escaping them. Unlike the other actions, using `print` will not mark values as "escaped" for the purposes of `--check-escapes` |
 | `delete` | Delete characters from the output by not printing anything. Deleted characters are considered "escaped" for the purposes of `--check-escape` |
-| `dot` | Replaces characters by simply printing a single period (`.`). (Note: Multibyte characters are still represented by a single period.) |
+| `dot` | Replaces characters by simply printing a single period (`.`). *Note*: Multibyte characters are still represented by a single period. |
 | `replace` | Identical to --dot, except instead of a period, the replacement character (\uFFFD) is printed instead. |
 | `hex` | Replaces characters with their hex value (\xHH). Multibyte characters will have each of their bytes printed, in order they were received. |
 | `octal` | Like --hex, except octal escapes (\###) are used instead. The output is always padded to three bytes (so NUL is \000, not \0) |
-| `control-picture` | Print out "control pictures" (U+240x-U+242x) corresponding to the character. Note that only \x00-\x20 and \x7F have control pictures assigned to them, and any other characters will yield a warning (and fall back to --hex). |
+| `picture` | Print out "control pictures" (U+240x-U+242x) corresponding to the character. Note that only \x00-\x20 and \x7F have control pictures assigned to them, and any other characters will yield a warning (and fall back to --hex). |
 | `codepoint` | Replaces chars with their UTF-8 codepoints (\u{...}). This only works if the encoding is UTF-8. See also --multibyte-codepoints |
 | `highlight` | Prints the character unchanged, but considers it "escaped". (Thus, visual effects are added to it like any other escape, and --check-escapes considers it an escaped character.) |
 | `c-escape` | Use c-style escapes for the following characters. (Any other characters will yield a warning, and fall back to --hex.): \0\a\b\t\n\v\f\r\e\\ |

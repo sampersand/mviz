@@ -113,7 +113,7 @@ module Action
 
   ## Returns Unicode "pictures" for certain characters (0x00 thru 0x20, and 0x7f). Other characters
   # yield a warning with a fallback on hex escapes.
-  CONTROL_PICTURE = ->char do
+  PICTURE = ->char do
     case char
     when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
     when "\x7F"       then visualize "\u{2421}"
@@ -533,11 +533,11 @@ OptParse.new do |op|
     PatternAndAction.add_pattern_and_action(pattern, Action::OCTAL)
   end
 
-  op.on '--control-picture=PATTERN', 'Print out "control pictures" (U+240x-U+242x) corresponding to',
+  op.on '--picture=PATTERN', 'Print out "control pictures" (U+240x-U+242x) corresponding to',
                                        'the character. Note that only \x00-\x20 and \x7F have control',
                                        'pictures assigned to them, and any other characters will yield',
                                        'a warning (and fall back to --hex).' do |pattern|
-    PatternAndAction.add_pattern_and_action(pattern, Action::CONTROL_PICTURE)
+    PatternAndAction.add_pattern_and_action(pattern, Action::PICTURE)
   end
 
   op.on '--codepoint=PATTERN', 'Replaces chars with their UTF-8 codepoints (\u{...}). This only',
@@ -603,8 +603,8 @@ OptParse.new do |op|
     Action.default = Action::OCTAL
   end
 
-  op.on '-C', 'Shorthand for --default-action=control-picture' do
-    Action.default = Action::CONTROL_PICTURE
+  op.on '-C', 'Shorthand for --default-action=picture (`-C` because it is a "control picture")' do
+    Action.default = Action::PICTURE
   end
 
 
@@ -664,8 +664,8 @@ OptParse.new do |op|
     PatternAndAction.add_pattern_and_action(/ /, Action::HIGHLIGHT)
   end
 
-  op.on '-S', '--control-picture-space', "Escape spaces with a \"picture\". (Same as --control-picture=' ')" do
-    PatternAndAction.add_pattern_and_action(/ /, Action::CONTROL_PICTURE)
+  op.on '-S', '--picture-space', "Escape spaces with a \"picture\". (Same as --picture=' ')" do
+    PatternAndAction.add_pattern_and_action(/ /, Action::PICTURE)
   end
 
   op.on '-B', '-\\', '--escape-backslashes', "Escape backslashes as '\\\\'. (Same as --c-escape='\\\\')",
