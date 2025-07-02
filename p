@@ -57,7 +57,7 @@ module Action
 
   # Used with `REPLACE`, to be the character we replace things with.
   REPLACEMENT_CHARACTER = '�'
-  REPLACEMENT_CHARACTER_ASCII = '\uFFFD'
+  REPLACEMENT_CHARACTER_REPR = '\uFFFD'
 
   ## Returns the character unchanged
   PRINT = ->char do
@@ -375,7 +375,7 @@ OptParse.new do |op|
     separator "\n#{BOLD_BEGIN}#{title}#{BOLD_END}#{additional && ' '}#{additional}"
   end
 
-  # We can't use an `op.accept :CHARSET` here to create regex patterns because we only know the
+  # We can't use an `op.accept :PATTERN` here to create regex patterns because we only know the
   # encoding after parsing all options, at which point we'd have already created all the regexes.
 
   ##################################################################################################
@@ -397,7 +397,7 @@ OptParse.new do |op|
       -d (-D)         Delete from the output
       -p (-P)         Print unchanged
       -. (-@)         Replace with a period ('.')
-      -r (-R)         Replace with the replacement character (#{Action::REPLACEMENT_CHARACTER_ASCII})
+      -r (-R)         Replace with the replacement character (#{Action::REPLACEMENT_CHARACTER_REPR})
       -C              Replace escaped chars with their "control pictures"
     #{BOLD_BEGIN}SPECIFIC ESCAPES#{BOLD_END}
       -l / -w         Don't escape newlines / newlines, tabs, or spaces.
@@ -488,77 +488,57 @@ OptParse.new do |op|
   #                                        Specific Escapes                                        #
   ##################################################################################################
 
-  op.section 'ESCAPES'#, '(Ties go to the last one specified. Without args, uses default pattern)'
-  op.on 'Specify how characters should be escaped. Flags which optionally take a CHARSET set the default'
-  op.on 'action if no pattern is supplied. Actions with explicit patterns are checked first, and ties go to'
-  op.on 'the last one specified. If no pattern matches, the default one is used. Shorthand options are like'
-  op.on 'the their corresponding long-form one, except they don\'t take an argument, and only work on the default pattern.'
+  op.section 'ESCAPES', '(Ties go to the last one specified)'
 
   op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces in strings. Doesn't work with",
                                            "the --file option. (default)" do |ess|
     $escape_surronding_spaces = ess
   end
 
-  op.on '--print=PATTERN', 'Print characters, unchanged, without escaping them. Unlike the',
-                             'other actions, using --print will not mark values as "escaped"',
-                             'for the purposes of --check-escapes.' do |pattern|
+  op.on '--print=PATTERN', 'Print characters, verbatim, without escaping them' do |pattern|
     PatternAndAction.add_pattern_and_action(pattern, Action::PRINT)
   end
 
-  op.on '--delete=PATTERN', 'Delete characters from the output by not printing anything.',
-                              'Deleted characters are considered "escaped" for the purposes',
-                              'of --check-escape.' do |pattern|
+  op.on '--delete=PATTERN', 'Delete characters from the output' do |pattern|
     PatternAndAction.add_pattern_and_action(pattern, Action::DELETE)
   end
 
-  op.on '--dot=PATTERN', 'Replaces characters by simply printing a single period (`.`).',
-                           '(Note: Multibyte characters are still represented by a single',
-                           'period.)' do |pattern|
+  op.on '--dot=PATTERN', 'Replaces characters by with a single period (`.`)' do |pattern|
     PatternAndAction.add_pattern_and_action(pattern, Action::DOT)
   end
 
-  op.on '--replace=PATTERN', 'Identical to --dot, except instead of a period, the replacement',
-                               "character (#{Action::REPLACEMENT_CHARACTER_ASCII}) is printed instead." do |pattern|
+  op.on '--replace=PATTERN', "Replaces characters with the replacement character (#{Action::REPLACEMENT_CHARACTER_REPR})" do |pattern|
     PatternAndAction.add_pattern_and_action(pattern, Action::REPLACE)
   end
 
-  op.on '--hex=PATTERN', 'Replaces characters with their hex value (\xHH). Multibyte',
-                           'characters will have each of their bytes printed, in order they',
-                           'were received.' do |pattern|
+  op.on '--hex=PATTERN', "Prints out a char's hex value (\\xHH)" do |pattern|
     PatternAndAction.add_pattern_and_action(pattern, Action::HEX)
   end
 
-  op.on '--octal=PATTERN', 'Like --hex, except octal escapes (\###) are used instead. The',
-                             'output is always padded to three bytes (so NUL is \000, not \0)' do |pattern|
+  op.on '--octal=PATTERN', "Prints out a char's octal value (\\###)" do |pattern|
     PatternAndAction.add_pattern_and_action(pattern, Action::OCTAL)
   end
 
-  op.on '--picture=PATTERN', 'Print out "control pictures" (U+240x-U+242x) corresponding to',
-                                       'the character. Note that only \x00-\x20 and \x7F have control',
-                                       'pictures assigned to them, and any other characters will yield',
-                                       'a warning (and fall back to --hex).' do |pattern|
+  op.on '--picture=PATTERN', 'Print out "pictures" (U+240x-U+242x) for the character. Only',
+                             'works for \x00-\x20 and \x7F; other chars yield a warning' do |pattern|
     PatternAndAction.add_pattern_and_action(pattern, Action::PICTURE)
   end
 
-  op.on '--codepoint=PATTERN', 'Replaces chars with their UTF-8 codepoints (\u{...}). This only',
-                                 'works if the encoding is UTF-8. See also --multibyte-codepoints'  do |pattern|
+  op.on '--codepoint=PATTERN', 'Prints out UTF-8 codepoints (\u{...}). Only works with UTF-8'  do |pattern|
     # TODO: check if encoding is utf-8, and warn if it isn't
     PatternAndAction.add_pattern_and_action(pattern, Action::CODEPOINTS)
   end
 
-  op.on '--highlight=PATTERN', 'Prints the character unchanged, but considers it "escaped".',
-                                 '(Thus, visual effects are added to it like any other escape,',
-                                 'and --check-escapes considers it an escaped character.)' do |pattern|
+  op.on '--highlight=PATTERN', 'Prints the character unchanged, but considers it "escaped"' do |pattern|
     PatternAndAction.add_pattern_and_action(pattern, Action::HIGHLIGHT)
   end
 
-  op.on '--c-escape=PATTERN', 'Use c-style escapes for the following characters. (Any other',
-                                'characters will yield a warning, and fall back to --hex.):',
-                                "#{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}" do |pattern|
+  op.on '--c-escape=PATTERN', "Use c-style escapes for #{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}; others chars",
+                              'will yield a warning.' do |pattern|
     PatternAndAction.add_pattern_and_action(pattern, Action::C_ESCAPES)
   end
 
-  op.on '--default=PATTERN', 'Use the default patterns for chars in CHARSET' do |pattern|
+  op.on '--default=PATTERN', 'Use the default patterns for chars in PATTERN' do |pattern|
     PatternAndAction.add_pattern_and_action(pattern, Action::DEFAULT)
   end
 
@@ -567,7 +547,7 @@ OptParse.new do |op|
 
   op.section 'DEFAULT ESCAPES'
 
-  op.on '--[no-]default-pattern CHARSET', 'Explicitly set the default pattern that flags without CHARSET',
+  op.on '--[no-]default-pattern PATTERN', 'Explicitly set the default pattern that flags without PATTERN',
                                           'values use. If --no-default-pattern is used, only flags which',
                                           'explicitly give a pattern are used, and everything else is',
                                           'printed out verbatim.' do |cs|
@@ -747,12 +727,12 @@ OptParse.new do |op|
   EOS
 
   ##################################################################################################
-  #                                      CHARSET Description                                       #
+  #                                      PATTERN Description                                       #
   ##################################################################################################
 
-  op.section 'CHARSETS'
+  op.section 'PATTERNS'
   op.on <<~'EOS'
-    A 'CHARSET' is a regex character without the surrounding brackets (for example, --delete='^a-z' will
+    A 'PATTERN' is a regex character without the surrounding brackets (for example, --delete='^a-z' will
     only output lowercase letters.) In addition to normal escapes (eg '\n' for newlines, '\w' for "word"
     characters, etc), some other special sequences are accepted:
       - '\A' matches all chars (so `--print='\A'` would print out every character)
