@@ -3,6 +3,8 @@ exec env ruby -S -Ebinary "$0" "$@"
 #!ruby
 # -*- encoding: UTF-8; frozen-string-literal: true -*-
 
+###### TODO: rename from `charset` to `pattern`, to match the readme.
+
 =begin Notes on the above
 The first three lines (the shebang, `exec env`, and `#!ruby`) are there so that we can specify the
 `-Ebinary` flag, which specifies that all command-line arguments should be binary-encoded; If we
@@ -774,6 +776,12 @@ $trailing_newline ||= $prefixes
 
 # Set the defaults for the options
 $ENCODING_FAILED = $SOMETHING_ESCAPED = false
+
+# Optimization: Early exit for `--malformed-error` and `--check-escapes` if we're in quiet mode.
+if $quiet
+  $malformed_error and trace_var :$ENCODING_FAILED do exit 1 end
+  $escape_error    and trace_var :$SOMETHING_ESCAPED do exit 1 end
+end
 
 # Change the exit status to reflect `--malformed-error` / `--no-check-escapes`
 at_exit do

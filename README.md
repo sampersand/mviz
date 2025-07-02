@@ -70,10 +70,18 @@ In addition, `p` by default adds a "standout marker" to escaped characters (by d
 # How it works
 The way `p` works at a high-level is pretty easy: Every character in an input is checked against the list of patterns, and the first one that matches is used. If no patterns match, the character is checked against the "default pattern," and if that doesn't match, the character is printed verbatim.
 
-To simplify the most common use-case of `p`, where only the "escaping mechanism" (called an "ACTION"; see below) is changed, a lot of short-hand flags (such as `-x`, `-d`, etc.) are provided to just change the default action.
+To simplify the most common use-case of `p`, where only the "escaping mechanism" (called an "Action"; see below) is changed, a lot of short-hand flags (such as `-x`, `-d`, etc.) are provided to just change the default action.
 
-`p` is broken into three configurable parts: The encoding of the input data, the "charsets" to match against the input data, and the ac
+`p` is broken into three configurable parts: The encoding of the input data, the "patterns" to match against the input data, and the action to take when a pattern matches. They're described in more details below:
 
+## Encodings
+The encoding (which can be specified via `--encoding`) is used to determine which input bytes are valid, and which are invalid.
+
+Valid bytes (which differ between encodings, see below) are then matched against patterns as described in `How it works`. However, "invalid bytes" (for example `\xC3` in UTF-8) are handled specially:
+
+By default, these bytes have their hex values printed out (but this can be changed, e.g. with `--invalid-delete`), along with a different "standout" pattern than normal escapes (by default, a red background). If any invalid bytes are encountered during an execution, and `--malformed-error` is set (which it is by default), the program will exit with a non-zero exit code at the end.
+
+By default, `p` uses the `UTF-8` encoding for all input streams, unless the environment variable `POSIXLY_CORRECT` is set, at
 
 # Actions
 
