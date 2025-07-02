@@ -81,10 +81,37 @@ Valid bytes (which differ between encodings, see below) are then matched against
 
 By default, these bytes have their hex values printed out (but this can be changed, e.g. with `--invalid-delete`), along with a different "standout" pattern than normal escapes (by default, a red background). If any invalid bytes are encountered during an execution, and `--malformed-error` is set (which it is by default), the program will exit with a non-zero exit code at the end.
 
-By default, `p` uses the `UTF-8` encoding for all input streams, unless the environment variable `POSIXLY_CORRECT` is set, at
+You can get a list of all the supported encodings via `--list-encodings`. Non-ASCII-compliant encodings, such as `UTF-16`, aren't supported (as they drastically complicate character matching logic).
 
-# Actions
+The "binary" encoding (which can be specified either with `--encoding=binary` or the `-b` / `--binary` / `--bytes` shorthands) is unique in that it doesn't have any "invalid bytes." (Note that it also changes the "default pattern" (see below) to include bytes `0x80-0xFF`, as those are normally considered "invalid".)
 
+Unless explicitly specified (either via `--encoding`, or one of the shorthands like `-b`), the encoding normally defaults to `UTF-8`. However, if the environment variable `POSIXLY_CORRECT` is set, it defaults to the "locale" encoding, which relies on the environment variables `LC_ALL`, `LC_CTYPE`, and `LANG` (in that order) to specify it.
+
+## Patterns
+Patterns are a sets of characters (internally using regular expression character classes—`[a-z]`) that are used to match against input characters. In addition to specifying "normal" escape sequences (eg `\n` for newlines, `\xHH` for hex escapes, and `\u{HHHH}` for Unicode codepoints, `\w` for "word characters", etc), patterns also support the following custom escape sequences:
+
+- `\A` matches all characters
+- `\N` matches no characters
+- `\m` matches multibyte characters (and is only useful if the input encoding is multibyte, like UTF-8)
+- `\M` matches single-byte characters (ie anything `\m` doesn't match)
+- `\@` matches the "default pattern" (see below)
+
+Patterns are normally used when specifying actions directly (eg `p --delete=^a-z` will only output lower-case letters).
+
+### Default Pattern
+XYZ
+
+<!--     A 'CHARSET' is a regex character without the surrounding brackets (for example, --delete='^a-z' will
+    only output lowercase letters.) In addition to normal escapes (eg '\n' for newlines, '\w' for "word"
+    characters, etc), some other special sequences are accepted:
+      - '\A' matches all chars (so `--print='\A'` would print out every character)
+      - '\N' matches no chars  (so `--delete='\N'` would never delete a character)
+      - '\m' matches multibyte characters (only useful if input data is multibyte like, UTF-8.)
+      - '\M' matches all single-byte characters (i.e. anything \m doesn't match)
+      - '\@' matches the charset "ESCAPES" uses (so `--hex='\@'` is equivalent to `--escape-by-hex`)
+    If more than pattern matches, the last one supplied on the command line wins.
+
+ -->
 
 # Encodings
 The way `p` works at a high-level is pretty easy: Every character in an input is checked against the list of patterns, where the
