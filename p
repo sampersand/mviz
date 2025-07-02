@@ -488,7 +488,7 @@ OptParse.new do |op|
   #                                        Specific Escapes                                        #
   ##################################################################################################
 
-  op.section 'ESCAPES', '(Ties go to the last one specified)'
+  op.section 'ESCAPES', '(Multiple may be specified; ties go to the last one specified)'
 
   op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces in strings. Doesn't work with",
                                            "the --file option. (default)" do |ess|
@@ -542,21 +542,56 @@ OptParse.new do |op|
     PatternAndAction.add_pattern_and_action(pattern, Action::DEFAULT)
   end
 
+  op.section 'ESCAPE SHORTHANDS'
+
+  op.on '-l', "Don't escape newlines. (Same as --print='\\n')",
+    "Shorthand for --print='\\n'. Don't escape newlines." do
+    PatternAndAction.add_pattern_and_action(/\n/, Action::PRINT)
+  end
+
+  op.on '-w', "Don't escape newline, tab, or space. (Same as --print='\\n\\t ')" do
+    PatternAndAction.add_pattern_and_action(/[\n\t ]/, Action::PRINT)
+  end
+
+  op.on '-s', "Escape spaces with highlights. (Same as --highlight=' ')" do
+    PatternAndAction.add_pattern_and_action(/ /, Action::HIGHLIGHT)
+  end
+
+  op.on '-S', "Escape spaces with a \"picture\". (Same as --picture=' ')" do
+    PatternAndAction.add_pattern_and_action(/ /, Action::PICTURE)
+  end
+
+  op.on '-B', "Escape backslashes as '\\\\'. (Same as --c-escape='\\\\')",
+              '[default when no --no-color, and no --default-action is given]' do |eb|
+    PatternAndAction.add_pattern_and_action(/\\/, Action::C_ESCAPES)
+  end
+
+  op.on '-m', "Use codepoints for multibyte chars. (Same as --codepoint='\\m')",
+                                        '(Not useful in single-byte-only encodings)' do
+    PatternAndAction.add_pattern_and_action(Pattern::MULTIBYTE, Action::CODEPOINTS)
+  end
+
+
   ##################################################################################################
   ##################################################################################################
 
-  op.section 'DEFAULT ESCAPES'
+  op.section 'DEFAULT ESCAPES', '(Performed if no ESCAPES match)'
 
-  op.on '--[no-]default-pattern PATTERN', 'Explicitly set the default pattern that flags without PATTERN',
-                                          'values use. If --no-default-pattern is used, only flags which',
-                                          'explicitly give a pattern are used, and everything else is',
-                                          'printed out verbatim.' do |cs|
+  op.on '--default-pattern=PATTERN', 'Explicitly set the default pattern. [default: \x00-\x1F\x7F]' do |cs|
     Pattern.default_pattern = cs
   end
 
 
-  op.on '--[no-]default-action=ACTION', :ACTION, 'Set the default action; --no-default-action disables it' do |action|
+  op.on '--default-action=ACTION', :ACTION, "Set the default action that's used when no ESCAPES match.",
+                                            '[default: default]' do |action|
     Action.default = action
+  end
+
+  op.on '--no-default-pattern', '--no-default-action', 'Specify either of these to disable the default functionality,',
+                                                       'and to print verbatim any characters that dont match ESCAPES.' do
+    # Technically we could also set `Action.default = Action::PRINT`; it doesn't really matter, as
+    # "pattern that never matches" and "action that always prints" do the same thing.
+    Pattern.default_pattern = nil
   end
 
   op.on '-p', 'Shorthand for --default-action=print' do
@@ -583,22 +618,23 @@ OptParse.new do |op|
     Action.default = Action::OCTAL
   end
 
-  op.on '-C', 'Shorthand for --default-action=picture (`-C` because it is a "control picture")' do
+  op.on '-C', 'Shorthand for --default-action=picture (`-C` b/c "control pic")' do
     Action.default = Action::PICTURE
   end
 
+  op.on '-a', '--escape-all', "Shorthand for --default-pattern='\\A'. (Does nothing on its own,",
+                              'and should be combined with a --default-action=XXX flag.)' do
+    Pattern.raw_default = Pattern::ALL
+  end
 
   ##################################################################################################
   #                                            Escapes                                             #
   ##################################################################################################
 
-  op.section 'MALFORMED ESCAPES', 'Escapes for malformed bytes in the encoding'
-  op.on 'Like the "ESCAPES" section, except these apply to malformed bytes for the given encoding.'
-  op.on 'Not all escape actions are possible, as some (eg codepoints) dont make sense. The shorthand'
-  op.on 'flags are just upper cases of their equivalent normal-escape forms.'
+  op.section 'INVALID BYTE ESCAPES', '(Performed on invalid bytes for the --encoding)'
 
-  op.on '--invalid-action=ACTION', :ACTION, 'Specify the action to be used for invalid bytes',
-                                     'Cannot specify `codepoints` as it doesnt make sense' do |action|
+  op.on '--invalid-action=ACTION', :ACTION, 'Specify the action to be used for invalid bytes. (Cannot',
+                                            'specify `codepoints`, as it doesnt make sense) [default: hex]' do |action|
     raise OptionParser::InvalidArgument if action == Action::CODEPOINTS
     Action.error = action
   end
@@ -625,42 +661,6 @@ OptParse.new do |op|
 
   op.on '-R', 'Shorthand for --invalid-action=replace' do
     Action.error = Action::REPLACE
-  end
-
-  ##################################################################################################
-  #                                           Shorthands                                           #
-  ##################################################################################################
-
-  op.section 'SHORTHANDS'
-  op.on '-l', '--print-newlines', "Don't escape newlines. (Same as --print='\\n')" do
-    PatternAndAction.add_pattern_and_action(/\n/, Action::PRINT)
-  end
-
-  op.on '-w', '--print-whitespace', "Don't escape newline, tab, or space. (Same as --print='\\n\\t ')" do
-    PatternAndAction.add_pattern_and_action(/[\n\t ]/, Action::PRINT)
-  end
-
-  op.on '-s', '--highlight-space', "Escape spaces with highlights. (Same as --highlight=' ')" do
-    PatternAndAction.add_pattern_and_action(/ /, Action::HIGHLIGHT)
-  end
-
-  op.on '-S', '--picture-space', "Escape spaces with a \"picture\". (Same as --picture=' ')" do
-    PatternAndAction.add_pattern_and_action(/ /, Action::PICTURE)
-  end
-
-  op.on '-B', '-\\', '--escape-backslashes', "Escape backslashes as '\\\\'. (Same as --c-escape='\\\\')",
-                                      '(Default if not in colour mode, and no --escape-by was given). (-\\ is deprecated)' do |eb|
-    PatternAndAction.add_pattern_and_action(/\\/, Action::C_ESCAPES)
-  end
-
-  op.on '-m', '--multibyte-codepoints', "Use codepoints for multibyte chars. (Same as --codepoint='\\m')",
-                                        '(Not useful in single-byte-only encodings)' do
-    PatternAndAction.add_pattern_and_action(Pattern::MULTIBYTE, Action::CODEPOINTS)
-  end
-
-  op.on '-a', '--escape-all', "Mark all characters as escaped. (Same as --escape-pattern='\\A')",
-                              'Does nothing alone; it needs to be used with an "ESCAPES" flag' do
-    Pattern.raw_default = Pattern::ALL
   end
 
   ##################################################################################################
@@ -699,6 +699,8 @@ OptParse.new do |op|
   op.on '--locale', 'Same as --encoding=locale. (Chooses encoding based on env vars)' do
     $encoding = Encoding.find('locale')
   end
+
+  puts op.help; exit
 
   ##################################################################################################
   #                                        Environment Vars                                        #
@@ -750,6 +752,7 @@ OptParse.new do |op|
       - 1    A problem opening a file given with `-f`
       - 2    Command-line usage error
   EOS
+
 
 
   ##################################################################################################
