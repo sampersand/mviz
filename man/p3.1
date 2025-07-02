@@ -1,0 +1,426 @@
+.Dd June 30, 2025
+.Dt P 1
+.Os
+
+.Sh NAME
+.Nm p
+.Nd visualize invisible and invalid bytes in different encodings.
+
+.Sh SYNOPSIS
+.Nm
+.Op options
+.Nm
+.Op options
+.Ar string
+.Op Ar ...
+.Nm
+.Fl f
+.Op options
+.Op Ar files ...
+
+.Sh DESCRIPTION
+.Nm
+is an \(lqescaper,\(rq converting bytes from their source
+representation to a more human\-understandable one.
+There are many options to control which bytes are converted (which, by
+default, is invisible ASCII bytes, and invalid UTF\-8) and also how the
+bytes are visualized.
+
+.Nm
+is designed with sane defaults, and most users don\(cqt need
+to muck around with the.
+
+.Nm
+normally works on a \(lqdefault charset,\(rq which all the
+short\-forms (eg \f[CR]\-x\f[R]) and value\-less flags (eg
+\f[CR]\-\-hex\f[R]) work on by default.
+This charset can be changed with
+\f[CR]\-\-default\-charset=CHARSET\f[R], or disabled entirely with
+\f[CR]\-\-no\-default\-charset\f[R] (where only explicitly\-selected
+options are used).
+
+In addition to the default charset, options for specific ranges (eg
+\f[CR]\-\-delete=a\-d\f[R]) may be specified; these take priority over
+the default, and are evaluated in a last\-specified\-first\-evaluated
+order.
+
+.Sh OPTIONS
+.Bl -tag -width flag
+
+.It Fl h , Fl Fl help
+Show a help message and exit.
+.Fl h
+shows a shorter help message. Unlike other utilities, supplying no arguments doesn't print out usage in
+.Nm
+as that's valid.
+
+.It Fl Fl version
+Print the version of
+.Nm
+and exit.
+
+.It Fl f , Fl Fl files , Fl Fl no-files
+Interpret trailing options as filenames to read. Without this option, contrary to UNIX-philosophy, all arguments are interpreted as string literals, and are escaped as-is. (This is because by the most common use-case for
+.Nm
+is to visualize strings, not files).
+
+The
+.Fl Fl no-files
+option disables an earlier
+.Fl Fl files Ns
+, causing all arguments to be interpreted as string
+literals again.
+
+.It Fl Fl malformed-error , Fl Fl no-malformed-error
+(Enabled by default.) Causes the program to exit with status code \f[CR]1\f[R] if any invalid
+characters for the \f[B]ENCODING\f[R] are encountered.
+This will not abort the program prematurely, and simply changes the
+final status.
+
+.It Fl c , Fl Fl check-escapes , Fl Fl no-check-escapes
+Causes the program to exit with status code \f[CR]1\f[R] if
+\f[B]any\f[R] character is escaped.
+Note that the \f[CR]\-\-print\f[R] \f[B]ACTION\f[R] is not considered
+\(lqescaping\(rq a character.
+
+.It Fl q , Fl Fl quiet , Fl Fl no-quiet
+Do not output anything.
+Useful with \f[CR]\-\-check\-escapes\f[R] and
+\f[CR]\-\-malformed\-error\f[R] to programmatically see if an input is
+\(lqnormal.\(rq
+
+.It Fl Fl color , Fl Fl no-color , Fl Fl color= Ns Ar auto/always/never
+Controls "visual effects," used both help messages and "standouts"
+\(lqstandouts\(rq added to escaped characters.
+\f[CR]\-\-color\f[R] (and \f[CR]\-\-color=always\f[R]) enables them,
+\f[CR]\-\-no\-color\f[R] (and \f[CR]\-\-color=never\f[R]) disables them,
+and \f[CR]\-\-color=auto\f[R] resets them to the default value.
+The \f[I]auto\f[R] color is done as follows: First, if
+\f[CR]FORCE_COLOR\f[R] is present in the environment and non\-empty,
+then colors are enabled.
+Second, if \f[CR]NO_COLOR\f[R] is present in the environment and
+non\-empty, then colors are disabled.
+Lastly, colors are enabled if stdout is a tty.
+
+.It Fl Fl prefixes , Fl Fl no-prefixes
+(Defaults to enable if stdout is a tty, and any arguments are given.)
+Adds \(lqprefixes\(rq to arguments.
+For string arguments (ie without \f[CR]\-\-files\f[R]), this is their
+positional number (after all flags are removed).
+For files, this is a header containing the name of the file.
+Mutually exclusive with \f[CR]\-\-one\-per\-line\f[R] and
+\f[CR]\-\-no\-prefixes\-or\-newline\f[R].
+
+.It Fl Fl separator= Ns Ar flag
+Sets the separator. Disables prefixes
+
+.It Fl 0
+Same as \--separator=\e0
+
+.Ss ESCAPES
+.Bl -tag -width flag
+Specify how characters should be escaped.
+Flags which optionally take a \f[B]CHARSET\f[R] set the default action
+if no charset is supplied.
+Actions with explicit charsets are checked first, and ties go to the
+last one specified.
+If no charset matches, the default one is used.
+Shorthand options are like the their corresponding long\-form one,
+except they don\(cqt take an argument, and only work on the default
+charset.
+.\" .PP
+If more than pattern matches, the last one supplied on the command line
+wins.
+
+.It Fl Fl escape-surrounding-space , Fl Fl no-escape-surrounding-space
+(Defaults to enabled) A convenience flag that doesn\(cqt really fit
+anywhere else: Unlike all the other escapes, this explicitly only works
+on leading and trailing spaces in strings, and only when the
+\f[CR]\-\-file\f[R] option is not given.
+This lets you visualize leading/trailing spaces in shell variables (eg
+\f[CR]p \(dq$foo\(dq\f[R])
+
+.It Fl Fl print Ar CHARSET
+Print characters, unchanged, without escaping them.
+Unlike the other actions, using \f[CR]\-\-print\f[R] will not mark
+values as \(lqescaped\(rq for the purposes of
+\f[CR]\-\-check\-escapes\f[R].
+
+.It Fl Fl delete Ar CHARSET
+Delete characters from the output by not printing anything.
+Deleted characters are considered \(lqescaped\(rq for the purposes of
+\f[CR]\-\-check\-escape\f[R].
+
+.It Fl Fl dot Ar CHARSET
+Replaces characters by simply printing a single period (\f[CR].\f[R]).
+(Note: Multibyte characters are still represented by a single period.)
+
+.It Fl Fl replace Ar CHARSET
+Identical to \f[CR]\-\-dot\f[R], except instead of a period, the
+replacement character (\f[CR]\(rsuFFFD\f[R]) is printed instead.
+
+.It Fl Fl hex Ar CHARSET
+Replaces characters with their hex value (\f[CR]\(rsxHH\f[R]).
+Multibyte characters will have each of their bytes printed, in order
+they were received.
+
+.It Fl Fl octal Ar CHARSET
+Like \f[CR]\-\-hex\f[R], except octal escapes (\f[CR]\(rs###\f[R]) are
+used instead.
+The output is always padded to three bytes (so NUL is
+\f[CR]\(rs000\f[R], not \f[CR]\(rs0\f[R]).
+
+.It Fl Fl control-picture Ar CHARSET
+Print out \(lqcontrol pictures\(rq
+(\f[CR]U+240x\f[R]\-\f[CR]U+242x\f[R]) corresponding to the character.
+Note that only \f[CR]\(rsx00\-\(rsx20\f[R] and \f[CR]\(rsx7F\f[R] have
+control pictures assigned to them, and any other characters will yield a
+warning (and fall back to \f[CR]\-\-hex\f[R]).
+
+.It Fl Fl codepoint Ar CHARSET
+Replaces chars with their UTF\-8 codepoints (\f[CR]\(rsu{...}\f[R]).
+This only works if the encoding is UTF\-8.
+See also \f[CR]\-\-multibyte\-codepoints\f[R]
+
+.It Fl Fl highlight Ar CHARSET
+Prints the character unchanged, but considers it \(lqescaped\(rq.
+(Thus, visual effects are added to it like any other escape, and
+\f[CR]\-\-check\-escapes\f[R] considers it an escaped character.)
+
+.It Fl Fl c-escape Ar CHARSET
+Use c\-style escapes for the following characters.
+(Any other characters will yield a warning, and fall back to
+\f[CR]\-\-hex\f[R].):
+\f[CR]\(rs0\(rsa\(rsb\(rst\(rsn\(rsv\(rsf\(rsr\(rse\(rs\(rs\f[R]
+
+.It Fl Fl default Ar CHARSET
+Use the default patterns for chars in \f[B]CHARSET\f[R]
+
+.Ss DEFAULT ESCAPES
+.Bl -tag -width flag
+
+.It Fl Fl default-charset= Ns Ar CHARSET
+Explicitly set the default charset that flags without
+\f[B]\f[BI]CHARSET\f[B]\f[R] values use.
+The default value is \f[CR]\(rsx00\-\(rsx1F\(rsx7F\f[R], with an
+additional \f[CR]\(rsx80\-\(rsxFF\f[R] if the binary \f[B]ENCODING\f[R]
+is used.
+Additionally, if not using colors and using the default action,
+backslash (\f[CR]\(rs\(rs\f[R]) is added to this charset list.
+
+.It Fl Fl no-default-charset
+Disables the default charset so that only \f[B]ESCAPES\f[R] with
+explicit charsets are used.
+
+.It Fl Fl default-action= Ns Ar ESCAPE
+Sets the default escape to ESCAPE. ESCAPE must be one of a, b, c., ...
+
+.It Fl p
+Same as
+.Fl Fl default-action= Ns Ar print Ns
+; See the \f[B]ACTIONS\f[R] section for more.
+.It Fl d
+Same as
+.Fl Fl default-action= Ns Ar delete Ns
+; See the \f[B]ACTIONS\f[R] section for more.
+.It Fl .
+Same as
+.Fl Fl default-action= Ns Ar dot Ns
+; See the \f[B]ACTIONS\f[R] section for more.
+.It Fl r
+Same as
+.Fl Fl default-action= Ns Ar replace Ns
+; See the \f[B]ACTIONS\f[R] section for more.
+.It Fl x
+Same as
+.Fl Fl default-action= Ns Ar hex Ns
+; See the \f[B]ACTIONS\f[R] section for more.
+.It Fl o
+Same as
+.Fl Fl default-action= Ns Ar octal Ns
+; See the \f[B]ACTIONS\f[R] section for more.
+.It Fl C
+Same as
+.Fl Fl default-action= Ns Ar control Ns
+; See the \f[B]ACTIONS\f[R] section for more.
+
+.Ss MALFORMED ESCAPES
+.Bl -tag -width flag
+Escapes for malformed bytes in the encoding.
+Like the \(lqESCAPES\(rq section, except these apply to malformed bytes
+for the given encoding.
+Not all escape actions are possible, as some (eg codepoints) dont make
+sense.
+The shorthand flags are just upper cases of their equivalent
+normal\-escape forms.
+
+.It Fl Fl invalid-action Ar ACTION
+
+.It Fl X
+Same as
+.Fl Fl invalid-action= Ns Ar hex Ns
+; See the \f[B]ACTIONS\f[R] section for more.
+.It Fl O
+Same as
+.Fl Fl invalid-action= Ns Ar octal Ns
+; See the \f[B]ACTIONS\f[R] section for more.
+.It Fl D
+Same as
+.Fl Fl invalid-action= Ns Ar delete Ns
+; See the \f[B]ACTIONS\f[R] section for more.
+.It Fl P
+Same as
+.Fl Fl invalid-action= Ns Ar print Ns
+; See the \f[B]ACTIONS\f[R] section for more.
+.It Fl @
+Same as
+.Fl Fl invalid-action= Ns Ar dot Ns
+; See the \f[B]ACTIONS\f[R] section for more.
+.It Fl R
+Same as
+.Fl Fl invalid-action= Ns Ar replace Ns
+; See the \f[B]ACTIONS\f[R] section for more.
+
+.Ss SHORTHANDS
+.Bl -tag -width flag
+.It Fl l , Fl Fl print\-newlines
+Don\(cqt escape newlines.
+(Same as \-\-print='\en')
+
+.It Fl w , Fl Fl print\-whitespace
+Don\(cqt escape newline, tab, or space.
+(Same as \-\-print='\en\et\ ')
+
+.It Fl s , Fl Fl highlight\-space
+Escape spaces with highlights.
+(Same as \-\-highlight=\(cq \(cq)
+
+.It Fl S , Fl Fl control\-picture\-space
+Escape spaces with a \(lqpicture\(rq.
+(Same as \-\-control\-picture=\(cq \(cq)
+
+.It Fl B , Fl Fl escape\-backslashes
+Escape backslashes as `\e\e'.
+(Same as \-\-c\-escape=`\e\e') (Default if not in colour mode, and no
+\-\-escape\-by was given)
+
+.It Fl m , Fl Fl multibyte\-codepoints
+Use codepoints for multibyte chars.
+(Same as \-\-codepoint=`').
+(Not useful in single\-byte\-only encodings)
+
+.It Fl a , Fl Fl escape\-all
+Mark all characters as escaped.
+(Same as \-\-escape\-charset=`') Does nothing alone; it needs to be used
+with an \(lqESCAPES\(rq flag
+
+.Ss ENCODINGS
+.Bl -tag -width indent
+(default is normally \f[CR]\-\-utf\-8\f[R].
+If POSIXLY_CORRECT is set, \f[CR]\-\-locale\f[R] is the default)
+
+.It Fl E Ar encoding , Fl Fl encoding= Ns Ar encoding
+Specify the input\(cqs encoding, which is case\-insensitive.
+The encoding must be ASCII\-compatible; encodings which aren\(cqt (eg
+UTF\-16) yield a fatal error.
+See \f[CR]\-\-list\-encodings\f[R] for a list of encodings that can be
+specified.
+
+.It Fl Fl list-encodings
+List all possible encodings, and exit with status 0.
+
+.It Fl b , Fl Fl bytes , Fl Fl binary
+Same as \f[CR]\-\-encoding=binary\f[R].
+This encoding considers all bytes \(lqvalid,\(rq and specifying it
+changes the \f[CR]\-\-default\-charset\f[R] to also escape all high\-bit
+bytes (ie \f[CR]\(rsx80\-\(rsxFF\f[R]).
+
+.It Fl A , Fl Fl ascii
+Same as \f[CR]\-\-encoding=ASCII\f[R].
+Like \f[CR]\-\-binary\f[R]/\f[CR]\-\-bytes\f[R], but but high\-bits are
+considered \(lqinvalid\(rq.
+
+.It Fl 8 , Fl Fl utf-8
+Same as \f[CR]\-\-encoding=UTF\-8\f[R].
+The default, unless the environment variable variable
+\f[I]POSIXLY_CORRECT\f[R] is set.
+
+.It Fl Fl locale
+Same as \f[CR]\-\-encoding=locale\f[R].
+This chooses the encoding based on the environment variables
+\f[I]LC_ALL\f[R], \f[I]LC_CTYPE\f[R], and \f[I]LANG\f[R] (in that
+order).
+If the encoding is not valid, or none of the variables are present,
+\f[CR]US\-ASCII\f[R] is used as a default.
+
+.Sh ENVIRONMENT
+The following environment variables affect the execution of
+.Nm :
+.Bl -tag -width ".Ev CLICOLOR_FORCE"
+
+.It Ev FORCE_COLOR , NO_COLOR
+Controls \f[CR]\-\-color=auto\f[R].
+If FORCE_COLOR is set and nonempty, acts like
+\f[CR]\-\-color=always\f[R].
+Else, if NO_COLOR is set and nonempty, acts like
+\f[CR]\-\-color=never\f[R].
+If neither is set to a non\-empty value, \f[CR]\-\-color=auto\f[R]
+defaults to \f[CR]\-\-color=always\f[R] when stdout is a tty.
+
+.It Ev POSIXLY_CORRECT
+If present, changes the default \f[CR]\-\-encoding\f[R] to be
+\f[CR]locale\f[R] (cf locale(1).), and also disables parsing switches
+after arguments (e.g.\ passing in \f[CR]foo \-x\f[R] as arguments will
+not interpret \f[CR]\-x\f[R] as a switch).
+
+.It Ev P_STANDOUT_BEGIN , P_STANDOUT_END
+Beginning and ending escape sequences for \-\-color; Usually don\(cqt
+need to be set, as they have sane defaults.
+
+.It Ev P_STANDOUT_ERR_BEGIN, P_STANDOUT_ERR_END
+Like P_STANDOUT_BEGIN/P_STANDOUT_END, except for invalid bytes (eg 0xC3
+in \-\-utf\-8)
+
+.It Ev LC_ALL , LC_CTYPE , LANG\f[R]
+Checked (in that order) for the encoding when \-\-encoding=locale is
+used.
+
+.Sh CHARSETS
+A \(lq\f[I]CHARSET\f[R]\(rq is a way to specify a range of characters.
+They\(cqre based off Regular Expression character classes, with a few
+additional options escapes available in addition to the regular escapes
+(eg \f[CR]\(rsn\f[R] to escape a newline, or \f[CR]\(rsw\f[R] for
+\(lqword\(rq characters).
+To use these escapes they must be the \f[I]entire\f[R] regex (so eg
+\f[CR]\(ha\(rsE\f[R] doesn\(cqt work):
+.IP \(bu 2
+\f[CR]\(rsA\f[R] matches all chars (so
+\f[CR]\-\-print=\(aq\(rsA\(aq\f[R] would print out every character)
+.IP \(bu 2
+\f[CR]\(rsN\f[R] matches no chars (so
+\f[CR]\-\-delete=\(aq\(rsN\(aq\f[R] would never delete a character)
+.IP \(bu 2
+\f[CR]\(rsm\f[R] matches multibyte characters (only useful if input data
+is multibyte like, UTF\-8.)
+.IP \(bu 2
+\f[CR]\(rsM\f[R] matches all single\-byte characters (i.e.\ anything
+doesn\(cqt match)
+.IP \(bu 2
+\f[CR]\(rsE\f[R] matches the \(lqdefault charset\(rq (see
+\f[CR]\-\-default\-charset\f[R]) (so \f[CR]\-\-hex=\(aq\(rsE\(aq\f[R] is
+equivalent to \f[CR]\-\-hex\f[R].)
+.PP
+(Under the hood, the character classes use ruby\(cqs regular expression
+engine, and so anything that\(cqs valid)
+
+.Sh EXIT STATUS
+Specific exit codes are used:
+.IP \(bu 2
+0 No problems encountered
+.IP \(bu 2
+1 A problem opening a file given with \f[CR]\-f\f[R]
+.IP \(bu 2
+2 Command\-line usage error
+
+.Sh BUGS
+Bugs can be reported and filed at https://github.com/sampersand/p.
