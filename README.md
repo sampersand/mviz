@@ -75,7 +75,7 @@ To simplify the most common use-case of `p`, where only the "escaping mechanism"
 `p` is broken into three configurable parts: The encoding of the input data, the "patterns" to match against the input data, and the action to take when a pattern matches. They're described in more details below:
 
 ## Encodings
-The encoding (which can be specified via `--encoding`) is used to determine which input bytes are valid, and which are invalid.
+The encoding (which can be specified via `--encoding`, and are case-insensitive) is used to determine which input bytes are valid, and which are invalid.
 
 Valid bytes (which differ between encodings, see below) are then matched against patterns as described in `How it works`. However, "invalid bytes" (for example `\xC3` in UTF-8) are handled specially:
 
@@ -83,7 +83,7 @@ By default, these bytes have their hex values printed out (but this can be chang
 
 You can get a list of all the supported encodings via `--list-encodings`. Non-ASCII-compliant encodings, such as `UTF-16`, aren't supported (as they drastically complicate character matching logic).
 
-The "binary" encoding (which can be specified either with `--encoding=binary` or the `-b` / `--binary` / `--bytes` shorthands) is unique in that it doesn't have any "invalid bytes." (Note that it also changes the "default pattern" (see below) to include bytes `0x80-0xFF`, as those are normally considered "invalid".)
+The "binary" encoding (which can be specified either with `--encoding=binary` or the `-b` / `--binary` / `--bytes` shorthands) is unique in that it doesn't have any "invalid bytes."
 
 Unless explicitly specified (either via `--encoding`, or one of the shorthands like `-b`), the encoding normally defaults to `UTF-8`. However, if the environment variable `POSIXLY_CORRECT` is set, it defaults to the "locale" encoding, which relies on the environment variables `LC_ALL`, `LC_CTYPE`, and `LANG` (in that order) to specify it.
 
@@ -99,7 +99,32 @@ Patterns are a sets of characters (internally using regular expression character
 Patterns are normally used when specifying actions directly (eg `p --delete=^a-z` will only output lower-case letters).
 
 ### Default Pattern
-XYZ
+The default pattern is the pattern that is checked _after_ all "user-specified patterns." If it matches, the "default action" takes place (which are controlled by shorthands like `-x`, `-o`, etc.) acts upon.
+
+Normally, the default pattern is just `\x00-\x1F\x7F`—that is, all of the "weird" bytes in ASCII. However, there's a few ways it can be changed:
+1. It can be explicitly set via `--default-pattern=PATTERN`, at which point that's exactly what'll be used.
+2. If encoding is `BINARY`, the bytes `\x80-\xFF` are also added, as the binary encoding considers all bytes to be valid.
+3. If the default action is unchanged, and visual effects aren't be used, then backslash (`\`) is added to the default pattern. This way, it'll be escaped when "standout features" aren't in use.
+
+## Actions
+Actions are how characters are escaped. There's a lot of them, and they can be used either as arguments to flags (eg `--invalid-action=octal`) or specified explicitly (eg via `--highlight=a-z`):
+
+| name | value |
+|------|-------|
+| `print` | Print characters, unchanged, without escaping them. Unlike the other actions, using `print` will not mark values as "escaped" for the purposes of `--check-escapes` |
+| `delete` | Delete characters from the output by not printing anything. Deleted characters are considered "escaped" for the purposes of `--check-escape` |
+| `dot` | Replaces characters by simply printing a single period (`.`). (Note: Multibyte characters are still represented by a single period.) |
+| `replace` | Identical to --dot, except instead of a period, the replacement character (\uFFFD) is printed instead. |
+| `hex` | Replaces characters with their hex value (\xHH). Multibyte characters will have each of their bytes printed, in order they were received. |
+| `octal` | Like --hex, except octal escapes (\###) are used instead. The output is always padded to three bytes (so NUL is \000, not \0) |
+| `control-picture` | Print out "control pictures" (U+240x-U+242x) corresponding to the character. Note that only \x00-\x20 and \x7F have control pictures assigned to them, and any other characters will yield a warning (and fall back to --hex). |
+| `codepoint` | Replaces chars with their UTF-8 codepoints (\u{...}). This only works if the encoding is UTF-8. See also --multibyte-codepoints |
+| `highlight` | Prints the character unchanged, but considers it "escaped". (Thus, visual effects are added to it like any other escape, and --check-escapes considers it an escaped character.) |
+| `c-escape` | Use c-style escapes for the following characters. (Any other characters will yield a warning, and fall back to --hex.): \0\a\b\t\n\v\f\r\e\\ |
+| `default` | Use the default patterns for chars in CHARSET |
+
+
+(Note that it also changes the "default pattern" (see below) to include bytes `0x80-0xFF`, as those are normally considered "invalid".)
 
 <!--     A 'CHARSET' is a regex character without the surrounding brackets (for example, --delete='^a-z' will
     only output lowercase letters.) In addition to normal escapes (eg '\n' for newlines, '\w' for "word"
