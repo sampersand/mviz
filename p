@@ -180,6 +180,8 @@ module CharSet
   ## A character set which matches characters composed of exactly one byte.
   SINGLEBYTE = ->char { char.bytesize == 1 }
 
+  # INVISIBLE = /[\u0009-\u000D \xA0\x]/
+
   module_function
 
   ## Creates a character set (ie something which has `===` defined) based on `selector`.

@@ -1,7 +1,7 @@
 # The `p` command
-A program to escape "weird" characters in strings or files.
+A program to visualize invisible and invalid bytes in different encodings.
 
-`p` is essentially a replacement for interactive use of `echo` or `cat`: Instead of `echo "$variable"` or `cat file.txt`, which would be hiding invisible characters (like `\x01`), instead do `p "$variable"` or `p -f file.txt`.
+`p` is essentially a replacement for interactive use of `echo` or `cat`: Instead of `echo "$variable"` or `cat file.txt`, which (on most terminals) hide invisible characters (like `\x01`), you instead do `p "$variable"` or `p -f file.txt`.
 
 # Examples
 `p` is designed with sensible defaults in mind; its default behaviour is what you want most of the time, but it can easily (and sensibly) be changed with options
@@ -9,12 +9,13 @@ A program to escape "weird" characters in strings or files.
 ```sh
 $ p "$variable"        # See the contents of a shell variable
 $ p -d "$variable"     # Delete weird characters from the variable
-$ p -f some-file.txt   # Print some-file, escaping all characters
-$ p -fw some-file.txt  # Like the previous line, but newlines and tabs aren't escaped.
-$ some_command | p     # Visualize weird chars of `some_command`
+$ p -f file.txt        # Print file.txt, escaping "weird" characters
+$ p -fw file.txt       # Like the previous line, but newlines and tabs aren't escaped.
+$ some_command | p     # Visualize weird characters of `some_command`
 $ some_command | p -l  # Like the previous one, but don't escape newlines.
-$ some_command | p -b  # Interpret input data as binary, not utf-8 (the default)
+$ some_command | p -b  # Interpret input data as binary, not UTF-8 (the default)
 ```
+
 It's also quite useful when you're learning how shells work:
 ```bash
 # See what files are expanded by a glob
@@ -38,7 +39,7 @@ $ p $variable
 Try `p -h` for short usage, and `p --help` for the longer one.
 
 # Why not use tool X (`xxd`, `hexdmp`, `vis`, `od`, etc)?
-The biggest difference between `p` and other tools is that `p` is intended for looking at text (not binary data) by default, and optimizes for that. (It doesn't change the output _unless_ weird characters exist.) For example:
+The biggest difference between `p` and other tools is that `p` is intended for looking at mostly-normal text by default, and optimizes for that. It doesn't change the output _unless_ weird characters exist. For example:
 ```bash
 % printf 'hello\x04world, how are you? \xC3👍\n' | p
 hello\x04world, how are you? \xC3👍\n
@@ -64,11 +65,25 @@ hello\^Dworld, how are you? \M-C\M-p\M^_\M^Q\M^M
 hello^Dworld, how are you? ??M-^_M-^QM-^M
 ```
 
-# Encodings
+In addition, `p` by default adds a "standout marker" to escaped characters (by default, it inverts the foreground and background colours), so they're more easily distinguished at a glance.
 
 # How it works
-The way `p` works at a high-level is pretty easy: Every character in an input is checked against the list of escapes. If it matches, the first escape that matches is used. Otherwise, the char is printed verbatim. In list form:
+The way `p` works at a high-level is pretty easy: Every character in an input is checked against the list of patterns, and the first one that matches is used. If no patterns match, the character is checked against the "default pattern," and if that doesn't match, the character is printed verbatim.
 
+To simplify the most common use-case of `p`, where only the "escaping mechanism" (called an "ACTION"; see below) is changed, a lot of short-hand flags (such as `-x`, `-d`, etc.) are provided to just change the default action.
+
+`p` is broken into three configurable parts: The encoding of the input data, the "charsets" to match against the input data, and the ac
+
+
+# Actions
+
+
+# Encodings
+The way `p` works at a high-level is pretty easy: Every character in an input is checked against the list of patterns, where the
+. If it matches, the first escape that matches is used. Otherwise, the char is printed verbatim. In list form:
+
+
+# How it works
 1. Is the byte/character illegal in the given encoding (eg byte `0xC3` in UTF-8)? If so, print the escape.
 
 
