@@ -123,7 +123,6 @@ Actions are how characters are escaped. There's a lot of them, and they can be u
 | `c-escape`  | Print out C-style escapes for the following characters: `0x07` (`\a`), `0x08` (`\b`), `0x09` (`\t`), `0x0a` (`\n`), `0x0b` (`\v`), `0x0c` (`\f`), `0x0d` (`\r`), `0x1b` (`\e`), `0x5c` (`\\`). *Note*: Using `c-escape` with any other character will yield a warning (and fall back to `hex`). |
 | `default`   | Use the default pattern: All valid `c-escape` characters have their escape printed (with the sole exception that a backslash is printed as-is if visual effects are enabled), all other characters in `\x00-\x1F`, `\x7F` (and `\x80-\xFF` if the encoding is binary) are printed in hex, and all other characters are printed as-is.|
 
-
 # Environment Variables
 The `p` command has numerous environment variables it relies on:
 
@@ -134,3 +133,6 @@ The `p` command has numerous environment variables it relies on:
 | `P_STANDOUT_BEGIN`, `P_STANDOUT_END` | Beginning and ending escape sequences for --colour; Usually don't need to be set, as they have sane defaults. |
 | `P_STANDOUT_ERR_BEGIN`, `P_STANDOUT_ERR_END` | Like `P_STANDOUT_BEGIN`/`P_STANDOUT_END`, except for invalid bytes (eg `\xC3` in UTF-8) |
 | `LC_ALL`, `LC_CTYPE`, `LANG` | Checked (in that order) for the encoding when `--encoding=locale` is used. |
+
+# Contributions
+Bugs are welcome!

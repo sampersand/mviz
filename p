@@ -356,7 +356,7 @@ $escape_surronding_spaces = true
 
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
-  op.version = '0.12.2'
+  op.version = '0.13.0'
   op.banner = <<~BANNER
   #{$standout_begin if $use_color}usage#{$standout_end if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
