@@ -589,27 +589,37 @@ OptParse.new do |op|
   op.on 'Not all escape actions are possible, as some (eg codepoints) dont make sense. The shorthand'
   op.on 'flags are just upper cases of their equivalent normal-escape forms.'
 
-  op.on '-X', '--invalid-hex', 'Like -x, but only for illegal bytes in the encoding' do
+  op.accept :action do |foo|
+    Action::VALID_ACTIONS[foo.downcase] or raise OptionParser::InvalidArgument
+  end
+
+  op.on '--invalid=ACTION', :action, 'Specify the action to be used for invalid bytes',
+                                     'Cannot specify `codepoints` as it doesnt make sense' do |action|
+    raise OptionParser::InvalidArgument if action == Action::CODEPOINTS
+    Action.error = action
+  end
+
+  op.on '-X', 'Shorthand for --invalid=hex' do
     Action.error = Action::HEX
   end
 
-  op.on '-O', '--invalid-octal', 'Like -o, but only for illegal bytes in the encoding' do
+  op.on '-O', 'Shorthand for --invalid=octal' do
     Action.error = Action::OCTAL
   end
 
-  op.on '-D', '--invalid-delete', 'Like -d, but only for illegal bytes in the encoding' do
+  op.on '-D', 'Shorthand for --invalid=delete' do
     Action.error = Action::DELETE
   end
 
-  op.on '-P', '--invalid-print', 'Like -p, but only for illegal bytes in the encoding' do
+  op.on '-P', 'Shorthand for --invalid=print' do
     Action.error = Action::PRINT
   end
 
-  op.on '-@', '--invalid-dot', 'Like -., but only for illegal bytes in the encoding' do
+  op.on '-@', 'Shorthand for --invalid=dot' do
     Action.error = Action::DOT
   end
 
-  op.on '-R', '--invalid-replace', 'Like -r, but only for illegal bytes in the encoding' do
+  op.on '-R', 'Shorthand for --invalid=replace' do
     Action.error = Action::REPLACE
   end
 
