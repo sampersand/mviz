@@ -372,7 +372,7 @@ OptParse.new do |op|
 
   # Define a custom `separator` function to add bold to each section
   def op.section(title, additional = nil)
-    separator "\n#{BOLD_BEGIN}#{title}#{BOLD_END}#{additional && ' '}#{additional}"
+    separator "#{BOLD_BEGIN}#{title}#{BOLD_END}#{additional && ' '}#{additional}"
   end
 
   # We can't use an `op.accept :PATTERN` here to create regex patterns because we only know the
@@ -399,10 +399,10 @@ OptParse.new do |op|
       -. (-@)         Replace with a period ('.')
       -r (-R)         Replace with the replacement character (#{Action::REPLACEMENT_CHARACTER_REPR})
       -C              Replace escaped chars with their "control pictures"
-    #{BOLD_BEGIN}SPECIFIC ESCAPES#{BOLD_END}
+    #{BOLD_BEGIN}ESCAPE SHORTHANDS#{BOLD_END}
       -l / -w         Don't escape newlines / newlines, tabs, or spaces.
       -s / -S         Escape spaces by highlighting it / with "pictures".
-      -B and -\\       Escape backslashes. (default unless colour or "ESCAPES" given)
+      -B              Escape backslashes. (default unless colour or "ESCAPES" given)
       -m              Escape multibyte characters with their Unicode codepoint.
       -a              Escape _every_ character. (Must be used with an "ESCAPES")
     #{BOLD_BEGIN}INPUT DATA#{BOLD_END} (UTF-8 is default unless POSIXLY_CORRECT is set)
@@ -490,11 +490,6 @@ OptParse.new do |op|
 
   op.section 'ESCAPES', '(Multiple may be specified; ties go to the last one specified)'
 
-  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces in strings. Doesn't work with",
-                                           "the --file option. (default)" do |ess|
-    $escape_surronding_spaces = ess
-  end
-
   op.on '--print=PATTERN', 'Print characters, verbatim, without escaping them' do |pattern|
     PatternAndAction.add_pattern_and_action(pattern, Action::PRINT)
   end
@@ -542,10 +537,12 @@ OptParse.new do |op|
     PatternAndAction.add_pattern_and_action(pattern, Action::DEFAULT)
   end
 
-  op.section 'ESCAPE SHORTHANDS'
+  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces in strings. Doesn't work with",
+                                           "the --file option. [default]" do |ess|
+    $escape_surronding_spaces = ess
+  end
 
-  op.on '-l', "Don't escape newlines. (Same as --print='\\n')",
-    "Shorthand for --print='\\n'. Don't escape newlines." do
+  op.on '-l', "Don't escape newlines. (Same as --print='\\n')" do
     PatternAndAction.add_pattern_and_action(/\n/, Action::PRINT)
   end
 
@@ -594,35 +591,35 @@ OptParse.new do |op|
     Pattern.default_pattern = nil
   end
 
-  op.on '-p', 'Shorthand for --default-action=print' do
+  op.on '-p', 'Same as --default-action=print' do
     Action.default = Action::PRINT
   end
 
-  op.on '-d', 'Shorthand for --default-action=delete' do
+  op.on '-d', 'Same as --default-action=delete' do
     Action.default = Action::DELETE
   end
 
-  op.on '-.', 'Shorthand for --default-action=dot' do
+  op.on '-.', 'Same as --default-action=dot' do
     Action.default = Action::DOT
   end
 
-  op.on '-r', 'Shorthand for --default-action=replace' do
+  op.on '-r', 'Same as --default-action=replace' do
     Action.default = Action::REPLACE
   end
 
-  op.on '-x', 'Shorthand for --default-action=hex' do
+  op.on '-x', 'Same as --default-action=hex' do
     Action.default = Action::HEX
   end
 
-  op.on '-o', 'Shorthand for --default-action=octal' do
+  op.on '-o', 'Same as --default-action=octal' do
     Action.default = Action::OCTAL
   end
 
-  op.on '-C', 'Shorthand for --default-action=picture (`-C` b/c "control pic")' do
+  op.on '-C', 'Same as --default-action=picture (`-C` b/c "control pic")' do
     Action.default = Action::PICTURE
   end
 
-  op.on '-a', '--escape-all', "Shorthand for --default-pattern='\\A'. (Does nothing on its own,",
+  op.on '-a', '--escape-all', "Same as --default-pattern='\\A'. (Does nothing on its own,",
                               'and should be combined with a --default-action=XXX flag.)' do
     Pattern.raw_default = Pattern::ALL
   end
@@ -639,37 +636,37 @@ OptParse.new do |op|
     Action.error = action
   end
 
-  op.on '-X', 'Shorthand for --invalid-action=hex' do
+  op.on '-X', 'Same as --invalid-action=hex' do
     Action.error = Action::HEX
   end
 
-  op.on '-O', 'Shorthand for --invalid-action=octal' do
+  op.on '-O', 'Same as --invalid-action=octal' do
     Action.error = Action::OCTAL
   end
 
-  op.on '-D', 'Shorthand for --invalid-action=delete' do
+  op.on '-D', 'Same as --invalid-action=delete' do
     Action.error = Action::DELETE
   end
 
-  op.on '-P', 'Shorthand for --invalid-action=print' do
+  op.on '-P', 'Same as --invalid-action=print' do
     Action.error = Action::PRINT
   end
 
-  op.on '-@', 'Shorthand for --invalid-action=dot' do
+  op.on '-@', 'Same as --invalid-action=dot' do
     Action.error = Action::DOT
   end
 
-  op.on '-R', 'Shorthand for --invalid-action=replace' do
+  op.on '-R', 'Same as --invalid-action=replace' do
     Action.error = Action::REPLACE
   end
 
   ##################################################################################################
   #                                        Specific Escapes                                        #
   ##################################################################################################
-  op.section 'ENCODINGS', '(default is normally --utf-8. If POSIXLY_CORRECT is set, --locale is the default)'
+  op.section 'ENCODINGS'
 
   op.on '-E', '--encoding ENCODING', "Specify the input's encoding. Case-insensitive. Encodings that",
-                                     "aren't ASCII-compatible encodings (eg UTF-16) are illegal." do |enc|
+                                     "aren't ASCII-compatible encodings (eg UTF-16) are invalid." do |enc|
     $encoding = Encoding.find enc rescue abort $!
     abort "Encoding #$encoding is not ASCII-compatible!" unless $encoding.ascii_compatible?
   end
@@ -684,22 +681,25 @@ OptParse.new do |op|
     exit
   end
 
-  op.on '-b', '--binary', '--bytes', 'Same as --encoding=binary. (Escapes high-bit bytes)' do
+  op.on '-b', '--binary', '--bytes', 'Escapes high-bit bytes. (Same as --encoding=BINARY)' do
     $encoding = Encoding::BINARY
   end
 
-  op.on '-A', '--ascii', 'Same as --encoding=ASCII. Like -b, but high-bits are "invalid".' do
+  op.on '-A', '--ascii', 'Like -b, but high-bits are invalid. (Same as --encoding=ASCII)' do
     $encoding = Encoding::ASCII
   end
 
-  op.on '-8', '--utf-8', 'Same as --encoding=UTF-8. (default unless POSIXLY_CORRECT set)' do
+  op.on '-8', '--utf-8', 'Sets encoding to utf-8. (Same as --encoding=UTF-8). [default',
+                         'when POSIXLY_CORRECT is not set]' do
     $encoding = Encoding::UTF_8
   end
 
-  op.on '--locale', 'Same as --encoding=locale. (Chooses encoding based on env vars)' do
-    $encoding = Encoding.find('locale')
+  op.on '--locale', 'Chooses the encoding based on environment variables. (Same',
+                    'as --encoding=locale.) [default when POSIXLY_CORRECT is set]' do
+    $encoding = Encoding.find('locale') # Chooses based on `LC_ALL`, `LC_CTYPE`, and `LANG`, in that order
   end
 
+=begin
   puts op.help; exit
 
   ##################################################################################################
@@ -752,7 +752,7 @@ OptParse.new do |op|
       - 1    A problem opening a file given with `-f`
       - 2    Command-line usage error
   EOS
-
+=end
 
 
   ##################################################################################################
