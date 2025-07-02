@@ -406,8 +406,8 @@ OptParse.new do |op|
       -m              Escape multibyte characters with their Unicode codepoint.
       -a              Escape _every_ character. (Must be used with an "ESCAPES")
     #{BOLD_BEGIN}INPUT DATA#{BOLD_END} (UTF-8 is default unless POSIXLY_CORRECT is set)
-      -b / -A / -8    Interpret inputs as binary text / ASCII / UTF-8.
       -E encoding     Specify the (ASCII-compatible) encoding.
+      -b / -A / -8    Shorthands for specifying encoding as BINARY / ASCII / UTF-8
     EOS
     exit
   end
