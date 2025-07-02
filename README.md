@@ -110,73 +110,27 @@ Normally, the default pattern is just `\x00-\x1F\x7F`—that is, all of the "wei
 Actions are how characters are escaped. There's a lot of them, and they can be used either as arguments to flags (eg `--invalid-action=octal`) or specified explicitly (eg via `--highlight=a-z`):
 
 | Name | Description |
-|------|-------|
-| `print` | Print characters, unchanged, without escaping them. Unlike the other actions, using `print` will not mark values as "escaped" for the purposes of `--check-escapes` |
-| `delete` | Delete characters from the output by not printing anything. Deleted characters are considered "escaped" for the purposes of `--check-escape` |
-| `dot` | Replaces characters by simply printing a single period (`.`). *Note*: Multibyte characters are still represented by a single period. |
-| `replace` | Identical to --dot, except instead of a period, the replacement character (\uFFFD) is printed instead. |
-| `hex` | Replaces characters with their hex value (\xHH). Multibyte characters will have each of their bytes printed, in order they were received. |
-| `octal` | Like --hex, except octal escapes (\###) are used instead. The output is always padded to three bytes (so NUL is \000, not \0) |
-| `picture` | Print out "control pictures" (U+240x-U+242x) corresponding to the character. Note that only \x00-\x20 and \x7F have control pictures assigned to them, and any other characters will yield a warning (and fall back to --hex). |
-| `codepoint` | Replaces chars with their UTF-8 codepoints (\u{...}). This only works if the encoding is UTF-8. See also --multibyte-codepoints |
-| `highlight` | Prints the character unchanged, but considers it "escaped". (Thus, visual effects are added to it like any other escape, and --check-escapes considers it an escaped character.) |
-| `c-escape` | Use c-style escapes for the following characters. (Any other characters will yield a warning, and fall back to --hex.): \0\a\b\t\n\v\f\r\e\\ |
-| `default` | Use the default patterns for chars in CHARSET |
+|------|-------------|
+| `print`     | Print characters, unchanged, without escaping them. Unlike the other actions, using `print` will not mark values as "escaped" for the purposes of `--check-escapes` |
+| `delete`    | Delete characters from the output by not printing anything. Deleted characters are considered "escaped" for the purposes of `--check-escape` |
+| `dot`       | Replaces characters by simply printing a single period (`.`). *Note*: Multibyte characters are still represented by a single period. |
+| `replace`   | Identical to `dot`, except instead of a period, the replacement character, � (`\uFFFD`) is printed instead. |
+| `hex`       | Replaces characters with their hex value (`\xHH`). Multibyte characters will have each of their bytes printed. |
+| `octal`     | Like `--hex`, except octal escapes (`\###`) are used instead. The output is always padded to three bytes (so NUL is `\000`, not `\0`) |
+| `picture`   | Print out "[control pictures](https://en.wikipedia.org/wiki/Control_Pictures)" (`U+240x`-`U+242x`) corresponding to the character. *Note*: Only `\x00`–`\x20` and `\x7F` have control pictures assigned to them, and using `picture` with any other characters will yield a warning (and fall back to `hex`). |
+| `codepoint` | Replaces chars with their UTF-8 codepoints (`\u{HHHH}`). This only works if the encoding is UTF-8. *Note:* This cannot be used with `--invalid-action`, as invalid bytes don't have a codepoint. |
+| `highlight` | Prints the character unchanged, but considers it "escaped". (Thus, visual effects are added to it like any other escape, and `--check-escapes` considers it an escaped character.) |
+| `c-escape`  | Print out C-style escapes for the following characters: `0x07` (`\a`), `0x08` (`\b`), `0x09` (`\t`), `0x0a` (`\n`), `0x0b` (`\v`), `0x0c` (`\f`), `0x0d` (`\r`), `0x1b` (`\e`), `0x5c` (`\\`). *Note*: Using `c-escape` with any other character will yield a warning (and fall back to `hex`). |
+| `default`   | Use the default pattern: All valid `c-escape` characters have their escape printed (with the sole exception that a backslash is printed as-is if visual effects are enabled), all other characters in `\x00-\x1F`, `\x7F` (and `\x80-\xFF` if the encoding is binary) are printed in hex, and all other characters are printed as-is.|
 
 
-(Note that it also changes the "default pattern" (see below) to include bytes `0x80-0xFF`, as those are normally considered "invalid".)
+# Environment Variables
+The `p` command has numerous environment variables it relies on:
 
-<!--     A 'CHARSET' is a regex character without the surrounding brackets (for example, --delete='^a-z' will
-    only output lowercase letters.) In addition to normal escapes (eg '\n' for newlines, '\w' for "word"
-    characters, etc), some other special sequences are accepted:
-      - '\A' matches all chars (so `--print='\A'` would print out every character)
-      - '\N' matches no chars  (so `--delete='\N'` would never delete a character)
-      - '\m' matches multibyte characters (only useful if input data is multibyte like, UTF-8.)
-      - '\M' matches all single-byte characters (i.e. anything \m doesn't match)
-      - '\@' matches the charset "ESCAPES" uses (so `--hex='\@'` is equivalent to `--escape-by-hex`)
-    If more than pattern matches, the last one supplied on the command line wins.
-
- -->
-
-# Encodings
-The way `p` works at a high-level is pretty easy: Every character in an input is checked against the list of patterns, where the
-. If it matches, the first escape that matches is used. Otherwise, the char is printed verbatim. In list form:
-
-
-# How it works
-1. Is the byte/character illegal in the given encoding (eg byte `0xC3` in UTF-8)? If so, print the escape.
-
-
-# Charsets
-
-<!--
-
-## TODO
-- Should I add an `--highlight-means-error` flag (name subject to bikeshed)? I.e. if there's _any_ form of highlights, return an error. (done)
-- Should make `-l` not `--unescape='\n'` but instead act like `/\R/` (ie platform-indep line sep)?
-- `p -ax` makes everything hex, except for spaces and backslashes. should we do this?
-- MAke `escape-options.txt` the actual escape options that are used. E.g., right now, it's not possible to have spaces escaped as `\x20`, but still have utf-8 chars escaped as `\u`
-
-## Character class
-- There's a 
-
-Oops:
-```sh
-print '\xC3👍' | p --escape='\u{1F44D}' --escape='\xC3'
-```
-This isn't great, cause regexes can't be one or the other. so i have to figure out what to do...
-
-You can also `LC_ALL=en_US-iso8859-1"
-
-# HOW ESCAPES WORK
-If a character is to be escaped, it goes through the following steps:
-1. If `--delete` is given, nothing is printed
-2. If `--dot` is given, a `.` is used
-
-
----
-allenc=( $(i --list-encodings | awk '{$1=$2=""; print}' | tr ',' '\n' | tr -d ' ') )
- -->
-
-# TODO
-- `--no-prefixes-or-newline` and co: fix their names and update associated documentatoin
+| Variable | Description |
+|----------|-------------|
+| `FORCE_COLOR`, `NO_COLOR` | Controls `--color=auto`. If FORCE_COLOR is set and nonempty, acts like `--color=always`. Else, if NO_COLOR is set and nonempty, acts like `--color=never`. If neither is set to a non-empty value, `--color=auto` defaults to `--color=always` when stdout is a tty. |
+| `POSIXLY_CORRECT` | If present, changes the default `--encoding` to be `locale` (cf locale(1).), and also disables parsing switches after arguments (e.g. passing in `foo -x` as arguments will not interpret `-x` as a switch). |
+| `P_STANDOUT_BEGIN`, `P_STANDOUT_END` | Beginning and ending escape sequences for --colour; Usually don't need to be set, as they have sane defaults. |
+| `P_STANDOUT_ERR_BEGIN`, `P_STANDOUT_ERR_END` | Like `P_STANDOUT_BEGIN`/`P_STANDOUT_END`, except for invalid bytes (eg `\xC3` in UTF-8) |
+| `LC_ALL`, `LC_CTYPE`, `LANG` | Checked (in that order) for the encoding when `--encoding=locale` is used. |
