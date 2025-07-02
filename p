@@ -115,7 +115,7 @@ module Action
 
   ## Returns Unicode "pictures" for certain characters (0x00 thru 0x20, and 0x7f). Other characters
   # yield a warning with a fallback on hex escapes.
-  CONTROL_PICTURES = ->char do
+  CONTROL_PICTURE = ->char do
     case char
     when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
     when "\x7F"       then visualize "\u{2421}"
@@ -368,6 +368,10 @@ OptParse.new do |op|
 
   op.on_head 'A program to escape "weird" characters'
 
+  op.accept :ACTION do |foo|
+    Action::VALID_ACTIONS[foo.downcase] or raise OptionParser::InvalidArgument
+  end
+
   # Define a custom `separator` function to add bold to each section
   def op.section(title, additional = nil)
     separator "\n#{BOLD_BEGIN}#{title}#{BOLD_END}#{additional && ' '}#{additional}"
@@ -492,13 +496,6 @@ OptParse.new do |op|
   op.on 'the last one specified. If no charset matches, the default one is used. Shorthand options are like'
   op.on 'the their corresponding long-form one, except they don\'t take an argument, and only work on the default charset.'
 
-  op.on '--[no-]default-charset CHARSET', 'Explicitly set the default charset that flags without CHARSET',
-                                          'values use. If --no-default-charset is used, only flags which',
-                                          'explicitly give a charset are used, and everything else is',
-                                          'printed out verbatim.' do |cs|
-    CharSet.default_charset = cs
-  end
-
   op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces in strings. Doesn't work with",
                                            "the --file option. (default)" do |ess|
     $escape_surronding_spaces = ess
@@ -544,12 +541,12 @@ OptParse.new do |op|
     Patterns.add_pattern(charset, Action::OCTAL)
   end
 
-  op.on '-C' do Action.default = Action::CONTROL_PICTURES end
+  op.on '-C' do Action.default = Action::CONTROL_PICTURE end
   op.on '--control-picture[=CHARSET]', 'Print out "control pictures" (U+240x-U+242x) corresponding to',
                                        'the character. Note that only \x00-\x20 and \x7F have control',
                                        'pictures assigned to them, and any other characters will yield',
                                        'a warning (and fall back to --hex).' do |charset|
-    Patterns.add_pattern(charset, Action::CONTROL_PICTURES)
+    Patterns.add_pattern(charset, Action::CONTROL_PICTURE)
   end
 
   op.on ''
@@ -581,6 +578,52 @@ OptParse.new do |op|
 
 
   ##################################################################################################
+  ##################################################################################################
+
+  op.section 'DEFAULT ESCAPES'
+
+  op.on '--[no-]default-charset CHARSET', 'Explicitly set the default charset that flags without CHARSET',
+                                          'values use. If --no-default-charset is used, only flags which',
+                                          'explicitly give a charset are used, and everything else is',
+                                          'printed out verbatim.' do |cs|
+    CharSet.default_charset = cs
+  end
+
+
+  op.on '--[no-]default-action=ACTION', :ACTION, 'Set the default action; --no-default-action disables it' do |action|
+    Action.default = action
+  end
+
+  op.on '-p', 'Shorthand for --default-action=print' do
+    Action.default = Action::PRINT
+  end
+
+  op.on '-d', 'Shorthand for --default-action=delete' do
+    Action.default = Action::DELETE
+  end
+
+  op.on '-.', 'Shorthand for --default-action=dot' do
+    Action.default = Action::DOT
+  end
+
+  op.on '-r', 'Shorthand for --default-action=replace' do
+    Action.default = Action::REPLACE
+  end
+
+  op.on '-x', 'Shorthand for --default-action=hex' do
+    Action.default = Action::HEX
+  end
+
+  op.on '-o', 'Shorthand for --default-action=octal' do
+    Action.default = Action::OCTAL
+  end
+
+  op.on '-C', 'Shorthand for --default-action=control-picture' do
+    Action.default = Action::CONTROL_PICTURE
+  end
+
+
+  ##################################################################################################
   #                                            Escapes                                             #
   ##################################################################################################
 
@@ -589,37 +632,33 @@ OptParse.new do |op|
   op.on 'Not all escape actions are possible, as some (eg codepoints) dont make sense. The shorthand'
   op.on 'flags are just upper cases of their equivalent normal-escape forms.'
 
-  op.accept :action do |foo|
-    Action::VALID_ACTIONS[foo.downcase] or raise OptionParser::InvalidArgument
-  end
-
-  op.on '--invalid=ACTION', :action, 'Specify the action to be used for invalid bytes',
+  op.on '--invalid-action=ACTION', :ACTION, 'Specify the action to be used for invalid bytes',
                                      'Cannot specify `codepoints` as it doesnt make sense' do |action|
     raise OptionParser::InvalidArgument if action == Action::CODEPOINTS
     Action.error = action
   end
 
-  op.on '-X', 'Shorthand for --invalid=hex' do
+  op.on '-X', 'Shorthand for --invalid-action=hex' do
     Action.error = Action::HEX
   end
 
-  op.on '-O', 'Shorthand for --invalid=octal' do
+  op.on '-O', 'Shorthand for --invalid-action=octal' do
     Action.error = Action::OCTAL
   end
 
-  op.on '-D', 'Shorthand for --invalid=delete' do
+  op.on '-D', 'Shorthand for --invalid-action=delete' do
     Action.error = Action::DELETE
   end
 
-  op.on '-P', 'Shorthand for --invalid=print' do
+  op.on '-P', 'Shorthand for --invalid-action=print' do
     Action.error = Action::PRINT
   end
 
-  op.on '-@', 'Shorthand for --invalid=dot' do
+  op.on '-@', 'Shorthand for --invalid-action=dot' do
     Action.error = Action::DOT
   end
 
-  op.on '-R', 'Shorthand for --invalid=replace' do
+  op.on '-R', 'Shorthand for --invalid-action=replace' do
     Action.error = Action::REPLACE
   end
 
@@ -641,7 +680,7 @@ OptParse.new do |op|
   end
 
   op.on '-S', '--control-picture-space', "Escape spaces with a \"picture\". (Same as --control-picture=' ')" do
-    Patterns.add_pattern(/ /, Action::CONTROL_PICTURES)
+    Patterns.add_pattern(/ /, Action::CONTROL_PICTURE)
   end
 
   op.on '-B', '-\\', '--escape-backslashes', "Escape backslashes as '\\\\'. (Same as --c-escape='\\\\')",

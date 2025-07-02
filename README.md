@@ -79,7 +79,7 @@ The encoding (which can be specified via `--encoding`) is used to determine whic
 
 Valid bytes (which differ between encodings, see below) are then matched against patterns as described in `How it works`. However, "invalid bytes" (for example `\xC3` in UTF-8) are handled specially:
 
-By default, these bytes have their hex values printed out (but this can be changed, e.g. with `--invalid=delete`), along with a different "standout" pattern than normal escapes (by default, a red background). If any invalid bytes are encountered during an execution, and `--malformed-error` is set (which it is by default), the program will exit with a non-zero exit code at the end.
+By default, these bytes have their hex values printed out (but this can be changed, e.g. with `--invalid-action=delete`), along with a different "standout" pattern than normal escapes (by default, a red background). If any invalid bytes are encountered during an execution, and `--malformed-error` is set (which it is by default), the program will exit with a non-zero exit code at the end.
 
 You can get a list of all the supported encodings via `--list-encodings`. Non-ASCII-compliant encodings, such as `UTF-16`, aren't supported (as they drastically complicate character matching logic).
 
