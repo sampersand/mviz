@@ -133,7 +133,8 @@ module Action
       $use_color ? '\\' : '\\\\'
     elsif C_ESCAPES_MAP.key?(char)
       C_ESCAPES.call(char)
-    elsif char <= "\x1F" || char == "\x7F" || ($encoding == Encoding::BINARY && "\x7F" <= char)
+    elsif char <= "\x1F" || char == "\x7F" || ($encoding == Encoding::BINARY && "\x7F" <= char) || \
+        ($encoding == Encoding::UTF_8 && /\p{Cntrl}/.match?(char))
       HEX.call(char)
     else
       char
@@ -229,6 +230,7 @@ module Pattern
 
         # Add the upper range if in binary
         regex.concat '-\xFF' if $encoding == Encoding::BINARY
+        regex.concat '\p{Cntrl}' if $encoding == Encoding::UTF_8
 
         # If we're using the default action, and we're using colours, then also add backslash to the
         # list of escapes. We need to use a double backslash so it interpolates correctly.
@@ -589,7 +591,7 @@ OptParse.new do |op|
                                                        'and to print verbatim any characters that dont match ESCAPES.' do
     # Technically we could also set `Action.default = Action::PRINT`; it doesn't really matter, as
     # "pattern that never matches" and "action that always prints" do the same thing.
-    Pattern.default_pattern = nil
+    Pattern.raw_default = nil
   end
 
   op.on '-p', 'Same as --default-action=print' do
