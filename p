@@ -35,7 +35,8 @@ rescue Exception
   # Completely ignore the exception
 end
 
-## Redefine `abort` and `warn` to prepend the program name to the message, in traditional unix style
+## Redefine the top-level `abort` and `warn` methods to prepend the program name to the message, in
+# traditional unix style
 PROGRAM_NAME = File.basename($0, '.*')
 def abort(message) super "#{PROGRAM_NAME}: #{message}" end
 def warn(message)  super "#{PROGRAM_NAME}: #{message}" end
@@ -46,7 +47,7 @@ def warn(message)  super "#{PROGRAM_NAME}: #{message}" end
 #                                                                                                  #
 ####################################################################################################
 
-## Actions that can be taken for each character. They're all `Proc`s, but really all they need is to
+## `Action`s are the way characters are output. They're all `Proc`s, but really all they need is to
 # have a `.call` method on them.
 module Action
   # Used with `C_ESCAPES` for faster access than just calling `.inspect`
