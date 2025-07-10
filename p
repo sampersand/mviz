@@ -361,7 +361,7 @@ OptParse.new do |op|
   op.banner = <<~BANNER
   #{$standout_begin if $use_color}usage#{$standout_end if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
-         #{BOLD_BEGIN}#{op.program_name} -f [options] [file ...]#{BOLD_END}  # Read from files
+         #{BOLD_BEGIN}#{op.program_name} [options] -f [file ...]#{BOLD_END}  # Read from files
   When no args are given, first form is assumed if stdin is not a tty.
   BANNER
 
@@ -432,7 +432,7 @@ OptParse.new do |op|
     $DEBUG = $VERBOSE = true
   end
 
-  op.on '-f', '--[no-]files', 'Interpret trailing options as filenames to read, instead of as',
+  op.on '-f', '--[no-]files', 'Interpret all arguments as filenames to read, instead of as',
                               'literal strings.'  do |f|
     $files = f
   end
@@ -699,62 +699,6 @@ OptParse.new do |op|
                     'as --encoding=locale.) [default when POSIXLY_CORRECT is set]' do
     $encoding = Encoding.find('locale') # Chooses based on `LC_ALL`, `LC_CTYPE`, and `LANG`, in that order
   end
-
-=begin
-  puts op.help; exit
-
-  ##################################################################################################
-  #                                        Environment Vars                                        #
-  ##################################################################################################
-  op.section 'ENVIRONMENT VARIABLES'
-  op.on <<-'EOS' # Note: `-EOS` not `~EOS` to keep leading spaces
-    FORCE_COLOR, NO_COLOR
-      Controls `--color=auto`. If FORCE_COLOR is set and nonempty, acts like `--color=always`. Else,
-      if NO_COLOR is set and nonempty, acts like `--color=never`. If neither is set to a non-empty
-      value, `--color=auto` defaults to `--color=always` when stdout is a tty.
-
-    POSIXLY_CORRECT
-      If present, changes the default `--encoding` to be `locale` (cf locale(1).), and also
-      disables parsing switches after arguments (e.g. passing in `foo -x` as arguments will not
-      interpret `-x` as a switch).
-
-    P_STANDOUT_BEGIN, P_STANDOUT_END
-      Beginning and ending escape sequences for --colour; Usually don't need to be set, as they have
-      sane defaults.
-
-    P_STANDOUT_ERR_BEGIN, P_STANDOUT_ERR_END
-      Like P_STANDOUT_BEGIN/P_STANDOUT_END, except for invalid bytes (eg 0xC3 in --utf-8)
-
-    LC_ALL, LC_CTYPE, LANG
-       Checked (in that order) for the encoding when --encoding=locale is used.
-  EOS
-
-  ##################################################################################################
-  #                                      PATTERN Description                                       #
-  ##################################################################################################
-
-  op.section 'PATTERNS'
-  op.on <<~'EOS'
-    A 'PATTERN' is a regex character without the surrounding brackets (for example, --delete='^a-z' will
-    only output lowercase letters.) In addition to normal escapes (eg '\n' for newlines, '\w' for "word"
-    characters, etc), some other special sequences are accepted:
-      - '\A' matches all chars (so `--print='\A'` would print out every character)
-      - '\N' matches no chars  (so `--delete='\N'` would never delete a character)
-      - '\m' matches multibyte characters (only useful if input data is multibyte like, UTF-8.)
-      - '\M' matches all single-byte characters (i.e. anything \m doesn't match)
-      - '\@' matches the pattern "ESCAPES" uses (so `--hex='\@'` is equivalent to `--escape-by-hex`)
-    If more than pattern matches, the last one supplied on the command line wins.
-  EOS
-
-  op.section 'EXIT CODES'
-  op.on <<~'EOS'
-    Specific exit codes are used:
-      - 0    No problems encountered
-      - 1    A problem opening a file given with `-f`
-      - 2    Command-line usage error
-  EOS
-=end
-
 
   ##################################################################################################
   #                                         Parse Options                                          #
