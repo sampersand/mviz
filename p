@@ -126,8 +126,9 @@ module Action
   end
 
   ## The sensible, default action for characters: Backslash is escaped if not in visual mode,
-  # c-escapable characters are escaped, and control characterscharacters (0x00-0x1F, 0x7F, or 0x7F and above
-  # if in binary mode) are printed in hex escapes. All other characters are returned unchanged.
+  # c-escapable characters are escaped, certain control characters (0x00-0x1F, 0x7F, or 0x7F and
+  # above if in binary mode) are printed in hex escapes, and in utf-8 encoding, other control chars
+  # (\u0080-\u009F) are printed in codepoint form; All other characters are returned unchanged.
   DEFAULT = ->char do
     if char == '\\'
       $use_color ? '\\' : '\\\\'
@@ -183,7 +184,7 @@ module Pattern
   ## A character set which matches characters composed of exactly one byte.
   SINGLEBYTE = ->char { char.bytesize == 1 }
 
-  # INVISIBLE = /[\u0009-\u000D \xA0\x]/
+  # INVISIBLE = /[\x09\x0A\x0B\x0C\x0D\x20\xA0\xAD\u034F\u061C]/
 
   module_function
 
@@ -361,14 +362,14 @@ $escape_surronding_spaces = true
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
   op.version = '0.13.0'
-  op.banner = <<~BANNER
-  #{$standout_begin if $use_color}usage#{$standout_end if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
-         #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
-         #{BOLD_BEGIN}#{op.program_name} [options] -f [file ...]#{BOLD_END}  # Read from files
-  When no args are given, first form is assumed if stdin is not a tty.
-  BANNER
+  op.banner = <<BANNER
+#{$standout_begin if $use_color}usage#{$standout_end if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
+       #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
+       #{BOLD_BEGIN}#{op.program_name} [options] -f [file ...]#{BOLD_END}  # Read from files
+When no args are given, first form is assumed if stdin is not a tty.
+BANNER
 
-  op.on_head 'A program to escape "weird" characters'
+  op.on_head 'A program to visualize "weird" characters'
 
   op.accept :ACTION do |foo|
     Action::VALID_ACTIONS[foo.downcase] or raise OptionParser::InvalidArgument
