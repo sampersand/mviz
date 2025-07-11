@@ -867,6 +867,9 @@ def print_escapes(has_each_char, suffix = nil)
   #    to prevent a blank line in the output. (Kinda like how `puts "a\n"` only prints one newline.)
   puts if $trailing_newline && last != "\n" && (last != nil || $prefixes)
   puts if $prefixes && $files
+rescue Interrupt
+  # If we receive an interrupt (CTRL-C), then just exit with status 130.
+  exit 130
 end
 
 ####################################################################################################
