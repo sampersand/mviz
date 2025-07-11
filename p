@@ -351,7 +351,8 @@ $malformed_error = true
 $escape_error = false
 $quiet = false
 $trailing_newline = true
-$escape_surronding_spaces = true
+$escape_surronding_spacees = true
+$expect_arguments = false
 
 ####################################################################################################
 #                                                                                                  #
@@ -363,13 +364,11 @@ OptParse.new do |op|
   op.program_name = PROGRAM_NAME
   op.version = '0.14.0'
   op.banner = <<BANNER
-#{$standout_begin if $use_color}usage#{$standout_end if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
-       #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
-       #{BOLD_BEGIN}#{op.program_name} [options] -f [file ...]#{BOLD_END}  # Read from files
-When no args are given, first form is assumed if stdin is not a tty.
+#{$standout_begin if $use_color}usage#{$standout_end if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}#{' '*30}read from stdin
+       #{BOLD_BEGIN}#{op.program_name} [options] STRING [STRING...]#{BOLD_END} #{' '*10}print strings
+       #{BOLD_BEGIN}#{op.program_name} [options] -f FILE [FILE...]#{BOLD_END}  #{' '*10}read from files
 BANNER
 
-  op.on_head 'A program to visualize "weird" characters'
 
   op.accept :ACTION do |foo|
     Action::VALID_ACTIONS[foo.downcase] or raise OptionParser::InvalidArgument
@@ -439,6 +438,11 @@ BANNER
   op.on '-f', '--[no-]files', 'Interpret all arguments as filenames to read, instead of as',
                               'literal strings.'  do |f|
     $files = f
+  end
+
+  op.on '--[no-]expect-arguments', 'Aborts if no arguments are supplied, instead of defaulting to',
+                              'reading from stdin'  do |ea|
+    $expect_arguments = ea
   end
 
   ##################################################################################################
@@ -722,8 +726,15 @@ end
 #                                      Defaults for Arguments                                      #
 #                                                                                                  #
 ####################################################################################################
+if $*.empty?
+  abort '--expect-arguments supplied, but no arguments provided' if $expect_arguments
+  abort '-f/--files supplied, but no files given' if $files
+end
+$
+$files = $*.empty?
+defined? $prefixes or $prefixes = !$*.empty?
 
-defined? $prefixes or $prefixes = $stdout.tty? && (!$*.empty? || (defined?($files) && $files))
+# defined? $prefixes or $prefixes = $stdout.tty? && (!$*.empty? || (defined?($files) && $files))
 defined? $files    or $files = !$stdin.tty? && $*.empty?
 $quiet and $stdout = File.open(File::NULL, 'w')
 
