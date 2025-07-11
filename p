@@ -79,7 +79,7 @@ $malformed_error = true
 $escape_error = false
 $quiet = false
 $files = false
-$prefixes = true
+$prefixes = $stdout.tty?
 $trailing_newline = true
 $escape_surronding_spaces = true
 $expect_arguments = false
@@ -438,13 +438,12 @@ OptParse.new do |op|
     exit
   end
 
-  op.on '-f', '--[no-]files', 'Interpret all arguments as filenames to read, instead of as',
-                              'literal strings.'  do |f|
+  op.on '-f', '--[no-]files', 'Interpret all args as filenames, instead of literal strings' do |f|
     $files = f
   end
 
   op.on '--[no-]expect-arguments', 'Aborts if no arguments are supplied, instead of defaulting to',
-                              'reading from stdin'  do |ea|
+                                   'reading from stdin'  do |ea|
     $expect_arguments = ea
   end
 
@@ -470,9 +469,17 @@ OptParse.new do |op|
   end
 
   # TODO: Should `--prefixes`, `--one-per-line`, and `--no-prefixes-or-newline` be collapsed?
-  op.on '--prefixes', "Add \"prefixes\". (default if stdout's a tty, and args are given)" do
-    $prefixes = true
-    $trailing_newline = true
+  op.on '--[no-]format[=WHEN]', %w[always never auto], 'When to add "prefixes" to the input', 'auto is when output is a tty' do |pfx|
+    case pfx
+    when 'always', nil  then $prefixes = $trailing_newline = true
+    when 'never', false then $prefixes = $trailing_newline = false
+    when 'auto'         then $prefixes = $trailing_newline = $stdout.tty?
+    else fail # Should never happen, as a list of valid options is given via `%w[...]`.
+    end
+  end
+
+  op.on '--[no-]trailing-newline', 'Add a trailing newline [default]' do |tnl|
+    $trailing_newline = tnl
   end
 
   op.on '-1', '--one-per-line', "Print each arg on its own line. (default when --prefixes isn't)" do
@@ -888,7 +895,7 @@ unless $files
     if $prefixes
       printf '%5d: ', idx + 1
     elsif !$trailing_newline && idx.nonzero?
-      print ' '
+      puts
     end
 
     # Unfortunately, `ARGV` strings are frozen, and we need to forcibly change the string's encoding
@@ -951,7 +958,7 @@ end
 ARGV.replace %w[-] if ARGV.empty?
 
 ## Iterate over each file in `ARGV`, and print their contents.
-ARGV.each do |filename|
+ARGV.each_with_index do |filename, idx|
   ## Open the file that was requested. As a special case, if the value `-` is given, it reads from
   # stdin. (We can't use `/dev/stdin` because it's not portable to Windows, so we have to use
   # `$stdin` directly.)
@@ -963,7 +970,11 @@ ARGV.each do |filename|
     end
 
   ## Print out the filename, a colon, and a space if prefixes were requested.
-  print BOLD_BEGIN, "==[#{filename}]==", BOLD_END, "\n" if $prefixes
+  if $prefixes
+    print BOLD_BEGIN, "==[#{filename}]==", BOLD_END, "\n"
+  elsif !$trailing_newline && idx.nonzero?
+    puts
+  end
 
   ## Print the escapes for the file
   print_escapes file
