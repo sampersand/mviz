@@ -101,9 +101,10 @@ Patterns are normally used when specifying actions directly (eg `p --delete=^a-z
 ### Default Pattern
 The default pattern is the pattern that is checked _after_ all "user-specified patterns." If it matches, the "default action" takes place (which are controlled by shorthands like `-x`, `-o`, etc.) acts upon.
 
-Normally, the default pattern is just `\x00-\x1F\x7F`—that is, all of the "weird" bytes in ASCII. However, there's a few ways it can be changed:
+Normally, the default pattern is just `\x00-\x1F\x7F`—that is, all of the control bytes in ASCII. However, there's a few ways it can be changed:
 1. It can be explicitly set via `--default-pattern=PATTERN`, at which point that's exactly what'll be used.
 2. If encoding is `BINARY`, the bytes `\x80-\xFF` are also added, as the binary encoding considers all bytes to be valid.
+3. If the encoding is `UTF-8` (the default, unless `POSIXLY_CORRECT` is set), then the codepoints `\u0080-\u009F` are added.
 3. If the default action is unchanged, and visual effects aren't be used, then backslash (`\`) is added to the default pattern. This way, it'll be escaped when "standout features" aren't in use.
 
 ## Actions
@@ -121,7 +122,7 @@ Actions are how characters are escaped. There's a lot of them, and they can be u
 | `codepoint` | Replaces chars with their UTF-8 codepoints (`\u{HHHH}`). This only works if the encoding is UTF-8. *Note:* This cannot be used with `--invalid-action`, as invalid bytes don't have a codepoint. |
 | `highlight` | Prints the character unchanged, but considers it "escaped". (Thus, visual effects are added to it like any other escape, and `--check-escapes` considers it an escaped character.) |
 | `c-escape`  | Print out C-style escapes for the following characters: `0x07` (`\a`), `0x08` (`\b`), `0x09` (`\t`), `0x0a` (`\n`), `0x0b` (`\v`), `0x0c` (`\f`), `0x0d` (`\r`), `0x1b` (`\e`), `0x5c` (`\\`). *Note*: Using `c-escape` with any other character will yield a warning (and fall back to `hex`). |
-| `default`   | Use the default pattern: All valid `c-escape` characters have their escape printed (with the sole exception that a backslash is printed as-is if visual effects are enabled), all other characters in `\x00-\x1F`, `\x7F` (and `\x80-\xFF` if the encoding is binary) are printed in hex, and all other characters are printed as-is.|
+| `default`   | Use the default pattern: All valid `c-escape` characters have their escape printed (with the sole exception that a backslash is printed as-is if visual effects are enabled), all other characters in `\x00-\x1F`, `\x7F` (and `\x80-\xFF` if the encoding is binary) are printed in hex, in `UTF-8` the codepoints `\u0080-\u009F` have their codepoints printed, and all other characters are printed as-is.|
 
 # Environment Variables
 The `p` command has numerous environment variables it relies on:

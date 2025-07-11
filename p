@@ -228,11 +228,12 @@ module Pattern
         NONE
       else
         # Universal default character class; encode it in whatever the encoding we're using is.
-        regex = (+'[\0-\x1F\x7F').force_encoding $encoding
-
-        # Add the upper range if in binary
-        regex.concat '-\xFF' if $encoding == Encoding::BINARY
-        regex.concat '\p{Cntrl}' if $encoding == Encoding::UTF_8
+        regex = (+'[').force_encoding $encoding
+        regex.concat case $encoding
+                     when Encoding::UTF_8  then '\p{Cntrl}' # Cntrl covers it all
+                     when Encoding::BINARY then '\0-\x1F\x7F-\xFF' # add upper range for binary
+                     else                       '\0-\x1F\x7F' # everything else is just ASCII control
+                     end
 
         # If we're using the default action, and we're using colours, then also add backslash to the
         # list of escapes. We need to use a double backslash so it interpolates correctly.
@@ -350,8 +351,10 @@ $encoding = IS_POSIXLY_CORRECT ? Encoding.find('locale') : Encoding::UTF_8
 $malformed_error = true
 $escape_error = false
 $quiet = false
+$files = false
+$prefixes = true
 $trailing_newline = true
-$escape_surronding_spacees = true
+$escape_surronding_spaces = true
 $expect_arguments = false
 
 ####################################################################################################
@@ -363,12 +366,16 @@ $expect_arguments = false
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
   op.version = '0.14.0'
-  op.banner = <<BANNER
-#{$standout_begin if $use_color}usage#{$standout_end if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}#{' '*30}read from stdin
-       #{BOLD_BEGIN}#{op.program_name} [options] STRING [STRING...]#{BOLD_END} #{' '*10}print strings
-       #{BOLD_BEGIN}#{op.program_name} [options] -f FILE [FILE...]#{BOLD_END}  #{' '*10}read from files
-BANNER
+  op.banner = <<~BANNER
+  #{$standout_begin if $use_color}usage#{$standout_end if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}#{' '*30}read from stdin
+         #{BOLD_BEGIN}#{op.program_name} [options] STRING [STRING...]#{BOLD_END} #{' '*10}print strings
+         #{BOLD_BEGIN}#{op.program_name} [options] -f FILE [FILE...]#{BOLD_END}  #{' '*10}read from files
+  BANNER
 
+  # Support `--debug`, but don't show it in the argument list
+  op.base.long['debug'] = OptParse::Switch::NoArgument.new do |arg|
+    $DEBUG = $VERBOSE = true
+  end
 
   op.accept :ACTION do |foo|
     Action::VALID_ACTIONS[foo.downcase] or raise OptionParser::InvalidArgument
@@ -429,10 +436,6 @@ BANNER
   op.on '--version', 'Print the version and exit' do
     puts op.ver
     exit
-  end
-
-  op.on '--debug', 'Enable internal debugging code.' do
-    $DEBUG = $VERBOSE = true
   end
 
   op.on '-f', '--[no-]files', 'Interpret all arguments as filenames to read, instead of as',
