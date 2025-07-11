@@ -80,7 +80,6 @@ $escape_error = false
 $quiet = false
 $files = false
 $prefixes = $stdout.tty?
-$trailing_newline = true
 $escape_surronding_spaces = true
 $expect_arguments = false
 
@@ -401,7 +400,7 @@ OptParse.new do |op|
       -f              Interpret all arguments as filenames, not strings
       -c              Check if any escapes are printed, and exit nonzero if so.
       -q              Don't output anything. (Useful with -c)
-      -1 / -n         Disable prefixes; Separate arguments with newlines / spaces.
+      -n              Disable prefixes, and the trailing newline
     #{BOLD_BEGIN}ESCAPES#{BOLD_END} (Mutually exclusive; Uppercase escapes control illegal bytes)
       -x (-X)         Print in hex notation
       -o (-O)         Print in octal notation
@@ -457,8 +456,9 @@ OptParse.new do |op|
   end
 
   # (Support `--color`, `--no-color`, and `--color=...`)
-  op.on '--[no-]color[=WHEN]', %w[always never auto], 'When to enable visual effects. (WHEN is always, never, auto)',
-                                                      'auto (default) uses on NO_COLOR/FORCE_COLOR; See ENV VARS below' do |w|
+  op.on '--[no-]color[=WHEN]', %w[always never auto], 'When to enable visual effects. (WHEN is always, never, auto).',
+                                                      'auto checks FORCE_COLOR/NO_COLOR, and if not set, enables only',
+                                                      'when stdout is a tty [default: auto]' do |w|
     $use_color =
       case w
       when 'always', nil  then true
@@ -469,29 +469,18 @@ OptParse.new do |op|
   end
 
   # TODO: Should `--prefixes`, `--one-per-line`, and `--no-prefixes-or-newline` be collapsed?
-  op.on '--[no-]format[=WHEN]', %w[always never auto], 'When to add "prefixes" to the input', 'auto is when output is a tty' do |pfx|
-    case pfx
-    when 'always', nil  then $prefixes = $trailing_newline = true
-    when 'never', false then $prefixes = $trailing_newline = false
-    when 'auto'         then $prefixes = $trailing_newline = $stdout.tty?
-    else fail # Should never happen, as a list of valid options is given via `%w[...]`.
-    end
+  op.on '--[no-]prefixes[=WHEN]', %w[always never auto], 'When to output "prefixes". (WHEN is always, never, auto). auto',
+                                                         'enables prefixes only when stdout is a tty. [default: auto]' do |pfx|
+    $prefixes = case pfx
+                when 'always', nil  then true
+                when 'never', false then false
+                when 'auto'         then $stdout.tty?
+                else fail # Should never happen, as a list of valid options is given via `%w[...]`.
+                end
   end
 
-  op.on '--[no-]trailing-newline', 'Add a trailing newline [default]' do |tnl|
-    $trailing_newline = tnl
-  end
-
-  op.on '-1', '--one-per-line', "Print each arg on its own line. (default when --prefixes isn't)" do
+  op.on '-n', 'Same as --prefixes=never' do
     $prefixes = false
-    $trailing_newline = true
-  end
-
-  op.on '-n', '--no-prefixes', 'Disables both prefixes and trailing newlines', 'Spaces are printed between args unless -f is given' do
-    # No need to have an option to set `$trailing_newline` on its own to false, as it's useless
-    # when `$prefixes` is truthy.
-    $prefixes = false
-    $trailing_newline = false
   end
 
   op.on '--[no-]malformed-error', 'Invalid chars in the --encoding cause exit status 2. (default)' do |me|
@@ -757,10 +746,6 @@ end
 
 $quiet and $stdout = File.open(File::NULL, 'w')
 
-## Force `$trailing_newline` to be set if `$prefixes` are set, as otherwise there wouldn't be a
-# newline between each header, which is weird.
-$trailing_newline ||= $prefixes
-
 PatternAndAction.build!
 
 ####################################################################################################
@@ -875,7 +860,7 @@ def print_escapes(has_each_char, suffix = nil)
   # 3. The last character to be printed was not a newline; This is normally the case, but if the
   #    newline was unescaped (eg `-l`), then the last character may be a newline. This condition is
   #    to prevent a blank line in the output. (Kinda like how `puts "a\n"` only prints one newline.)
-  puts if $trailing_newline && last != "\n" && (last != nil || $prefixes)
+  puts if $prefixes && last != "\n" && (last != nil || $prefixes) # <-- TODO: make sure this is the format we want
   puts if $prefixes && $files
 rescue Interrupt
   # If we receive an interrupt (CTRL-C), then just exit with status 130.
@@ -894,7 +879,7 @@ unless $files
     # Print out the prefix if a header was requested
     if $prefixes
       printf '%5d: ', idx + 1
-    elsif !$trailing_newline && idx.nonzero?
+    elsif idx.nonzero?
       puts
     end
 
@@ -972,7 +957,7 @@ ARGV.each_with_index do |filename, idx|
   ## Print out the filename, a colon, and a space if prefixes were requested.
   if $prefixes
     print BOLD_BEGIN, "==[#{filename}]==", BOLD_END, "\n"
-  elsif !$trailing_newline && idx.nonzero?
+  elsif idx.nonzero?
     puts
   end
 
