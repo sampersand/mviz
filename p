@@ -43,6 +43,49 @@ def warn(message)  super "#{PROGRAM_NAME}: #{message}" end
 
 ####################################################################################################
 #                                                                                                  #
+#                                            Constants                                             #
+#                                                                                                  #
+####################################################################################################
+
+## Whether visual effects should be enabled by default
+USE_COLOR = $use_color =
+  if ENV.fetch('FORCE_COLOR', '') != ''
+    true
+  elsif ENV.fetch('NO_COLOR', '') != ''
+    false
+  else
+    $stdout.tty?
+  end
+
+## Whether POSIX-ly correct defaults should be used.
+IS_POSIXLY_CORRECT = ENV.key?('POSIXLY_CORRECT')
+
+## Strings to surround all escaped characters with; Defaults to "invert colour"
+STANDOUT_BEGIN = $standout_begin = (ENV.fetch('P_STANDOUT_BEGIN', "\e[7m") if $use_color)
+STANDOUT_END   = $standout_end   = (ENV.fetch('P_STANDOUT_END',   "\e[27m") if $use_color)
+
+## Like `STANDOUT_XXX`, but only for encoding errors. Defaults to "red background, light grey
+# foreground"
+STANDOUT_ERR_BEGIN = (ENV.fetch('P_STANDOUT_ERR_BEGIN', "\e[37m\e[41m") if $use_color)
+STANDOUT_ERR_END   = (ENV.fetch('P_STANDOUT_ERR_END',   "\e[49m\e[39m") if $use_color)
+
+## Bold escape sequences; Bold is only used in help message and headers when files are given.
+BOLD_BEGIN = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if $use_color)
+BOLD_END   = (ENV.fetch('P_BOLD_END',   "\e[0m") if $use_color)
+
+## Set defaults for globals; user-supplied options can change these.
+$encoding = IS_POSIXLY_CORRECT ? Encoding.find('locale') : Encoding::UTF_8
+$malformed_error = true
+$escape_error = false
+$quiet = false
+$files = false
+$prefixes = true
+$trailing_newline = true
+$escape_surronding_spaces = true
+$expect_arguments = false
+
+####################################################################################################
+#                                                                                                  #
 #                                              Action                                              #
 #                                                                                                  #
 ####################################################################################################
@@ -316,49 +359,6 @@ end
 
 ####################################################################################################
 #                                                                                                  #
-#                                  Constants and Global Defaults                                   #
-#                                                                                                  #
-####################################################################################################
-
-## Whether visual effects should be enabled by default
-USE_COLOR = $use_color =
-  if ENV.fetch('FORCE_COLOR', '') != ''
-    true
-  elsif ENV.fetch('NO_COLOR', '') != ''
-    false
-  else
-    $stdout.tty?
-  end
-
-## Whether POSIX-ly correct defaults should be used.
-IS_POSIXLY_CORRECT = ENV.key?('POSIXLY_CORRECT')
-
-## Strings to surround all escaped characters with; Defaults to "invert colour"
-STANDOUT_BEGIN = $standout_begin = ENV.fetch('P_STANDOUT_BEGIN', "\e[7m")
-STANDOUT_END   = $standout_end   = ENV.fetch('P_STANDOUT_END',   "\e[27m")
-
-## Like `STANDOUT_XXX`, but only for encoding errors. Defaults to "red background, light grey
-# foreground"
-STANDOUT_ERR_BEGIN = ENV.fetch('P_STANDOUT_ERR_BEGIN', "\e[37m\e[41m")
-STANDOUT_ERR_END   = ENV.fetch('P_STANDOUT_ERR_END',   "\e[49m\e[39m")
-
-## Bold escape sequences; Bold is only used in help message and headers when files are given.
-BOLD_BEGIN = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if $use_color)
-BOLD_END   = (ENV.fetch('P_BOLD_END',   "\e[0m") if $use_color)
-
-## Set defaults for globals; user-supplied options can change these.
-$encoding = IS_POSIXLY_CORRECT ? Encoding.find('locale') : Encoding::UTF_8
-$malformed_error = true
-$escape_error = false
-$quiet = false
-$files = false
-$prefixes = true
-$trailing_newline = true
-$escape_surronding_spaces = true
-$expect_arguments = false
-
-####################################################################################################
-#                                                                                                  #
 #                                         Parse Arguments                                          #
 #                                                                                                  #
 ####################################################################################################
@@ -367,7 +367,7 @@ OptParse.new do |op|
   op.program_name = PROGRAM_NAME
   op.version = '0.14.0'
   op.banner = <<~BANNER
-  #{$standout_begin if $use_color}usage#{$standout_end if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}#{' '*30}read from stdin
+  #{STANDOUT_BEGIN}usage#{STANDOUT_END}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}#{' '*30}read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] STRING [STRING...]#{BOLD_END} #{' '*10}print strings
          #{BOLD_BEGIN}#{op.program_name} [options] -f FILE [FILE...]#{BOLD_END}  #{' '*10}read from files
   BANNER
@@ -750,11 +750,11 @@ end
 
 $quiet and $stdout = File.open(File::NULL, 'w')
 
-PatternAndAction.build!
-
 ## Force `$trailing_newline` to be set if `$prefixes` are set, as otherwise there wouldn't be a
 # newline between each header, which is weird.
 $trailing_newline ||= $prefixes
+
+PatternAndAction.build!
 
 ####################################################################################################
 #                                                                                                  #
