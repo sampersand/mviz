@@ -477,7 +477,7 @@ BANNER
     $trailing_newline = true
   end
 
-  op.on '-n', '--no-prefixes-or-newline', 'Disables both prefixes and trailing newlines', 'Spaces are printed between args unless -f is given' do
+  op.on '-n', '--no-prefixes', 'Disables both prefixes and trailing newlines', 'Spaces are printed between args unless -f is given' do
     # No need to have an option to set `$trailing_newline` on its own to false, as it's useless
     # when `$prefixes` is truthy.
     $prefixes = false
@@ -726,16 +726,25 @@ end
 #                                      Defaults for Arguments                                      #
 #                                                                                                  #
 ####################################################################################################
-if $*.empty?
-  abort '--expect-arguments supplied, but no arguments provided' if $expect_arguments
-  abort '-f/--files supplied, but no files given' if $files
-end
-$
-$files = $*.empty?
-defined? $prefixes or $prefixes = !$*.empty?
 
-# defined? $prefixes or $prefixes = $stdout.tty? && (!$*.empty? || (defined?($files) && $files))
-defined? $files    or $files = !$stdin.tty? && $*.empty?
+# Handle when there's no arguments
+if $*.empty?
+  # If we've opted out of reading from stdin, check that.
+  if $expect_arguments
+    abort '--expect-arguments supplied, but no arguments provided'
+  end
+
+  # If `-f` was explicitly supplied, then we must always have arguments
+  if $files
+    abort '-f/--files supplied, but no files given'
+  end
+
+  # Handle the no-argument case as if `--no-prefixes -f -` were passed
+  $*.replace %w[-]
+  $files = true
+  $prefixes = false
+end
+
 $quiet and $stdout = File.open(File::NULL, 'w')
 
 PatternAndAction.build!
