@@ -40,7 +40,9 @@ Try `p -h` for short usage, and `p --help` for the longer one.
 
 # Why not use tool X (`xxd`, `hexdmp`, `vis`, `od`, etc)?
 The biggest difference between `p` and other tools is that `p` is intended for looking at mostly-normal text by default, and optimizes for that. It doesn't change the output _unless_ weird characters exist. For example:
-```bash
+
+![comparisons of p to xxd, hexdump -C, od -c, vis, and cat -v](imgs/comparisons.png)
+<!-- ```bash
 % printf 'hello\x04world, how are you? \xC3👍\n' | p
 hello\x04world, how are you? \xC3👍\n
 
@@ -64,7 +66,7 @@ hello\^Dworld, how are you? \M-C\M-p\M^_\M^Q\M^M
 % printf 'hello\x04world, how are you? \xC3👍\n' | cat -v
 hello^Dworld, how are you? ??M-^_M-^QM-^M
 ```
-
+ -->
 In addition, `p` by default adds a "standout marker" to escaped characters (by default, it inverts the foreground and background colours), so they're more easily distinguished at a glance.
 
 # How it works
