@@ -126,16 +126,17 @@ module Action
   end
 
   ## The sensible, default action for characters: Backslash is escaped if not in visual mode,
-  # c-escapable characters are escaped, and invisible characters (0x00-0x1F, 0x7F, or 0x7F and above
+  # c-escapable characters are escaped, and control characterscharacters (0x00-0x1F, 0x7F, or 0x7F and above
   # if in binary mode) are printed in hex escapes. All other characters are returned unchanged.
   DEFAULT = ->char do
     if char == '\\'
       $use_color ? '\\' : '\\\\'
     elsif C_ESCAPES_MAP.key?(char)
       C_ESCAPES.call(char)
-    elsif char <= "\x1F" || char == "\x7F" || ($encoding == Encoding::BINARY && "\x7F" <= char) || \
-        ($encoding == Encoding::UTF_8 && /\p{Cntrl}/.match?(char))
+    elsif char <= "\x1F" || char == "\x7F" || ($encoding == Encoding::BINARY && "\x7F" <= char)
       HEX.call(char)
+    elsif $encoding == Encoding::UTF_8 && /\p{Cntrl}/.match?(char)
+      CODEPOINTS.call(char)
     else
       char
     end
