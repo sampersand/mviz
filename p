@@ -382,7 +382,7 @@ OptParse.new do |op|
 
   # Define a custom `separator` function to add bold to each section
   def op.section(title, additional = nil)
-    separator "#{BOLD_BEGIN}#{title}#{BOLD_END}#{additional && ' '}#{additional}"
+    separator "\n#{BOLD_BEGIN}#{title}#{BOLD_END}#{additional && ' '}#{additional}"
   end
 
   # We can't use an `op.accept :PATTERN` here to create regex patterns because we only know the
@@ -697,8 +697,8 @@ OptParse.new do |op|
     $encoding = Encoding::ASCII
   end
 
-  op.on '-8', '--utf-8', 'Sets encoding to utf-8. (Same as --encoding=UTF-8). [default',
-                         'when POSIXLY_CORRECT is not set]' do
+  op.on '-8', '--utf8', 'Sets encoding to utf-8. (Same as --encoding=UTF-8). [default',
+                        'when POSIXLY_CORRECT is not set]' do
     $encoding = Encoding::UTF_8
   end
 
@@ -737,6 +737,10 @@ if $*.empty?
   if $files
     abort '-f/--files supplied, but no files given'
   end
+
+  # if $stdin.tty?
+  #   abort "no arguments given, and stdin was detected to be a tty\n\nuse -h for short help or --help for long help\n"
+  # end
 
   # Handle the no-argument case as if `--no-prefixes -f -` were passed
   $*.replace %w[-]
