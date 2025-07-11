@@ -361,7 +361,7 @@ $escape_surronding_spaces = true
 
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
-  op.version = '0.13.0'
+  op.version = '0.14.0'
   op.banner = <<BANNER
 #{$standout_begin if $use_color}usage#{$standout_end if $use_color}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}                # Read from stdin
        #{BOLD_BEGIN}#{op.program_name} [options] [string ...]#{BOLD_END}   # Print strings
@@ -723,7 +723,6 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-# Specify defaults
 defined? $prefixes or $prefixes = $stdout.tty? && (!$*.empty? || (defined?($files) && $files))
 defined? $files    or $files = !$stdin.tty? && $*.empty?
 $quiet and $stdout = File.open(File::NULL, 'w')
