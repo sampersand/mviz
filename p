@@ -92,8 +92,15 @@ BOLD_END   = ($use_color ? ENV.fetch('P_BOLD_END',   "\e[0m") : nil)
 
 ## `Action`s are the way characters are output. They're all `Proc`s, but really all they need is to
 # have a `.call` method on them.
+#
+# These shouldn't do any internal form of "caching" results, as the `ESCAPES_CACHE` ensures that
+# each of these is only called once per character.
 module Action
-  # Used with `C_ESCAPES` for faster access than just calling `.inspect`
+  ################################################################################
+  #                            Constants for Actions                             #
+  ################################################################################
+
+  # List of C escapes that the `C_ESCPAES` action uses.
   C_ESCAPES_MAP = {
     "\0" => '\0', "\a" => '\a', "\b" => '\b', "\t" => '\t', "\n" => '\n',
     "\v" => '\v', "\f" => '\f', "\r" => '\r', "\e" => '\e', "\\" => '\\\\',
@@ -102,6 +109,10 @@ module Action
   # Used with `REPLACE`, to be the character we replace things with.
   REPLACEMENT_CHARACTER = '�'
   REPLACEMENT_CHARACTER_REPR = '\uFFFD'
+
+  ################################################################################
+  #                                   Actions                                    #
+  ################################################################################
 
   ## Returns the character unchanged
   PRINT = ->char do
@@ -139,7 +150,7 @@ module Action
     visualize '\u{%04X}' % char.ord
   end
 
-  # Simply visualizes the character without changing it
+  ## Simply visualizes the character without changing it
   HIGHLIGHT = ->char do
     visualize char
   end
@@ -147,8 +158,8 @@ module Action
   ## Returns the C-style escape for the character, if it exists. If it doesn't, a warning is
   # printed, and it falls back on hex escapes
   C_ESCAPES = ->char do
-    unless (c_escape = C_ESCAPES_MAP[char])
-      warn "character #{char.inspect} does not have a c escape; falling back on hex escapes"
+    c_escape = C_ESCAPES_MAP.fetch char do
+      warn "character #{char.inspect} does not have a c escape; falling back on hex escape"
       return HEX.call(char)
     end
 
