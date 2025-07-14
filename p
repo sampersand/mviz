@@ -3,18 +3,23 @@ exec env ruby -S -Ebinary "$0" "$@"
 #!ruby
 # -*- encoding: UTF-8; frozen-string-literal: true -*-
 
-=begin Notes on the above
-The first three lines (the shebang, `exec env`, and `#!ruby`) are there so that we can specify the
-`-Ebinary` flag, which specifies that all command-line arguments should be binary-encoded; If we
-didn't, they'd default to UTF-8 (unless `RUBYOPT` was set), and `optparse`'s regexes would fail. An
-alternative would be to do something like `$*.replace $*.map { (+_1).force_encoding 'binary' }`, but
-we need to clone each arg, as ruby makes the arguments frozen, which precludes `force_encoding`.
-Since we possibly expect large strings to be passed in, I decided to juse use the `#!/bin/sh` hack.
-
-We also specify this file's encoding as UTF-8 (which overrides what `RUBYOPT` might have), as that
-way all the strings default to it. We also specify frozen string literals, as we use a lot of
-strings.
-=end
+## Notes on the above
+# The first three lines (the shebang, `exec env`, and `#!ruby`) are there so that we can specify the
+# `-Ebinary` flag, which specifies that all command-line arguments should be binary-encoded; If we
+# didn't, they'd default to UTF-8 (unless `RUBYOPT` was set), and `optparse`'s regexes for parsing
+# flags would fail.
+#
+# An alternative to the above would be something like `$*.map!{ _1.encode 'binary' }`, but this
+# needs to duplicate each argument, as Ruby freezes all command-line argument strings. While this is
+# a possible alternative, we would be duplicating all
+# An alternative would be to do something like `$*.replace $*.map{ (+_1).force_encoding 'binary' }`,
+# but we need to clone each arg---Ruby freezes command-line arguments, which precludes using
+# `force_encoding`. Since we possibly expect large strings to be passed in, I decided to juse use the `#!/bin/sh` hack.
+#
+# We also specify this file's encoding as UTF-8 (which overrides what `RUBYOPT` might have), as that
+# way all the strings default to it. We also specify frozen string literals, as we use a lot of
+# strings.
+##
 
 ####################################################################################################
 #                                                                                                  #
@@ -468,7 +473,6 @@ OptParse.new do |op|
       end
   end
 
-  # TODO: Should `--prefixes`, `--one-per-line`, and `--no-prefixes-or-newline` be collapsed?
   op.on '--[no-]prefixes[=WHEN]', %w[always never auto], 'When to output "prefixes". (WHEN is always, never, auto). auto',
                                                          'enables prefixes only when stdout is a tty. [default: auto]' do |pfx|
     $prefixes = case pfx
