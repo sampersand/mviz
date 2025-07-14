@@ -179,6 +179,14 @@ module Action
     end
   end
 
+  ## Possible idea, where top-bit is subtracted
+  SUBTRACT_TOP_BIT = ->char do
+    char = (char.bytes[0] & 0x7f).chr
+    char <= "\x1F" || char == "\x7F" ? PICTURE.call(char) : visualize(char)
+    # PICTURE.call  (char.bytes[0] & 0x7f).chr
+    # visualize (char.ord & 0x7f).chr
+  end
+
   ## The sensible, default action for characters:
   # 1. Backslash is escaped if not showing visual escapes (as otherwise you couldn't distinguish
   #    between two unescaped backslashes and one escaped one)
@@ -201,12 +209,24 @@ module Action
     end
   end
 
-  VALID_ACTIONS = constants.map { |name|
-    a = Action.const_get(name)
-    a.is_a?(Proc) ? [name.to_s.downcase.tr('_','-'), a] : nil
-  }.compact.to_h
+  ################################################################################
+  #                               Fetching Actions                               #
+  ################################################################################
 
-  ## The action to use by default.
+  ## `get_action` is used to dynamically lookup an action based on its name.
+  # It takes a case-insensitive String, and returns the `Action` that corresponds to it, or a falsey
+  # value if no action is found.
+  def self.get_action(name)
+    constant = Action.const_get(name.upcase.tr('-', '_')) rescue return
+    constant.is_a?(Proc) && constant
+  end
+
+  ################################################################################
+  #                          Default and Error Actions                           #
+  ################################################################################
+
+  # The default action happens when no more specific actions match. The error action happens when
+  # an invalid byte for the encoding occurs.
   class << self
     attr_accessor :default
     attr_accessor :error
@@ -227,31 +247,33 @@ class RegexpFasterEqq < Regexp
   alias === match?
 end
 
-## Helpers for matching against characters. All that a "Character Set" needs to have is the `===`
-# method defined on it, which is used to determine if the character set matches or not.
+## Helpers for matching against characters. All that a "Pattern" needs to have is the `===` method
+# defined on it, which is used to determine if the pattern matches or not.
 module Pattern
-  ## A character set which matches _all_ characters.
+  ## A pattern which matches all characters.
   ALL = ->char { true }
 
-  ## A character set which matches _no_ characters.
+  ## A pattern which matches no characters.
   NONE = ->char { false }
 
-  ## A character set which matches characters composed of more than one byte.
+  ## A pattern which matches characters composed of more than one byte.
   MULTIBYTE = ->char { char.bytesize > 1 }
 
-  ## A character set which matches characters composed of exactly one byte.
+  ## A pattern which matches characters composed of exactly one byte.
   SINGLEBYTE = ->char { char.bytesize == 1 }
 
+  ## A pattern which matches "invisible" characters. Currently unimplemented, as what "invisible"
+  # means is pretty vague.
   # INVISIBLE = /[\x09\x0A\x0B\x0C\x0D\x20\xA0\xAD\u034F\u061C]/
 
   module_function
 
-  ## Creates a character set (ie something which has `===` defined) based on `selector`.
+  ## Creates a Pattern based on `selector`
   def build(selector)
     case selector
     when '\A'         then ALL
     when '\N'         then NONE
-    when '\@'         then default # if this changes, change `default_pattern=`
+    when '\@'         then   # if this changes, change `default_pattern=`
     when '\m'         then MULTIBYTE
     when '\M'         then SINGLEBYTE
     when String       then RegexpFasterEqq.new((+"[#{selector}]").force_encoding($encoding)) # TODO: WHY is this frozen in ruby 2.6.10
@@ -402,8 +424,8 @@ OptParse.new do |op|
   # Support `--debug`, but don't show it in the argument list
   op.base.long['debug'] = OptParse::Switch::NoArgument.new { $-d = $-v = true }
 
-  op.accept :ACTION do |foo|
-    Action::VALID_ACTIONS[foo.downcase] or raise OptionParser::InvalidArgument
+  op.accept :ACTION do |action|
+    Action.get_action(action) or raise OptionParser::InvalidArgument
   end
 
   # Define a custom `separator` function to add bold to each section
@@ -561,6 +583,10 @@ OptParse.new do |op|
     PatternAndAction.add_pattern_and_action(pattern, Action::HIGHLIGHT)
   end
 
+  op.on '--subtract-top-bit=PATTERN', 'Prints the character unchanged, but considers it "escaped"' do |pattern|
+    PatternAndAction.add_pattern_and_action(pattern, Action::SUBTRACT_TOP_BIT)
+  end
+
   op.on '--c-escape=PATTERN', "Use c-style escapes for #{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}; others chars",
                               'will yield a warning.' do |pattern|
     PatternAndAction.add_pattern_and_action(pattern, Action::C_ESCAPES)
@@ -608,7 +634,7 @@ OptParse.new do |op|
   op.section 'DEFAULT ESCAPES', '(Performed if no ESCAPES match)'
 
   op.on '--default-pattern=PATTERN', 'Explicitly set the default pattern. [default: \x00-\x1F\x7F]' do |cs|
-    Pattern.default_pattern = cs
+    Pattern.raw_default = cs
   end
 
 
