@@ -1,25 +1,29 @@
-#!/bin/sh
-exec env ruby -S -Ebinary "$0" "$@"
-#!ruby
+#!/usr/bin/env ruby
 # -*- encoding: UTF-8; frozen-string-literal: true -*-
+# (NOTE: The UTF-8 encoding above is to override whatever `RUBYOPT` may have supplied, as we want
+# strings in this file to be UTF-8, because I haven't tested with others.)
 
-## Notes on the above
-# The first three lines (the shebang, `exec env`, and `#!ruby`) are there so that we can specify the
-# `-Ebinary` flag, which specifies that all command-line arguments should be binary-encoded; If we
-# didn't, they'd default to UTF-8 (unless `RUBYOPT` was set), and `optparse`'s regexes for parsing
-# flags would fail.
+####################################################################################################
+# The `p` command is a command to display "weird" character. Use `p -h` for a short help message,  #
+# or `p --help` for a long one. The README contains additional details.                            #
+####################################################################################################
+
+## Ensure all of the command-line arguments are binary-encoded.
+# This is required because the regexes that `optparse` uses to handle arguments expect the arguments
+# to be valid in whatever their source encoding is, and since `p` intentionally accepts invalid
+# strings (part of its purpose after all is to display the invalid bytes!), we need to convert all
+# the strings to binary (where all bytes are valid).
 #
-# An alternative to the above would be something like `$*.map!{ _1.encode 'binary' }`, but this
-# needs to duplicate each argument, as Ruby freezes all command-line argument strings. While this is
-# a possible alternative, we would be duplicating all
-# An alternative would be to do something like `$*.replace $*.map{ (+_1).force_encoding 'binary' }`,
-# but we need to clone each arg---Ruby freezes command-line arguments, which precludes using
-# `force_encoding`. Since we possibly expect large strings to be passed in, I decided to juse use the `#!/bin/sh` hack.
+# Sadly, this requires duping (via `+@`) all the strings, as Ruby freezes command-line argument
+# strings. However, the maximum length of command-line arguments (which you can get for your system
+# via the shell command `getconf ARG_MAX`) is pretty low usually (on mine, just 1MB), which means
+# duplicating won't be a huge memory issue.
 #
-# We also specify this file's encoding as UTF-8 (which overrides what `RUBYOPT` might have), as that
-# way all the strings default to it. We also specify frozen string literals, as we use a lot of
-# strings.
+# (An alternative to this, which doesn't require duplicating all strings is to specify `-Ebinary`
+# when invoking ruby. This is possible via `/usr/bin/env -S ruby -Ebinary`, however `-S` isn't
+# fully portable, and `dup`ing 1MB isn't that big of a deal.)
 ##
+ARGV.replace ARGV.map { |arg| (+arg).force_encoding('binary') }
 
 ####################################################################################################
 #                                                                                                  #
@@ -41,7 +45,7 @@ rescue Exception
 end
 
 ## Redefine the top-level `abort` and `warn` methods to prepend the program name to the message, in
-# traditional unix style
+# traditional UNIX style.
 PROGRAM_NAME = File.basename($0, '.*')
 def abort(message) super "#{PROGRAM_NAME}: #{message}" end
 def warn(message)  super "#{PROGRAM_NAME}: #{message}" end
@@ -52,7 +56,10 @@ def warn(message)  super "#{PROGRAM_NAME}: #{message}" end
 #                                                                                                  #
 ####################################################################################################
 
-## Whether visual effects should be enabled by default
+# (Note: Just like Ruby's `STDOUT` and `$stdout` pairing, some of these constants also have an
+# associated global variable which is normally used; the constant exists as the "initial" value.)
+
+# Whether visual effects should be enabled by default.
 USE_COLOR = $use_color =
   if ENV.fetch('FORCE_COLOR', '') != ''
     true
@@ -62,21 +69,20 @@ USE_COLOR = $use_color =
     $stdout.tty?
   end
 
-## Whether POSIX-ly correct defaults should be used.
+# Whether POSIX-ly correct defaults should be used.
 IS_POSIXLY_CORRECT = ENV.key?('POSIXLY_CORRECT')
 
-## Strings to surround all escaped characters with; Defaults to "invert colour"
-STANDOUT_BEGIN = $standout_begin = (ENV.fetch('P_STANDOUT_BEGIN', "\e[7m") if $use_color)
-STANDOUT_END   = $standout_end   = (ENV.fetch('P_STANDOUT_END',   "\e[27m") if $use_color)
+# Strings to surround all escaped characters with; Defaults to "invert color"
+STANDOUT_BEGIN = $standout_begin = ($use_color ? ENV.fetch('P_STANDOUT_BEGIN', "\e[7m") : nil)
+STANDOUT_END   = $standout_end   = ($use_color ? ENV.fetch('P_STANDOUT_END',   "\e[27m") : nil)
 
-## Like `STANDOUT_XXX`, but only for encoding errors. Defaults to "red background, light grey
-# foreground"
-STANDOUT_ERR_BEGIN = (ENV.fetch('P_STANDOUT_ERR_BEGIN', "\e[37m\e[41m") if $use_color)
-STANDOUT_ERR_END   = (ENV.fetch('P_STANDOUT_ERR_END',   "\e[49m\e[39m") if $use_color)
+# Like `STANDOUT_XXX`, but for encoding errors. Defaults to "red background, light grey foreground"
+STANDOUT_ERR_BEGIN = ($use_color ? ENV.fetch('P_STANDOUT_ERR_BEGIN', "\e[37m\e[41m") : nil)
+STANDOUT_ERR_END   = ($use_color ? ENV.fetch('P_STANDOUT_ERR_END',   "\e[49m\e[39m") : nil)
 
-## Bold escape sequences; Bold is only used in help message and headers when files are given.
-BOLD_BEGIN = (ENV.fetch('P_BOLD_BEGIN', "\e[1m") if $use_color)
-BOLD_END   = (ENV.fetch('P_BOLD_END',   "\e[0m") if $use_color)
+# Bold escape sequences; Bold is only used in help message and headers when files are given.
+BOLD_BEGIN = ($use_color ? ENV.fetch('P_BOLD_BEGIN', "\e[1m") : nil)
+BOLD_END   = ($use_color ? ENV.fetch('P_BOLD_END',   "\e[0m") : nil)
 
 ## Set defaults for globals; user-supplied options can change these.
 $encoding = IS_POSIXLY_CORRECT ? Encoding.find('locale') : Encoding::UTF_8
@@ -282,7 +288,7 @@ module Pattern
                      else                       '\0-\x1F\x7F' # everything else is just ASCII control
                      end
 
-        # If we're using the default action, and we're using colours, then also add backslash to the
+        # If we're using the default action, and we're using colors, then also add backslash to the
         # list of escapes. We need to use a double backslash so it interpolates correctly.
         regex.concat '\\\\' if Action.default == Action::DEFAULT && !$use_color
 
@@ -369,9 +375,9 @@ end
 
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
-  op.version = '0.14.0'
+  op.version = '0.14.1'
   op.banner = <<~BANNER
-  #{STANDOUT_BEGIN}usage#{STANDOUT_END}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}#{' '*30}read from stdin
+  #{$standout_begin}usage#{$standout_end}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}#{' '*30}read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] STRING [STRING...]#{BOLD_END} #{' '*10}print strings
          #{BOLD_BEGIN}#{op.program_name} [options] -f FILE [FILE...]#{BOLD_END}  #{' '*10}read from files
   BANNER
@@ -417,7 +423,7 @@ OptParse.new do |op|
     #{BOLD_BEGIN}ESCAPE SHORTHANDS#{BOLD_END}
       -l / -w         Don't escape newlines / newlines, tabs, or spaces.
       -s / -S         Escape spaces by highlighting it / with "pictures".
-      -B              Escape backslashes. (default unless colour or "ESCAPES" given)
+      -B              Escape backslashes. (default unless color or "ESCAPES" given)
       -m              Escape multibyte characters with their Unicode codepoint.
       -a              Escape _every_ character. (Must be used with an "ESCAPES")
     #{BOLD_BEGIN}INPUT DATA#{BOLD_END} (UTF-8 is default unless POSIXLY_CORRECT is set)
@@ -792,8 +798,8 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-# Visualizes `string` by surrounding it with the colour escape sequences if colour mode is enabled.
-# Also, sets the variable `$SOMETHING_ESCAPED` regardless of colour mode for `--check-escapes`.
+# Visualizes `string` by surrounding it with the color escape sequences if color mode is enabled.
+# Also, sets the variable `$SOMETHING_ESCAPED` regardless of color mode for `--check-escapes`.
 if $use_color
   def visualize(string)
     $SOMETHING_ESCAPED = true
