@@ -273,12 +273,12 @@ module Pattern
     case selector
     when '\A'         then ALL
     when '\N'         then NONE
-    when '\@'         then   # if this changes, change `default_pattern=`
+    when '\@'         then default
     when '\m'         then MULTIBYTE
     when '\M'         then SINGLEBYTE
-    when String       then RegexpFasterEqq.new((+"[#{selector}]").force_encoding($encoding)) # TODO: WHY is this frozen in ruby 2.6.10
+    when String       then RegexpFasterEqq.new( (+"[#{selector}]").force_encoding($encoding) )
     when Regexp, Proc then selector
-    else raise "fail: bad pattern '#{selector.inspect}'"
+    else raise ArgumentError, "bad pattern '#{selector.inspect}'"
     end
   end
 
@@ -290,8 +290,8 @@ module Pattern
 
     @raw_default =
       case pattern
-      when '\@'    then nil # Handle `\@` here to mean "whatever the default is"
-      when '', '^' then false
+      when '\@'    then nil   # Handle `\@` here to mean "whatever the default is"
+      when '', '^' then false # empty patterns are equivalent to no default pattern.
       else              pattern
       end
   end
