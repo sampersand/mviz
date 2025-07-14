@@ -179,32 +179,25 @@ module Action
     end
   end
 
-  ## The sensible, default action for characters: Backslash is escaped if not in visual mode,
-  # c-escapable characters are escaped, certain control characters (0x00-0x1F, 0x7F, or 0x7F and
-  # above if in binary mode) are printed in hex escapes, and in utf-8 encoding, other control chars
-  # (\u0080-\u009F) are printed in codepoint form; All other characters are returned unchanged.
+  ## The sensible, default action for characters:
+  # 1. Backslash is escaped if not showing visual escapes (as otherwise you couldn't distinguish
+  #    between two unescaped backslashes and one escaped one)
+  # 2. C-escapable characters are escaped
+  # 3. Hex for C0 control character (0x00-0x1F, 0x7F), as well as 0x7F-0xFF when in binary encoding.
+  # 4. When in UTF-8, C1 control characters have codepoints printed
+  # 5. Everything else is printed verbatim
   DEFAULT = ->char do
     case char
-    when '\\'
-      $use_color ? '\\' : '\\\\'
+    when $use_color && '\\' # Early return the backslash when using colors so C_ESCAPES wont take it
+      char
     when C_ESCAPES_MAP.method(:key?)
       C_ESCAPES.call(char)
-    when "\0".."\x1F", "\x7F", ($encoding == Encoding::BINARY && "\x7F".."\xFF")
+    when "\0".."\x1F", "\x7F", ($encoding == Encoding::BINARY && ("\x7F".."\xFF"))
       HEX.call(char)
     when $encoding == Encoding::UTF_8 && /\p{Cntrl}/
       CODEPOINTS.call(char)
     else
       char
-    # if char == '\\'
-    #   $use_color ? '\\' : '\\\\'
-    # elsif C_ESCAPES_MAP.key?(char)
-    #   C_ESCAPES.call(char)
-    # elsif char <= "\x1F" || char == "\x7F" || ($encoding == Encoding::BINARY && "\x7F" <= char)
-    #   HEX.call(char)
-    # elsif $encoding == Encoding::UTF_8 && /\p{Cntrl}/.match?(char)
-    #   CODEPOINTS.call(char)
-    # else
-    #   char
     end
   end
 
