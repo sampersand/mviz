@@ -84,16 +84,6 @@ STANDOUT_ERR_END   = ($use_color ? ENV.fetch('P_STANDOUT_ERR_END',   "\e[49m\e[3
 BOLD_BEGIN = ($use_color ? ENV.fetch('P_BOLD_BEGIN', "\e[1m") : nil)
 BOLD_END   = ($use_color ? ENV.fetch('P_BOLD_END',   "\e[0m") : nil)
 
-## Set defaults for globals; user-supplied options can change these.
-$encoding = IS_POSIXLY_CORRECT ? Encoding.find('locale') : Encoding::UTF_8
-$malformed_error = true
-$escape_error = false
-$quiet = false
-$files = false
-$prefixes = $stdout.tty?
-$escape_surronding_spaces = true
-$expect_arguments = false
-
 ####################################################################################################
 #                                                                                                  #
 #                                              Action                                              #
@@ -373,6 +363,18 @@ end
 #                                                                                                  #
 ####################################################################################################
 
+
+## Set defaults for globals; user-supplied options can change these.
+$encoding = IS_POSIXLY_CORRECT ? Encoding.find('locale') : Encoding::UTF_8
+$malformed_error = true
+$escape_error = false
+$quiet = false
+$files = false
+$prefixes = $stdout.tty?
+$escape_surronding_spaces = true
+$expect_arguments = false
+
+## Parse Options
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
   op.version = '0.14.1'
@@ -383,9 +385,7 @@ OptParse.new do |op|
   BANNER
 
   # Support `--debug`, but don't show it in the argument list
-  op.base.long['debug'] = OptParse::Switch::NoArgument.new do |arg|
-    $DEBUG = $VERBOSE = true
-  end
+  op.base.long['debug'] = OptParse::Switch::NoArgument.new { $-d = $-v = true }
 
   op.accept :ACTION do |foo|
     Action::VALID_ACTIONS[foo.downcase] or raise OptionParser::InvalidArgument
