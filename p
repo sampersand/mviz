@@ -184,16 +184,27 @@ module Action
   # above if in binary mode) are printed in hex escapes, and in utf-8 encoding, other control chars
   # (\u0080-\u009F) are printed in codepoint form; All other characters are returned unchanged.
   DEFAULT = ->char do
-    if char == '\\'
+    case char
+    when '\\'
       $use_color ? '\\' : '\\\\'
-    elsif C_ESCAPES_MAP.key?(char)
+    when C_ESCAPES_MAP.method(:key?)
       C_ESCAPES.call(char)
-    elsif char <= "\x1F" || char == "\x7F" || ($encoding == Encoding::BINARY && "\x7F" <= char)
+    when "\0".."\x1F", "\x7F", ($encoding == Encoding::BINARY && "\x7F".."\xFF")
       HEX.call(char)
-    elsif $encoding == Encoding::UTF_8 && /\p{Cntrl}/.match?(char)
+    when $encoding == Encoding::UTF_8 && /\p{Cntrl}/
       CODEPOINTS.call(char)
     else
       char
+    # if char == '\\'
+    #   $use_color ? '\\' : '\\\\'
+    # elsif C_ESCAPES_MAP.key?(char)
+    #   C_ESCAPES.call(char)
+    # elsif char <= "\x1F" || char == "\x7F" || ($encoding == Encoding::BINARY && "\x7F" <= char)
+    #   HEX.call(char)
+    # elsif $encoding == Encoding::UTF_8 && /\p{Cntrl}/.match?(char)
+    #   CODEPOINTS.call(char)
+    # else
+    #   char
     end
   end
 
