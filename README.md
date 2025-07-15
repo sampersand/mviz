@@ -7,6 +7,7 @@ A program to visualize invisible and invalid bytes in different encodings.
 `p` is designed with sensible defaults in mind; its default behaviour is what you want most of the time, but it can easily (and sensibly) be changed with options
 
 ![basic usages of p](imgs/intro.png)
+
 <!--
 ```sh
 $ p "$variable"        # See the contents of a shell variable
@@ -33,8 +34,8 @@ some_command | p -l   # Don't escape newlines!
 some_command | p -dD  # Delete invalid characters!
 some_command | p -b   # Interpret the input as binary data!
 some_command | p -abx # Show the hex of _all_ bytes!
+-->
 
- -->
 It's also quite useful when you're learning how shells work:
 ```bash
 # See what files are expanded by a glob

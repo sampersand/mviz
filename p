@@ -200,7 +200,7 @@ module Action
       char
     when C_ESCAPES_MAP.method(:key?)
       C_ESCAPES.call(char)
-    when "\0".."\x1F", "\x7F", ($encoding == Encoding::BINARY && ("\x7F".."\xFF"))
+    when "\0".."\x1F", "\x7F", $encoding == Encoding::BINARY && ("\x7F".."\xFF")
       HEX.call(char)
     when $encoding == Encoding::UTF_8 && /\p{Cntrl}/
       CODEPOINTS.call(char)
@@ -268,7 +268,7 @@ module Pattern
 
   module_function
 
-  ## Creates a Pattern based on `selector`
+  ## Creates a Pattern based on `selector`.
   def build(selector)
     case selector
     when '\A'         then ALL
@@ -282,16 +282,18 @@ module Pattern
     end
   end
 
+  # We use `raw_default` instead of `default`, as the default pattern's only accessible after all
+  # command-line arguments have been processed (as the encoding may come at the end).
   @raw_default = nil
 
   ## Set the default pattern; This can only be called before `build_default_pattern!` is run. If
   def raw_default=(pattern)
-    fail if @default
+    fail if @default # internal bug; `raw_default=` is only used before `build_default_pattern!`
 
     @raw_default =
       case pattern
       when '\@'    then nil   # Handle `\@` here to mean "whatever the default is"
-      when '', '^' then false # empty patterns are equivalent to no default pattern.
+      when '', '^' then NONE  # empty patterns are equivalent to no default pattern.
       else              pattern
       end
   end
@@ -299,13 +301,12 @@ module Pattern
   ## Constructs the default pattern; This should only ever be called once, after any calls to the
   # `default_pattern=` method have been performed.
   def build_default_pattern!
-    fail if @default
+    fail if @default # internal bug; `build_default_pattern!` is only calledonce
 
     @default =
       if @raw_default
+        # If the raw default's supplied, then use that directly
         build @raw_default
-      elsif @raw_default == false
-        NONE
       else
         # Universal default character class; encode it in whatever the encoding we're using is.
         regex = (+'[').force_encoding $encoding
@@ -407,14 +408,14 @@ $malformed_error = true
 $escape_error = false
 $quiet = false
 $files = false
-$prefixes = $stdout.tty?
+$prefixes = nil#$stdout.tty?
 $escape_surronding_spaces = true
 $expect_arguments = false
 
 ## Parse Options
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
-  op.version = '0.14.1'
+  op.version = '0.14.2'
   op.banner = <<~BANNER
   #{$standout_begin}usage#{$standout_end}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}#{' '*30}read from stdin
          #{BOLD_BEGIN}#{op.program_name} [options] STRING [STRING...]#{BOLD_END} #{' '*10}print strings
@@ -521,7 +522,7 @@ OptParse.new do |op|
     $prefixes = case pfx
                 when 'always', nil  then true
                 when 'never', false then false
-                when 'auto'         then $stdout.tty?
+                when 'auto'         then nil #$stdout.tty?
                 else fail # Should never happen, as a list of valid options is given via `%w[...]`.
                 end
   end
@@ -647,7 +648,7 @@ OptParse.new do |op|
                                                        'and to print verbatim any characters that dont match ESCAPES.' do
     # Technically we could also set `Action.default = Action::PRINT`; it doesn't really matter, as
     # "pattern that never matches" and "action that always prints" do the same thing.
-    Pattern.raw_default = nil
+    Pattern.raw_default = Pattern::NONE
   end
 
   op.on '-p', 'Same as --default-action=print' do
@@ -799,6 +800,7 @@ if $*.empty?
   $prefixes = false
 end
 
+$PREFIXES_NIL=$prefixes = $*.length > 1 if $prefixes.nil?
 $quiet and $stdout = File.open(File::NULL, 'w')
 
 PatternAndAction.build!
@@ -957,6 +959,7 @@ unless $files
     # handle the input string
     print_escapes string.force_encoding($encoding), trailing_spaces
   end
+  puts if defined?($PREFIXES_NIL) && !$prefixes
 
   # Exit early so we don't deal with the chunk below. Note however, the `at_exit` earlier in this
   # file for dealing with the `--malformed-error` flag.
