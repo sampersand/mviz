@@ -4,13 +4,13 @@
 # strings in this file to be UTF-8, because I haven't tested with others.)
 
 ####################################################################################################
-# The `p` command is a command to display "weird" character. Use `p -h` for a short help message,  #
-# or `p --help` for a long one. The README contains additional details.                            #
+# The `mviz` command is a command to display "weird" character. Use `mviz -h` for a short help,    #
+# message or `mviz --help` for a long one. The README contains additional details.                 #
 ####################################################################################################
 
 ## Ensure all of the command-line arguments are binary-encoded.
 # This is required because the regexes that `optparse` uses to handle arguments expect the arguments
-# to be valid in whatever their source encoding is, and since `p` intentionally accepts invalid
+# to be valid in whatever their source encoding is, and since `mviz` intentionally accepts invalid
 # strings (part of its purpose after all is to display the invalid bytes!), we need to convert all
 # the strings to binary (where all bytes are valid).
 #
@@ -986,9 +986,9 @@ end
 #    pain to easily capture them, especially since we want to dump all files, even if there's a
 #    problem with one of them.
 # 4. `ARGF#filename` is not a usable way to see if new files are given: Using `old == ARGF.filename`
-#    in a loop doesn't work in the case of two identical files being dumped (eg `p ab.txt ab.txt`).
+#    in a loop doesn't work in the case of two identical files (eg `mviz ab.txt ab.txt`).
 #    But, `old.equal? ARGF.filename` also doesn't work because a brand new `"-"` is returned for
-#    each `.filename` call when `ARGV` started out empty (i.e. `p` with no arguments).
+#    each `.filename` call when `ARGV` started out empty (i.e. `mviz` with no arguments).
 #
 # Unfortunately, manually iterating over `ARGV` also has its issues:
 # 1. You need to manually check for `ARGV.empty?` and then default it to `/dev/stdin` if no files

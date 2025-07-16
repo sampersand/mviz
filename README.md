@@ -1,69 +1,69 @@
-# The `p` command
-A program to visualize invisible and invalid bytes in different encodings.
+# The `mviz` command
+A modern alternative to `viz`: a way visualize invisible and invalid bytes in different encodings.
 
-`p` is essentially a replacement for interactive use of `echo` or `cat`: Instead of `echo "$variable"` or `cat file.txt`, which (on most terminals) hide invisible characters (like `\x01`), you instead do `p "$variable"` or `p -f file.txt`.
+`mviz` is essentially a replacement for interactive use of `echo` or `cat`: Instead of `echo "$variable"` or `cat file.txt`, which (on most terminals) hide invisible characters (like `\x01`), you instead do `mviz "$variable"` or `mviz -f file.txt`.
 
 # Examples
-`p` is designed with sensible defaults in mind; its default behaviour is what you want most of the time, but it can easily (and sensibly) be changed with options
+`mviz` is designed with sensible defaults in mind; its default behaviour is what you want most of the time, but it can easily (and sensibly) be changed with options
 
-![basic usages of p](imgs/intro.png)
+![basic usages of mviz](imgs/intro.png)
 
 <!--
 ```sh
-$ p "$variable"        # See the contents of a shell variable
-$ p -d "$variable"     # Delete weird characters from the variable
-$ p -f file.txt        # Print file.txt, escaping "weird" characters
-$ p -fw file.txt       # Like the previous line, but newlines and tabs aren't escaped.
-$ some_command | p     # Visualize weird characters of `some_command`
-$ some_command | p -l  # Like the previous one, but don't escape newlines.
-$ some_command | p -b  # Interpret input data as binary, not UTF-8 (the default)
+$ mviz "$variable"        # See the contents of a shell variable
+$ mviz -d "$variable"     # Delete weird characters from the variable
+$ mviz -f file.txt        # Print file.txt, escaping "weird" characters
+$ mviz -fw file.txt       # Like the previous line, but newlines and tabs aren't escaped.
+$ some_command | mviz     # Visualize weird characters of `some_command`
+$ some_command | mviz -l  # Like the previous one, but don't escape newlines.
+$ some_command | mviz -b  # Interpret input data as binary, not UTF-8 (the default)
 ```
 greeting=$'\rHello\x01, world 🌍! '
 some_command () { print $'Not\u00A0much.\r\ncool!' }
 PROMPT_EOL_MARK=
 
 echo "$greeting" # Everything _seems_ to be in order...
-p "$greeting"    # But it's not!
+mviz "$greeting"    # But it's not!
 
-p -r "$greeting" # Replace with �
-p -C "$greeting" # Use control pictures!
-p -m "$greeting" # Escape UTF-8!
+mviz -r "$greeting" # Replace with �
+mviz -C "$greeting" # Use control pictures!
+mviz -m "$greeting" # Escape UTF-8!
 
-some_command | p      # Pipe stuff in!
-some_command | p -l   # Don't escape newlines!
-some_command | p -dD  # Delete invalid characters!
-some_command | p -b   # Interpret the input as binary data!
-some_command | p -abx # Show the hex of _all_ bytes!
+some_command | mviz      # Pipe stuff in!
+some_command | mviz -l   # Don't escape newlines!
+some_command | mviz -dD  # Delete invalid characters!
+some_command | mviz -b   # Interpret the input as binary data!
+some_command | mviz -abx # Show the hex of _all_ bytes!
 -->
 
 It's also quite useful when you're learning how shells work:
 ```bash
 # See what files are expanded by a glob
-$ p [A-Z]*
+$ mviz [A-Z]*
     1: LICENSE
     2: README.md
 # See how `$variable` word splits
 $ variable='hello    world,   :-)'
-$ p $variable
+$ mviz $variable
     1: hello
     2: world,
     3: :-)
 # See how `$IFS` affects it
 $ IFS=o
-$ p $variable
+$ mviz $variable
     1: hell
     2:     w
     3: rld,   :-)
 ```
 
-Try `p -h` for short usage, and `p --help` for the longer one.
+Try `mviz -h` for short usage, and `mviz --help` for the longer one.
 
 # Why not use tool X (`xxd`, `hexdmp`, `vis`, `od`, etc)?
-The biggest difference between `p` and other tools is that `p` is intended for looking at mostly-normal text by default, and optimizes for that. It doesn't change the output _unless_ weird characters exist. For example:
+The biggest difference between `mviz` and other tools is that `mviz` is intended for looking at mostly-normal text by default, and optimizes for that. It doesn't change the output _unless_ weird characters exist. For example:
 
-![comparisons of p to xxd, hexdump -C, od -c, vis, and cat -v](imgs/comparisons.png)
+![comparisons of mviz to xxd, hexdump -C, od -c, vis, and cat -v](imgs/comparisons.png)
 <!-- ```bash
-% printf 'hello\x04world, how are you? \xC3👍\n' | p
+% printf 'hello\x04world, how are you? \xC3👍\n' | mviz
 hello\x04world, how are you? \xC3👍\n
 
 % printf 'hello\x04world, how are you? \xC3👍\n' | xxd
@@ -87,14 +87,14 @@ hello\^Dworld, how are you? \M-C\M-p\M^_\M^Q\M^M
 hello^Dworld, how are you? ??M-^_M-^QM-^M
 ```
  -->
-In addition, `p` by default adds a "standout marker" to escaped characters (by default, it inverts the foreground and background colours), so they're more easily distinguished at a glance.
+In addition, `mviz` by default adds a "standout marker" to escaped characters (by default, it inverts the foreground and background colours), so they're more easily distinguished at a glance.
 
 # How it works
-The way `p` works at a high-level is pretty easy: Every character in an input is checked against the list of patterns, and the first one that matches is used. If no patterns match, the character is checked against the "default pattern," and if that doesn't match, the character is printed verbatim.
+The way `mviz` works at a high-level is pretty easy: Every character in an input is checked against the list of patterns, and the first one that matches is used. If no patterns match, the character is checked against the "default pattern," and if that doesn't match, the character is printed verbatim.
 
-To simplify the most common use-case of `p`, where only the "escaping mechanism" (called an "Action"; see below) is changed, a lot of short-hand flags (such as `-x`, `-d`, etc.) are provided to just change the default action.
+To simplify the most common use-case of `mviz`, where only the "escaping mechanism" (called an "Action"; see below) is changed, a lot of short-hand flags (such as `-x`, `-d`, etc.) are provided to just change the default action.
 
-`p` is broken into three configurable parts: The encoding of the input data, the "patterns" to match against the input data, and the action to take when a pattern matches. They're described in more details below:
+`mviz` is broken into three configurable parts: The encoding of the input data, the "patterns" to match against the input data, and the action to take when a pattern matches. They're described in more details below:
 
 ## Encodings
 The encoding (which can be specified via `--encoding`, and are case-insensitive) is used to determine which input bytes are valid, and which are invalid.
@@ -118,7 +118,7 @@ Patterns are a sets of characters (internally using regular expression character
 - `\M` matches single-byte characters (ie anything `\m` doesn't match)
 - `\@` matches the "default pattern" (see below)
 
-Patterns are normally used when specifying actions directly (eg `p --delete=^a-z` will only output lower-case letters).
+Patterns are normally used when specifying actions directly (eg `mviz --delete=^a-z` will only output lower-case letters).
 
 ### Default Pattern
 The default pattern is the pattern that is checked _after_ all "user-specified patterns." If it matches, the "default action" takes place (which are controlled by shorthands like `-x`, `-o`, etc.) acts upon.
@@ -147,7 +147,7 @@ Actions are how characters are escaped. There's a lot of them, and they can be u
 | `default`   | Use the default pattern: All valid `c-escape` characters have their escape printed (with the sole exception that a backslash is printed as-is if visual effects are enabled), all other characters in `\x00-\x1F`, `\x7F` (and `\x80-\xFF` if the encoding is binary) are printed in hex, in `UTF-8` the codepoints `\u0080-\u009F` have their codepoints printed, and all other characters are printed as-is.|
 
 # Environment Variables
-The `p` command has numerous environment variables it relies on:
+The `mviz` command has numerous environment variables it relies on:
 
 | Variable | Description |
 |----------|-------------|
