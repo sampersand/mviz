@@ -412,7 +412,7 @@ $expect_arguments = false
 ## Parse Options
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
-  op.version = '0.14.3'
+  op.version = '0.15.0'
   op.banner = <<~BANNER
   #{STANDOUT_BEGIN}usage#{STANDOUT_END}: #{BOLD_BEGIN}#{PROGRAM_NAME} [options]#{BOLD_END}#{' '*30}read from stdin
          #{BOLD_BEGIN}#{PROGRAM_NAME} [options] STRING [STRING...]#{BOLD_END} #{' '*10}print strings
