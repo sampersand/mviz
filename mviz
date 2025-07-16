@@ -584,7 +584,7 @@ OptParse.new do |op|
     PatternAndAction.add_pattern_and_action(pattern, Action::HIGHLIGHT)
   end
 
-  op.on '--subtract-top-bit=PATTERN', 'Prints the character unchanged, but considers it "escaped"' do |pattern|
+  op.on '--subtract-top-bit=PATTERN', '[EXPERIMENTAL] Subtract 0x80, then prints out picture/itself.' do |pattern|
     PatternAndAction.add_pattern_and_action(pattern, Action::SUBTRACT_TOP_BIT)
   end
 
