@@ -310,11 +310,13 @@ module Pattern
       else
         # Universal default character class; encode it in whatever the encoding we're using is.
         regex = (+'[').force_encoding $encoding
-        regex.concat case $encoding
-                     when Encoding::UTF_8  then '\p{Cntrl}' # Cntrl covers it all
-                     when Encoding::BINARY then '\0-\x1F\x7F-\xFF' # add upper range for binary
-                     else                       '\0-\x1F\x7F' # everything else is just ASCII control
-                     end
+        regex.concat(
+          case $encoding
+          when Encoding::UTF_8  then '\p{Cntrl}'        # Cntrl covers everything
+          when Encoding::BINARY then '\0-\x1F\x7F-\xFF' # add upper range for binary
+          else                       '\0-\x1F\x7F'      # everything else is just ASCII control
+          end
+        )
 
         # If we're using the default action, and we're using colors, then also add backslash to the
         # list of escapes. We need to use a double backslash so it interpolates correctly.
@@ -335,7 +337,7 @@ end
 
 ####################################################################################################
 #                                                                                                  #
-#                                             PatternAndAction                                             #
+#                                         PatternAndAction                                         #
 #                                                                                                  #
 ####################################################################################################
 
@@ -349,11 +351,6 @@ module PatternAndAction
   # This means that later patterns take priority over earlier ones. Should not be called after
   # `.build!` is called.
   def add_pattern_and_action(pattern, action)
-    if pattern.nil?
-      Action.default = action
-      return
-    end
-
     fail if @patterns # Ensure that we're called only before `.build!`
 
     # Ignore patterns which are empty. This isn't just an optimization: Without this check, the
@@ -379,8 +376,8 @@ module PatternAndAction
 
   ## Returns the representation of a character; Should only be called after `.build!`.
   def handle(char)
-    # No need for a `fail unless @patterns`, as `@patterns.each` will fail if `.build!` wasn't
-    # called first (as `@patterns` will be nil.)
+    # (No need for a `fail unless @patterns`, as `@patterns.each` will fail if `.build!` wasn't
+    # called first (as `@patterns` will be nil.))
 
     # Check user-supplied patterns to see if any match
     @patterns.each do |condition, action|
@@ -415,16 +412,19 @@ $expect_arguments = false
 ## Parse Options
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
-  op.version = '0.14.2'
+  op.version = '0.14.3'
   op.banner = <<~BANNER
-  #{$standout_begin}usage#{$standout_end}: #{BOLD_BEGIN}#{op.program_name} [options]#{BOLD_END}#{' '*30}read from stdin
-         #{BOLD_BEGIN}#{op.program_name} [options] STRING [STRING...]#{BOLD_END} #{' '*10}print strings
-         #{BOLD_BEGIN}#{op.program_name} [options] -f FILE [FILE...]#{BOLD_END}  #{' '*10}read from files
+  #{STANDOUT_BEGIN}usage#{STANDOUT_END}: #{BOLD_BEGIN}#{PROGRAM_NAME} [options]#{BOLD_END}#{' '*30}read from stdin
+         #{BOLD_BEGIN}#{PROGRAM_NAME} [options] STRING [STRING...]#{BOLD_END} #{' '*10}print strings
+         #{BOLD_BEGIN}#{PROGRAM_NAME} [options] -f FILE [FILE...]#{BOLD_END}  #{' '*10}read from files
   BANNER
 
   # Support `--debug`, but don't show it in the argument list
   op.base.long['debug'] = OptParse::Switch::NoArgument.new { $-d = $-v = true }
 
+  ## Accept actions
+  # (There's no `op.accept :PATTERN`, as patterns are only created after all arguments are parsed,
+  # as the encoding can be specified at any point);
   op.accept :ACTION do |action|
     Action.get_action(action) or raise OptionParser::InvalidArgument
   end
@@ -444,7 +444,7 @@ OptParse.new do |op|
 
   op.on '-h', 'Print a shorter help message and exit' do
     puts <<~EOS
-    #{BOLD_BEGIN}usage: #{op.program_name} [options] [string ...]#{BOLD_END}
+    #{BOLD_BEGIN}usage: #{PROGRAM_NAME} [options] [string ...]#{BOLD_END}
       --help          Print a longer help message with more options
       -f              Interpret all arguments as filenames, not strings
       -c              Check if any escapes are printed, and exit nonzero if so.

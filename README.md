@@ -26,8 +26,8 @@ echo "$greeting" # Everything _seems_ to be in order...
 p "$greeting"    # But it's not!
 
 p -r "$greeting" # Replace with �
-p -m "$greeting" # Escape UTF-8!
 p -C "$greeting" # Use control pictures!
+p -m "$greeting" # Escape UTF-8!
 
 some_command | p      # Pipe stuff in!
 some_command | p -l   # Don't escape newlines!
