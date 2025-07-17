@@ -405,7 +405,8 @@ $malformed_error = true
 $escape_error = false
 $quiet = false
 $files = false
-$prefixes = nil#$stdout.tty?
+$prefixes = :auto
+$trailing_newline = :auto
 $escape_surronding_spaces = true
 $expect_arguments = false
 
@@ -427,6 +428,19 @@ OptParse.new do |op|
   # as the encoding can be specified at any point);
   op.accept :ACTION do |action|
     Action.get_action(action) or raise OptionParser::InvalidArgument
+  end
+
+  # Support for `WHEN`s: returns true/false/:auto depending on the arguments.
+  op.accept :WHEN do |option|
+    # Oddly enough, `--no-foo` doesn't pass `false` to this function, but `--foo` (when `WHEN` is
+    # optional) does pass `nil` in. In case this changes in a future version of `optparse`, we still
+    # check for `, false` even though it's redundant.
+    case option
+    when 'always', nil  then true
+    when 'never', false then false
+    when 'auto'         then :auto
+    else raise OptionParser::InvalidArgument
+    end
   end
 
   # Define a custom `separator` function to add bold to each section
@@ -505,30 +519,24 @@ OptParse.new do |op|
   end
 
   # (Support `--color`, `--no-color`, and `--color=...`)
-  op.on '--[no-]color[=WHEN]', %w[always never auto], 'When to enable visual effects. (WHEN is always, never, auto).',
-                                                      'auto checks FORCE_COLOR/NO_COLOR, and if not set, enables only',
-                                                      'when stdout is a tty [default: auto]' do |w|
-    $use_color =
-      case w
-      when 'always', nil  then true
-      when 'never', false then false
-      when 'auto'         then USE_COLOR
-      else fail # Should never happen, as a list of valid options is given via `%w[...]`.
-      end
+  op.on '--[no-]color[=WHEN]', :WHEN, 'When to enable visual effects. (WHEN is always, never, auto).',
+                                      'auto checks FORCE_COLOR/NO_COLOR, and if not set, enables only',
+                                      'when stdout is a tty [default: auto]' do |color|
+    $use_color = (color == :auto ? USE_COLOR : color)
   end
 
-  op.on '--[no-]prefixes[=WHEN]', %w[always never auto], 'When to output "prefixes". (WHEN is always, never, auto). auto',
-                                                         'enables prefixes only when stdout is a tty. [default: auto]' do |pfx|
-    $prefixes = case pfx
-                when 'always', nil  then true
-                when 'never', false then false
-                when 'auto'         then nil #$stdout.tty?
-                else fail # Should never happen, as a list of valid options is given via `%w[...]`.
-                end
+  op.on '--[no-]prefixes[=WHEN]',:WHEN, 'When to output "prefixes". (WHEN is always, never, auto). auto',
+                                        'enables prefixes only when stdout is a tty. [default: auto]' do |pfx|
+    $prefixes = pfx
   end
 
-  op.on '-n', 'Same as --prefixes=never' do
-    $prefixes = false
+  op.on '--[no-]trailing-newline[=WHEN]',:WHEN, 'When to output trailing newlines. (WHEN is always, never, auto). auto',
+                                        'disables trailing newlines only when reading from stdin [default: auto]' do |tnl|
+    $trailing_newline = tnl
+  end
+
+  op.on '-n', 'Same as --prefixes=never --trailing-newline=never' do
+    $prefixes = $trailing_newline = false
   end
 
   op.on '--[no-]malformed-error', 'Invalid chars in the --encoding cause exit status 2. (default)' do |me|
@@ -644,8 +652,9 @@ OptParse.new do |op|
     Action.default = action
   end
 
-  op.on '--no-default-pattern', '--no-default-action', 'Specify either of these to disable the default functionality,',
-                                                       'and to print verbatim any characters that dont match ESCAPES.' do
+  op.on '--no-default-pattern',
+        '--no-default-action', 'Specify either of these to disable the default functionality,',
+                               'and to print verbatim any characters that dont match ESCAPES.' do
     # Technically we could also set `Action.default = Action::PRINT`; it doesn't really matter, as
     # "pattern that never matches" and "action that always prints" do the same thing.
     Pattern.raw_default = Pattern::NONE
@@ -798,10 +807,12 @@ if $*.empty?
   $*.replace %w[-]
   $files = true
   $prefixes = false
+  $trailing_newline = false if $trailing_newline == :auto
 end
 
-$PREFIXES_NIL=$prefixes = $*.length > 1 if $prefixes.nil?
+$PREFIXES_NIL=$prefixes = $*.length > 1 if $prefixes == :auto
 $quiet and $stdout = File.open(File::NULL, 'w')
+$trailing_newline = $*.length >= 1 if $trailing_newline == :auto
 
 PatternAndAction.build!
 
@@ -917,8 +928,8 @@ def print_escapes(has_each_char, suffix = nil)
   # 3. The last character to be printed was not a newline; This is normally the case, but if the
   #    newline was unescaped (eg `-l`), then the last character may be a newline. This condition is
   #    to prevent a blank line in the output. (Kinda like how `puts "a\n"` only prints one newline.)
-  puts if $prefixes && last != "\n" && (last != nil || $prefixes) # <-- TODO: make sure this is the format we want
-  puts if $prefixes && $files
+  # puts if $prefixes && last != "\n" && (last != nil || $prefixes) # <-- TODO: make sure this is the format we want
+  # puts if $prefixes && $files
 rescue Interrupt
   # If we receive an interrupt (CTRL-C), then just exit with status 130.
   exit 130
@@ -934,11 +945,8 @@ end
 unless $files
   ARGV.each_with_index do |string, idx|
     # Print out the prefix if a header was requested
-    if $prefixes
-      printf '%5d: ', idx + 1
-    elsif idx.nonzero?
-      puts
-    end
+    puts if idx.nonzero?
+    printf '%5d: ', idx + 1 if $prefixes
 
     # Unfortunately, `ARGV` strings are frozen, and we need to forcibly change the string's encoding
     # within `handle` so can iterate over the contents of the string in the new encoding. As such,
@@ -959,7 +967,8 @@ unless $files
     # handle the input string
     print_escapes string.force_encoding($encoding), trailing_spaces
   end
-  puts if defined?($PREFIXES_NIL) && !$prefixes
+
+  puts if $trailing_newline
 
   # Exit early so we don't deal with the chunk below. Note however, the `at_exit` earlier in this
   # file for dealing with the `--malformed-error` flag.
@@ -1013,11 +1022,8 @@ ARGV.each_with_index do |filename, idx|
     end
 
   ## Print out the filename, a colon, and a space if prefixes were requested.
-  if $prefixes
-    print BOLD_BEGIN, "==[#{filename}]==", BOLD_END, "\n"
-  elsif idx.nonzero?
-    puts
-  end
+  puts if idx.nonzero?
+  print BOLD_BEGIN, "==[#{filename}]==", BOLD_END, "\n" if $prefixes
 
   ## Print the escapes for the file
   print_escapes file
@@ -1036,6 +1042,8 @@ ensure
     file.close rescue nil # We don't care about problems closing it
   end
 end
+
+puts if $trailing_newline
 
 ## If there was a problem reading a file, exit with a non-zero exit status. Note that we do this
 # instead of `exit !@FILE_ERROR`, as the `--invalid-bytes-failure` flag sets an `at_exit` earlier in

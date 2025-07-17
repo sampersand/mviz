@@ -1,0 +1,47 @@
+#!/usr/bin/env ruby
+require 'tempfile'
+require 'shellwords'
+
+# Prepend `mviz` to it
+ENV['PATH'] = File.dirname(__dir__) + ':' + ENV['PATH']
+
+def mviz(p:, t:, a:) = `mviz --prefix=#{p} --trailing-newline=#{t} #{a}`
+def exp(wanted, **rest) got = mviz(**rest);
+  abort "for: #{rest}\nwanted: #{wanted.inspect}\ngot:#{got.inspect}" unless got == wanted end
+def str_pfx(*a)
+  a.each_with_index.map { |arg, idx| "%5d: %s" % [idx + 1, arg] }.join("\n") end
+
+t = Tempfile.new
+t.write 'foo'; t.flush
+P = t.path.shellescape
+
+%w[auto always never].each do |prefix|
+  %w[auto always never].each do |trailing_nl|
+    # ARGUMENTS
+    [%w'foo', %w'foo bar', %w'foo bar baz'].each do |args|
+      expected = if prefix == 'never' || prefix == 'auto' && args.length == 1
+        args.join("\n")
+      else
+        str_pfx(*args)
+      end
+      expected.concat "\n" if trailing_nl != 'never'
+      exp expected, p: prefix, t: trailing_nl, a: args.join(' ')
+    end
+
+    # STDIN
+    exp "foo" + (trailing_nl == 'always' ? "\n" : ""), p: prefix, t: trailing_nl, a: "< #{P}"
+
+    # FILES
+    if prefix == 'never' || prefix == 'auto'
+      exp "foo" + (trailing_nl == 'never' ? "" : "\n"), p: prefix, t: trailing_nl, a: "-f #{P}"
+    else
+      exp "==[#{P}]==\nfoo" + (trailing_nl == 'never' ? "" : "\n"), p: prefix, t: trailing_nl, a: "-f #{P}"
+    end
+
+    if prefix == 'never'
+      exp "foo\nfoo" + (trailing_nl == 'never' ? "" : "\n"), p: prefix, t: trailing_nl, a: "-f #{P} #{P}"
+    else
+      exp "==[#{P}]==\nfoo\n==[#{P}]==\nfoo" + (trailing_nl == 'never' ? "" : "\n"), p: prefix, t: trailing_nl, a: "-f #{P} #{P}"
+    end
+  end
+end
