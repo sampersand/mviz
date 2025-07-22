@@ -1,12 +1,14 @@
 # The `mviz` command
-A modern alternative to `viz`: a way visualize invisible and invalid bytes in different encodings.
+A modern alternative to `vis`: a way visualize invisible and invalid bytes in different encodings.
 
 `mviz` is essentially a replacement for interactive use of `echo` or `cat`: Instead of `echo "$variable"` or `cat file.txt`, which (on most terminals) hide invisible characters (like `\x01`), you instead do `mviz "$variable"` or `mviz -f file.txt`.
 
 # Examples
 `mviz` is designed with sensible defaults in mind; its default behaviour is what you want most of the time, but it can easily (and sensibly) be changed with options
 
-![basic usages of mviz](imgs/intro.png)
+![basic usages of mviz](imgs/intro1.png)
+![basic usages of mviz](imgs/intro2.png)
+![basic usages of mviz](imgs/intro3.png)
 
 <!--
 ```sh
