@@ -6,8 +6,13 @@ A modern alternative to `vis`: a way visualize invisible and invalid bytes in di
 # Examples
 `mviz` is designed with sensible defaults in mind; its default behaviour is what you want most of the time, but it can easily (and sensibly) be changed with options
 
+Hm... let's try inspecting a variable
 ![basic usages of mviz](imgs/intro1.png)
+
+What else can `mviz` do?
 ![basic usages of mviz](imgs/intro2.png)
+
+It's even usable with pipes!
 ![basic usages of mviz](imgs/intro3.png)
 
 <!--
