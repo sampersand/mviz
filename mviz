@@ -409,6 +409,7 @@ $prefixes = :auto
 $trailing_newline = :auto
 $escape_surronding_spaces = true
 $expect_arguments = false
+$from_stdin = true
 
 ## Parse Options
 OptParse.new do |op|
@@ -502,6 +503,10 @@ OptParse.new do |op|
 
   op.on '-f', '--[no-]files', 'Interpret all args as filenames, instead of literal strings' do |f|
     $files = f
+  end
+
+  op.on '--[no-]stdin', 'Read from stdin if no arguments are given [default]' do |stdin|
+    $from_stdin = stdin
   end
 
   op.on '--[no-]expect-arguments', 'Aborts if no arguments are supplied, instead of defaulting to',
@@ -798,6 +803,9 @@ if $*.empty?
   if $files
     abort '-f/--files supplied, but no files given'
   end
+
+  # Exit early if `--no-stdin` was supplied
+  exit unless $from_stdin
 
   # if $stdin.tty?
   #   abort "no arguments given, and stdin was detected to be a tty\n\nuse -h for short help or --help for long help\n"
