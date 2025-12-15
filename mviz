@@ -464,7 +464,7 @@ OptParse.new do |op|
       -f              Interpret all arguments as filenames, not strings
       -c              Check if any escapes are printed, and exit nonzero if so.
       -q              Don't output anything. (Useful with -c)
-      -n              Disable prefixes, and the trailing newline
+      -1 / -n         Disable prefixes (-n also disables trailing newline)
     #{BOLD_BEGIN}ESCAPES#{BOLD_END} (Mutually exclusive; Uppercase escapes control illegal bytes)
       -x (-X)         Print in hex notation
       -o (-O)         Print in octal notation
@@ -540,7 +540,11 @@ OptParse.new do |op|
     $trailing_newline = tnl
   end
 
-  op.on '-n', 'Same as --prefixes=never --trailing-newline=never' do
+  op.on '-1', 'Same as --no-prefixes' do
+    $prefixes = false
+  end
+
+  op.on '-n', 'Same as --no-prefixes --no-trailing-newline' do
     $prefixes = $trailing_newline = false
   end
 
@@ -806,6 +810,7 @@ if $*.empty?
 
   # Exit early if `--no-stdin` was supplied
   exit unless $from_stdin
+  exit if $from_stdin == :auto && ($stdin.tty? || !$stdout.tty?) # TODO: will this bite us?
 
   # if $stdin.tty?
   #   abort "no arguments given, and stdin was detected to be a tty\n\nuse -h for short help or --help for long help\n"
