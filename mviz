@@ -414,7 +414,7 @@ $from_stdin = true
 ## Parse Options
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
-  op.version = '0.15.0'
+  op.version = '0.16.0'
   op.banner = <<~BANNER
   #{STANDOUT_BEGIN}usage#{STANDOUT_END}: #{BOLD_BEGIN}#{PROGRAM_NAME} [options]#{BOLD_END}#{' '*30}read from stdin
          #{BOLD_BEGIN}#{PROGRAM_NAME} [options] STRING [STRING...]#{BOLD_END} #{' '*10}print strings
@@ -781,10 +781,10 @@ OptParse.new do |op|
   #                                         Parse Options                                          #
   ##################################################################################################
 
-  # Parse the options; Note that `op.parse!` handles `POSIXLY_CORRECT` internally to determine if
-  # flags should be allowed to come after arguments.
+  # Parse the options; Note that `op.order!` requires flags to come first. I've found this is better
+  # than letting them be interspersed, as occasionally i'll do `p $@` and end up with a random falg
   begin
-    op.parse!
+    op.order!
   rescue OptionParser::ParseError => err # Only gracefully exit with optparse errors.
     abort err
   end
