@@ -796,7 +796,7 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-if $from_stdin == :auto
+if $from_stdin == :auto # Unsure if I want this
   $from_stdin = !$stdin.tty? && $stdout.tty?
 end
 
@@ -807,12 +807,8 @@ if $*.empty?
     abort '-f/--files supplied, but no files given'
   end
 
-  # Exit early if `--stdin` was supplied
+  # Exit early unless `--stdin` was supplied
   exit unless $from_stdin
-
-  # if $stdin.tty?
-  #   abort "no arguments given, and stdin was detected to be a tty\n\nuse -h for short help or --help for long help\n"
-  # end
 
   # Handle the no-argument case as if `--no-prefixes -f -` were passed
   $*.replace %w[-]
@@ -821,9 +817,9 @@ if $*.empty?
   $trailing_newline = false if $trailing_newline == :auto
 end
 
-$PREFIXES_NIL=$prefixes = $*.length > 1 if $prefixes == :auto
-$quiet and $stdout = File.open(File::NULL, 'w')
-$trailing_newline = $*.length >= 1 if $trailing_newline == :auto
+$quiet                     and $stdout = File.open(File::NULL, 'w')
+$prefixes == :auto         and $prefixes = $*.length > 1
+$trailing_newline == :auto and $trailing_newline = $*.length >= 1
 
 PatternAndAction.build!
 
