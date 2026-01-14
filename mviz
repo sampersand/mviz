@@ -408,7 +408,7 @@ $files = false
 $prefixes = :auto
 $trailing_newline = :auto
 $escape_surronding_spaces = true
-$from_stdin = :auto
+$from_stdin = false
 
 ## Parse Options
 OptParse.new do |op|
@@ -461,6 +461,7 @@ OptParse.new do |op|
     #{BOLD_BEGIN}usage: #{PROGRAM_NAME} [options] [string ...]#{BOLD_END}
       --help          Print a longer help message with more options
       -f              Interpret all arguments as filenames, not strings
+      -s              Read input from stdin if no 'string's are supplied.
       -c              Check if any escapes are printed, and exit nonzero if so.
       -q              Don't output anything. (Useful with -c)
       -1 / -n         Disable prefixes (-n also disables trailing newline)
@@ -474,7 +475,7 @@ OptParse.new do |op|
       -C              Replace escaped chars with their "control pictures"
     #{BOLD_BEGIN}ESCAPE SHORTHANDS#{BOLD_END}
       -l / -w         Don't escape newlines / newlines, tabs, or spaces.
-      -s / -S         Escape spaces by highlighting it / with "pictures".
+      -S / -_         Escape spaces by highlighting it / with "pictures".
       -B              Escape backslashes. (default unless color or "ESCAPES" given)
       -m              Escape multibyte characters with their Unicode codepoint.
       -a              Escape _every_ character. (Must be used with an "ESCAPES")
@@ -504,7 +505,7 @@ OptParse.new do |op|
     $files = f
   end
 
-  op.on '--[no-]stdin', 'Read from stdin if no arguments are given [default]' do |stdin|
+  op.on '-s', '--[no-]stdin', 'Read from stdin if no arguments are given [default]' do |stdin|
     $from_stdin = stdin
   end
 
@@ -621,11 +622,11 @@ OptParse.new do |op|
     PatternAndAction.add_pattern_and_action(/[\n\t ]/, Action::PRINT)
   end
 
-  op.on '-s', "Escape spaces with highlights. (Same as --highlight=' ')" do
+  op.on '-S', "Escape spaces with highlights. (Same as --highlight=' ')" do
     PatternAndAction.add_pattern_and_action(/ /, Action::HIGHLIGHT)
   end
 
-  op.on '-S', "Escape spaces with a \"picture\". (Same as --picture=' ')" do
+  op.on '-_', "Escape spaces with a \"picture\". (Same as --picture=' ')" do
     PatternAndAction.add_pattern_and_action(/ /, Action::PICTURE)
   end
 
@@ -797,9 +798,8 @@ if $*.empty?
     abort '-f/--files supplied, but no files given'
   end
 
-  # Exit early if `--no-stdin` was supplied
+  # Exit early if `--stdin` was supplied
   exit unless $from_stdin
-  exit if $from_stdin == :auto && ($stdin.tty? || !$stdout.tty?) # TODO: will this bite us?
 
   # if $stdin.tty?
   #   abort "no arguments given, and stdin was detected to be a tty\n\nuse -h for short help or --help for long help\n"
