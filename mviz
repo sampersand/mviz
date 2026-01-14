@@ -1,4 +1,4 @@
-#!/usr/bin/env ruby
+#!/usr/bin/env -S ruby --disable=all
 # -*- encoding: UTF-8; frozen-string-literal: true -*-
 # (NOTE: The UTF-8 encoding above is to override whatever `RUBYOPT` may have supplied, as we want
 # strings in this file to be UTF-8, because I haven't tested with others.)
@@ -409,7 +409,7 @@ $prefixes = :auto
 $trailing_newline = :auto
 $escape_surronding_spaces = true
 $expect_arguments = false
-$from_stdin = true
+$from_stdin = :auto
 
 ## Parse Options
 OptParse.new do |op|
