@@ -408,7 +408,6 @@ $files = false
 $prefixes = :auto
 $trailing_newline = :auto
 $escape_surronding_spaces = true
-$expect_arguments = false
 $from_stdin = :auto
 
 ## Parse Options
@@ -507,11 +506,6 @@ OptParse.new do |op|
 
   op.on '--[no-]stdin', 'Read from stdin if no arguments are given [default]' do |stdin|
     $from_stdin = stdin
-  end
-
-  op.on '--[no-]expect-arguments', 'Aborts if no arguments are supplied, instead of defaulting to',
-                                   'reading from stdin'  do |ea|
-    $expect_arguments = ea
   end
 
   ##################################################################################################
@@ -798,11 +792,6 @@ end
 
 # Handle when there's no arguments
 if $*.empty?
-  # If we've opted out of reading from stdin, check that.
-  if $expect_arguments
-    abort '--expect-arguments supplied, but no arguments provided'
-  end
-
   # If `-f` was explicitly supplied, then we must always have arguments
   if $files
     abort '-f/--files supplied, but no files given'
