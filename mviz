@@ -473,10 +473,10 @@ OptParse.new do |op|
       -x (-X)         Print in hex notation
       -o (-O)         Print in octal notation
       -d (-D)         Delete from the output
-      -p (-P)         Print unchanged
+      -u (-U)         Print unchanged
       -. (-@)         Replace with a period ('.')
       -r (-R)         Replace with the replacement character (#{Action::REPLACEMENT_CHARACTER_REPR})
-      -C              Replace escaped chars with their "control pictures"
+      -p              Replace escaped chars with "pictures"
     #{BOLD_BEGIN}ESCAPE SHORTHANDS#{BOLD_END}
       -l / -w         Don't escape newlines / newlines, tabs, or spaces.
       -S / -_         Escape spaces by highlighting it / with "pictures".
@@ -670,7 +670,7 @@ OptParse.new do |op|
     Pattern.raw_default = Pattern::NONE
   end
 
-  op.on '-p', 'Same as --default-action=print' do
+  op.on '-u', 'Same as --default-action=print (-u b/c "unchanged")' do
     Action.default = Action::PRINT
   end
 
@@ -694,7 +694,7 @@ OptParse.new do |op|
     Action.default = Action::OCTAL
   end
 
-  op.on '-C', 'Same as --default-action=picture (`-C` b/c "control pic")' do
+  op.on '-p', 'Same as --default-action=picture' do
     Action.default = Action::PICTURE
   end
 
@@ -727,7 +727,7 @@ OptParse.new do |op|
     Action.error = Action::DELETE
   end
 
-  op.on '-P', 'Same as --invalid-action=print' do
+  op.on '-U', 'Same as --invalid-action=print' do
     Action.error = Action::PRINT
   end
 
