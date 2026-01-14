@@ -1,4 +1,4 @@
-#!/usr/bin/env -S ruby --disable=all
+#!/usr/bin/env ruby
 # -*- encoding: UTF-8; frozen-string-literal: true -*-
 # (NOTE: The UTF-8 encoding above is to override whatever `RUBYOPT` may have supplied, as we want
 # strings in this file to be UTF-8, because I haven't tested with others.)
@@ -24,6 +24,8 @@
 # fully portable, and `dup`ing 1MB isn't that big of a deal.)
 ##
 ARGV.replace ARGV.map { |arg| (+arg).force_encoding('binary') }
+
+VERSION = '0.17.0' # Put the version at the top, so it's easily viewable
 
 ####################################################################################################
 #                                                                                                  #
@@ -413,15 +415,17 @@ $from_stdin = :auto
 ## Parse Options
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
-  op.version = '0.16.0'
+  op.version = VERSION
   op.banner = <<~BANNER
   #{STANDOUT_BEGIN}usage#{STANDOUT_END}: #{BOLD_BEGIN}#{PROGRAM_NAME} [options]#{BOLD_END}#{' '*30}read from stdin
          #{BOLD_BEGIN}#{PROGRAM_NAME} [options] STRING [STRING...]#{BOLD_END} #{' '*10}print strings
          #{BOLD_BEGIN}#{PROGRAM_NAME} [options] -f FILE [FILE...]#{BOLD_END}  #{' '*10}read from files
+         #{BOLD_BEGIN}#{PROGRAM_NAME} [options] -s #{BOLD_END}                #{' '*10}read from stdin
   BANNER
 
   # Support `--debug`, but don't show it in the argument list
-  op.base.long['debug'] = OptParse::Switch::NoArgument.new { $-d = $-v = true }
+  def (op.define('--debug') { $-d = $-v = true }).summarize(*) end
+  # op.base.long['debug'] = OptParse::Switch::NoArgument.new { $-d = $-v = true }
 
   ## Accept actions
   # (There's no `op.accept :PATTERN`, as patterns are only created after all arguments are parsed,
