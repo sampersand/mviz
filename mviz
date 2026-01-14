@@ -408,7 +408,7 @@ $files = false
 $prefixes = :auto
 $trailing_newline = :auto
 $escape_surronding_spaces = true
-$from_stdin = false
+$from_stdin = :auto
 
 ## Parse Options
 OptParse.new do |op|
@@ -505,7 +505,8 @@ OptParse.new do |op|
     $files = f
   end
 
-  op.on '-s', '--[no-]stdin', 'Read from stdin if no arguments are given [default]' do |stdin|
+  op.on '-s', '--[no-]stdin[=WHEN]', :WHEN, 'Read from stdin if no arguments given. [default: auto',
+                                            'which means only if stdin isnt a tty and stdout is]' do |stdin|
     $from_stdin = stdin
   end
 
@@ -790,6 +791,10 @@ end
 #                                      Defaults for Arguments                                      #
 #                                                                                                  #
 ####################################################################################################
+
+if $from_stdin == :auto
+  $from_stdin = !$stdin.tty? && $stdout.tty?
+end
 
 # Handle when there's no arguments
 if $*.empty?
