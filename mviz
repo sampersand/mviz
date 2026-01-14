@@ -509,10 +509,11 @@ OptParse.new do |op|
     $files = f
   end
 
-  op.on '-s', '--[no-]stdin[=WHEN]', :WHEN, 'Read from stdin if no arguments given. [default: auto',
+  op.on '--[no-]stdin[=WHEN]', :WHEN, 'Read from stdin if no arguments given. [default: auto',
                                             'which means only if stdin isnt a tty and stdout is]' do |stdin|
     $from_stdin = stdin
   end
+  op.on '-s', 'Same as --stdin' do $from_stdin = true end
 
   ##################################################################################################
   #                                            Outputs                                             #
