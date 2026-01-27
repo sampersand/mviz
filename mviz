@@ -54,16 +54,11 @@ def warn(message)  super "#{PROGRAM_NAME}: #{message}" end
 
 ####################################################################################################
 #                                                                                                  #
-#                                            Constants                                             #
+#                                              Colors                                              #
 #                                                                                                  #
 ####################################################################################################
 
-# (Note: Just like Ruby's `STDOUT` and `$stdout` pairing, some of these constants also have an
-# associated global variable which is normally used; the constant exists as the "initial" value.)
-
-# Whether POSIX-ly correct defaults should be used.
-IS_POSIXLY_CORRECT = ENV.key?('POSIXLY_CORRECT')
-
+# List of colours that are used. We support both the `NO_COLOR` and `FORCE_COLOR` standards.
 module Color
   # Strings to surround all escaped characters with; Defaults to "invert color"
   STANDOUT_BEGIN = ENV.fetch('P_STANDOUT_BEGIN', "\e[7m")
@@ -424,7 +419,7 @@ end
 
 
 ## Set defaults for globals; user-supplied options can change these.
-$encoding = IS_POSIXLY_CORRECT ? Encoding.find('locale') : Encoding::UTF_8
+$encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
 $malformed_error = true
 $escape_error = false
 $quiet = false

@@ -159,7 +159,7 @@ The `mviz` command has numerous environment variables it relies on:
 | Variable | Description |
 |----------|-------------|
 | `FORCE_COLOR`, `NO_COLOR` | Controls `--color=auto`. If FORCE_COLOR is set and nonempty, acts like `--color=always`. Else, if NO_COLOR is set and nonempty, acts like `--color=never`. If neither is set to a non-empty value, `--color=auto` defaults to `--color=always` when stdout is a tty. |
-| `POSIXLY_CORRECT` | If present, changes the default `--encoding` to be `locale` (cf locale(1).), and also disables parsing switches after arguments (e.g. passing in `foo -x` as arguments will not interpret `-x` as a switch). |
+| `POSIXLY_CORRECT` | If present, changes the default `--encoding` to be `locale` (cf locale(1).). |
 | `P_STANDOUT_BEGIN`, `P_STANDOUT_END` | Beginning and ending escape sequences for --colour; Usually don't need to be set, as they have sane defaults. |
 | `P_STANDOUT_ERR_BEGIN`, `P_STANDOUT_ERR_END` | Like `P_STANDOUT_BEGIN`/`P_STANDOUT_END`, except for invalid bytes (eg `\xC3` in UTF-8) |
 | `LC_ALL`, `LC_CTYPE`, `LANG` | Checked (in that order) for the encoding when `--encoding=locale` is used. |
