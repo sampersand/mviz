@@ -75,16 +75,16 @@ USE_COLOR = $use_color =
 IS_POSIXLY_CORRECT = ENV.key?('POSIXLY_CORRECT')
 
 # Strings to surround all escaped characters with; Defaults to "invert color"
-def (STANDOUT_BEGIN = [ENV.fetch('P_STANDOUT_BEGIN', "\e[7m")]).to_s = $use_color ? super : ''
-def (STANDOUT_END   = [ENV.fetch('P_STANDOUT_END',   "\e[27m")]).to_s = $use_color ? super : ''
+def (STANDOUT_BEGIN = [ENV.fetch('P_STANDOUT_BEGIN', "\e[7m")]).to_s = $use_color ? join('') : ''
+def (STANDOUT_END   = [ENV.fetch('P_STANDOUT_END',   "\e[27m")]).to_s = $use_color ? join('') : ''
 
 # Like `STANDOUT_XXX`, but for encoding errors. Defaults to "red background, light grey foreground"
-def (STANDOUT_ERR_BEGIN = [ENV.fetch('P_STANDOUT_ERR_BEGIN', "\e[37m\e[41m")]).to_s = $use_color ? super : ''
-def (STANDOUT_ERR_END   = [ENV.fetch('P_STANDOUT_ERR_END',   "\e[49m\e[39m")]).to_s = $use_color ? super : ''
+def (STANDOUT_ERR_BEGIN = [ENV.fetch('P_STANDOUT_ERR_BEGIN', "\e[37m\e[41m")]).to_s = $use_color ? join('') : ''
+def (STANDOUT_ERR_END   = [ENV.fetch('P_STANDOUT_ERR_END',   "\e[49m\e[39m")]).to_s = $use_color ? join('') : ''
 
 # Bold escape sequences; Bold is only used in help message and headers when files are given.
-def (BOLD_BEGIN = [ENV.fetch('P_BOLD_BEGIN', "\e[1m")]).to_s = $use_color ? super : ''
-def (BOLD_END   = [ENV.fetch('P_BOLD_END',   "\e[0m")]).to_s = $use_color ? super : ''
+def (BOLD_BEGIN = [ENV.fetch('P_BOLD_BEGIN', "\e[1m")]).to_s = $use_color ? join('') : ''
+def (BOLD_END   = [ENV.fetch('P_BOLD_END',   "\e[0m")]).to_s = $use_color ? join('') : ''
 
 ####################################################################################################
 #                                                                                                  #
