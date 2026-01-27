@@ -25,7 +25,7 @@
 ##
 ARGV.replace ARGV.map { |arg| (+arg).force_encoding('binary') }
 
-VERSION = '0.17.0' # Put the version at the top, so it's easily viewable
+VERSION = '0.17.1' # Put the version at the top, so it's easily viewable
 
 ####################################################################################################
 #                                                                                                  #
@@ -75,16 +75,16 @@ USE_COLOR = $use_color =
 IS_POSIXLY_CORRECT = ENV.key?('POSIXLY_CORRECT')
 
 # Strings to surround all escaped characters with; Defaults to "invert color"
-STANDOUT_BEGIN = $standout_begin = ($use_color ? ENV.fetch('P_STANDOUT_BEGIN', "\e[7m") : nil)
-STANDOUT_END   = $standout_end   = ($use_color ? ENV.fetch('P_STANDOUT_END',   "\e[27m") : nil)
+STANDOUT_BEGIN = ENV.fetch('P_STANDOUT_BEGIN', "\e[7m")
+STANDOUT_END   = ENV.fetch('P_STANDOUT_END',   "\e[27m")
 
 # Like `STANDOUT_XXX`, but for encoding errors. Defaults to "red background, light grey foreground"
-STANDOUT_ERR_BEGIN = ($use_color ? ENV.fetch('P_STANDOUT_ERR_BEGIN', "\e[37m\e[41m") : nil)
-STANDOUT_ERR_END   = ($use_color ? ENV.fetch('P_STANDOUT_ERR_END',   "\e[49m\e[39m") : nil)
+STANDOUT_ERR_BEGIN = ENV.fetch('P_STANDOUT_ERR_BEGIN', "\e[37m\e[41m")
+STANDOUT_ERR_END   = ENV.fetch('P_STANDOUT_ERR_END',   "\e[49m\e[39m")
 
 # Bold escape sequences; Bold is only used in help message and headers when files are given.
-BOLD_BEGIN = ($use_color ? ENV.fetch('P_BOLD_BEGIN', "\e[1m") : nil)
-BOLD_END   = ($use_color ? ENV.fetch('P_BOLD_END',   "\e[0m") : nil)
+BOLD_BEGIN = ENV.fetch('P_BOLD_BEGIN', "\e[1m")
+BOLD_END   = ENV.fetch('P_BOLD_END',   "\e[0m")
 
 ####################################################################################################
 #                                                                                                  #
@@ -416,11 +416,11 @@ $from_stdin = :auto
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
   op.version = VERSION
-  op.banner = <<~BANNER
-  #{STANDOUT_BEGIN}usage#{STANDOUT_END}: #{BOLD_BEGIN}#{PROGRAM_NAME} [options]#{BOLD_END}#{' '*30}read from stdin
-         #{BOLD_BEGIN}#{PROGRAM_NAME} [options] STRING [STRING...]#{BOLD_END} #{' '*10}print strings
-         #{BOLD_BEGIN}#{PROGRAM_NAME} [options] -f FILE [FILE...]#{BOLD_END}  #{' '*10}read from files
-         #{BOLD_BEGIN}#{PROGRAM_NAME} [options] -s #{BOLD_END}                #{' '*10}read from stdin
+  def op.banner = <<~BANNER
+  #{STANDOUT_BEGIN if $use_color}usage#{STANDOUT_END if $use_color}: #{BOLD_BEGIN if $use_color}#{PROGRAM_NAME} [options]#{BOLD_END if $use_color}#{' '*30}read from stdin
+         #{BOLD_BEGIN if $use_color}#{PROGRAM_NAME} [options] STRING [STRING...]#{BOLD_END if $use_color} #{' '*10}print strings
+         #{BOLD_BEGIN if $use_color}#{PROGRAM_NAME} [options] -f FILE [FILE...]#{BOLD_END if $use_color}  #{' '*10}read from files
+         #{BOLD_BEGIN if $use_color}#{PROGRAM_NAME} [options] -s #{BOLD_END if $use_color}                #{' '*10}read from stdin
   BANNER
 
   # Support `--debug`, but don't show it in the argument list
@@ -447,9 +447,16 @@ OptParse.new do |op|
     end
   end
 
-  # Define a custom `separator` function to add bold to each section
+  # Define a custom `separator` function to add bold to each section. We have to use
+  # this hack to ensure `NO_COLOR=1 mviz --color=always --help` prints out colour help
+  # messages
   def op.section(title, additional = nil)
-    separator "\n#{BOLD_BEGIN}#{title}#{BOLD_END}#{additional && ' '}#{additional}"
+    sep = Object.new
+    sep.define_singleton_method(:summarize) do |*, &bl|
+      "\n#{BOLD_BEGIN if $use_color}#{title}#{BOLD_END if $use_color}#{additional && ' '}#{additional}"
+        .each_line(&bl)
+    end
+    separator sep
   end
 
   # We can't use an `op.accept :PATTERN` here to create regex patterns because we only know the
@@ -462,14 +469,14 @@ OptParse.new do |op|
 
   op.on '-h', 'Print a shorter help message and exit' do
     puts <<~EOS
-    #{BOLD_BEGIN}usage: #{PROGRAM_NAME} [options] [string ...]#{BOLD_END}
+    #{BOLD_BEGIN if $use_color}usage: #{PROGRAM_NAME} [options] [string ...]#{BOLD_END if $use_color}
       --help          Print a longer help message with more options
       -f              Interpret all arguments as filenames, not strings
       -s              Read input from stdin if no 'string's are supplied.
       -c              Check if any escapes are printed, and exit nonzero if so.
       -q              Don't output anything. (Useful with -c)
       -1 / -n         Disable prefixes (-n also disables trailing newline)
-    #{BOLD_BEGIN}ESCAPES#{BOLD_END} (Mutually exclusive; Uppercase escapes control illegal bytes)
+    #{BOLD_BEGIN if $use_color}ESCAPES#{BOLD_END if $use_color} (Mutually exclusive; Uppercase escapes control illegal bytes)
       -x (-X)         Print in hex notation
       -o (-O)         Print in octal notation
       -d (-D)         Delete from the output
@@ -477,13 +484,13 @@ OptParse.new do |op|
       -. (-@)         Replace with a period ('.')
       -r (-R)         Replace with the replacement character (#{Action::REPLACEMENT_CHARACTER_REPR})
       -p              Replace escaped chars with "pictures"
-    #{BOLD_BEGIN}ESCAPE SHORTHANDS#{BOLD_END}
+    #{BOLD_BEGIN if $use_color}ESCAPE SHORTHANDS#{BOLD_END if $use_color}
       -l / -w         Don't escape newlines / newlines, tabs, or spaces.
       -S / -_         Escape spaces by highlighting it / with "pictures".
       -B              Escape backslashes. (default unless color or "ESCAPES" given)
       -m              Escape multibyte characters with their Unicode codepoint.
       -a              Escape _every_ character. (Must be used with an "ESCAPES")
-    #{BOLD_BEGIN}INPUT DATA#{BOLD_END} (UTF-8 is default unless POSIXLY_CORRECT is set)
+    #{BOLD_BEGIN if $use_color}INPUT DATA#{BOLD_END if $use_color} (UTF-8 is default unless POSIXLY_CORRECT is set)
       -E encoding     Specify the (ASCII-compatible) encoding.
       -b / -A / -8    Shorthands for specifying encoding as BINARY / ASCII / UTF-8
     EOS
@@ -822,6 +829,11 @@ $quiet                     and $stdout = File.open(File::NULL, 'w')
 $prefixes == :auto         and $prefixes = $*.length > 1
 $trailing_newline == :auto and $trailing_newline = $*.length >= 1
 
+if $use_color
+  $standout_begin = STANDOUT_BEGIN
+  $standout_end = STANDOUT_END
+end
+
 PatternAndAction.build!
 
 ####################################################################################################
@@ -1031,7 +1043,7 @@ ARGV.each_with_index do |filename, idx|
 
   ## Print out the filename, a colon, and a space if prefixes were requested.
   puts if idx.nonzero?
-  print BOLD_BEGIN, "==[#{filename}]==", BOLD_END, "\n" if $prefixes
+  print (BOLD_BEGIN if $use_color), "==[#{filename}]==", (BOLD_END), "\n" if $prefixes
 
   ## Print the escapes for the file
   print_escapes file
