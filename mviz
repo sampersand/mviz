@@ -61,30 +61,52 @@ def warn(message)  super "#{PROGRAM_NAME}: #{message}" end
 # (Note: Just like Ruby's `STDOUT` and `$stdout` pairing, some of these constants also have an
 # associated global variable which is normally used; the constant exists as the "initial" value.)
 
-# Whether visual effects should be enabled by default.
-USE_COLOR = $use_color =
-  if ENV.fetch('FORCE_COLOR', '') != ''
-    true
-  elsif ENV.fetch('NO_COLOR', '') != ''
-    false
-  else
-    $stdout.tty?
-  end
-
 # Whether POSIX-ly correct defaults should be used.
 IS_POSIXLY_CORRECT = ENV.key?('POSIXLY_CORRECT')
 
-# Strings to surround all escaped characters with; Defaults to "invert color"
-STANDOUT_BEGIN = ENV.fetch('P_STANDOUT_BEGIN', "\e[7m")
-STANDOUT_END   = ENV.fetch('P_STANDOUT_END',   "\e[27m")
+module Color
+  # Strings to surround all escaped characters with; Defaults to "invert color"
+  STANDOUT_BEGIN = ENV.fetch('P_STANDOUT_BEGIN', "\e[7m")
+  STANDOUT_END   = ENV.fetch('P_STANDOUT_END',   "\e[27m")
 
-# Like `STANDOUT_XXX`, but for encoding errors. Defaults to "red background, light grey foreground"
-STANDOUT_ERR_BEGIN = ENV.fetch('P_STANDOUT_ERR_BEGIN', "\e[37m\e[41m")
-STANDOUT_ERR_END   = ENV.fetch('P_STANDOUT_ERR_END',   "\e[49m\e[39m")
+  # Like `STANDOUT_XXX`, but for encoding errors. Defaults to "red background, light grey foreground"
+  STANDOUT_ERR_BEGIN = ENV.fetch('P_STANDOUT_ERR_BEGIN', "\e[37m\e[41m")
+  STANDOUT_ERR_END   = ENV.fetch('P_STANDOUT_ERR_END',   "\e[49m\e[39m")
 
-# Bold escape sequences; Bold is only used in help message and headers when files are given.
-BOLD_BEGIN = ENV.fetch('P_BOLD_BEGIN', "\e[1m")
-BOLD_END   = ENV.fetch('P_BOLD_END',   "\e[0m")
+  # Bold escape sequences; Bold is only used in help message and headers when files are given.
+  BOLD_BEGIN = ENV.fetch('P_BOLD_BEGIN', "\e[1m")
+  BOLD_END   = ENV.fetch('P_BOLD_END',   "\e[0m")
+
+  # Whether visual effects should be enabled by default.
+  DEFAULT = @enabled =
+    if ENV.fetch('FORCE_COLOR', '') != ''
+      true
+    elsif ENV.fetch('NO_COLOR', '') != ''
+      false
+    else
+      $stdout.tty?
+    end
+
+  class << self
+    attr_writer :enabled
+
+    # If `FORCE_COLOR` is turned on, then we're always enabled. Otherwise, use
+    # the instance variable.
+    if ENV.fetch('FORCE_COLOR', '') != ''
+      def enabled?; true end
+    else
+      def enabled?; @enabled end
+    end
+
+    def bold(msg)
+      enabled? ? "#{BOLD_BEGIN}#{msg}#{BOLD_END}" : msg
+    end
+
+    def standout(msg)
+      enabled? ? "#{STANDOUT_BEGIN}#{msg}#{STANDOUT_END}" : msg
+    end
+  end
+end
 
 ####################################################################################################
 #                                                                                                  #
@@ -198,7 +220,7 @@ module Action
   # 5. Everything else is printed verbatim
   DEFAULT = ->char do
     case char
-    when $use_color && '\\' # Early return the backslash when using colors so C_ESCAPES wont take it
+    when Color.enabled? && '\\' # Early return the backslash when using colors so C_ESCAPES wont take it
       char
     when C_ESCAPES_MAP.method(:key?)
       C_ESCAPES.call(char)
@@ -322,7 +344,7 @@ module Pattern
 
         # If we're using the default action, and we're using colors, then also add backslash to the
         # list of escapes. We need to use a double backslash so it interpolates correctly.
-        regex.concat '\\\\' if Action.default == Action::DEFAULT && !$use_color
+        regex.concat '\\\\' if Action.default == Action::DEFAULT && !Color.enabled?
 
         # Finish the character class
         regex.concat ']'
@@ -417,10 +439,10 @@ OptParse.new do |op|
   op.program_name = PROGRAM_NAME
   op.version = VERSION
   def op.banner = <<~BANNER
-  #{STANDOUT_BEGIN if $use_color}usage#{STANDOUT_END if $use_color}: #{BOLD_BEGIN if $use_color}#{PROGRAM_NAME} [options]#{BOLD_END if $use_color}#{' '*30}read from stdin
-         #{BOLD_BEGIN if $use_color}#{PROGRAM_NAME} [options] STRING [STRING...]#{BOLD_END if $use_color} #{' '*10}print strings
-         #{BOLD_BEGIN if $use_color}#{PROGRAM_NAME} [options] -f FILE [FILE...]#{BOLD_END if $use_color}  #{' '*10}read from files
-         #{BOLD_BEGIN if $use_color}#{PROGRAM_NAME} [options] -s #{BOLD_END if $use_color}                #{' '*10}read from stdin
+  #{Color.standout 'usage'}: #{Color.bold "#{PROGRAM_NAME} [options]"}#{' '*30}read from stdin
+         #{Color.bold "#{PROGRAM_NAME} [options] STRING [STRING...]"} #{' '*10}print strings
+         #{Color.bold "#{PROGRAM_NAME} [options] -f FILE [FILE...]"}  #{' '*10}read from files
+         #{Color.bold "#{PROGRAM_NAME} [options] -s "}                #{' '*10}read from stdin
   BANNER
 
   # Support `--debug`, but don't show it in the argument list
@@ -453,8 +475,7 @@ OptParse.new do |op|
   def op.section(title, additional = nil)
     sep = Object.new
     sep.define_singleton_method(:summarize) do |*, &bl|
-      "\n#{BOLD_BEGIN if $use_color}#{title}#{BOLD_END if $use_color}#{additional && ' '}#{additional}"
-        .each_line(&bl)
+      "\n#{Color.bold title}#{additional && ' '}#{additional}".each_line(&bl)
     end
     separator sep
   end
@@ -469,14 +490,14 @@ OptParse.new do |op|
 
   op.on '-h', 'Print a shorter help message and exit' do
     puts <<~EOS
-    #{BOLD_BEGIN if $use_color}usage: #{PROGRAM_NAME} [options] [string ...]#{BOLD_END if $use_color}
+    #{Color.bold "usage: #{PROGRAM_NAME} [options] [string ...]"}
       --help          Print a longer help message with more options
       -f              Interpret all arguments as filenames, not strings
       -s              Read input from stdin if no 'string's are supplied.
       -c              Check if any escapes are printed, and exit nonzero if so.
       -q              Don't output anything. (Useful with -c)
       -1 / -n         Disable prefixes (-n also disables trailing newline)
-    #{BOLD_BEGIN if $use_color}ESCAPES#{BOLD_END if $use_color} (Mutually exclusive; Uppercase escapes control illegal bytes)
+    #{Color.bold 'ESCAPES'} (Mutually exclusive; Uppercase escapes control illegal bytes)
       -x (-X)         Print in hex notation
       -o (-O)         Print in octal notation
       -d (-D)         Delete from the output
@@ -484,13 +505,13 @@ OptParse.new do |op|
       -. (-@)         Replace with a period ('.')
       -r (-R)         Replace with the replacement character (#{Action::REPLACEMENT_CHARACTER_REPR})
       -p              Replace escaped chars with "pictures"
-    #{BOLD_BEGIN if $use_color}ESCAPE SHORTHANDS#{BOLD_END if $use_color}
+    #{Color.bold 'ESCAPE SHORTHANDS'}
       -l / -w         Don't escape newlines / newlines, tabs, or spaces.
       -S / -_         Escape spaces by highlighting it / with "pictures".
       -B              Escape backslashes. (default unless color or "ESCAPES" given)
       -m              Escape multibyte characters with their Unicode codepoint.
       -a              Escape _every_ character. (Must be used with an "ESCAPES")
-    #{BOLD_BEGIN if $use_color}INPUT DATA#{BOLD_END if $use_color} (UTF-8 is default unless POSIXLY_CORRECT is set)
+    #{Color.bold 'INPUT DATA'} (UTF-8 is default unless POSIXLY_CORRECT is set)
       -E encoding     Specify the (ASCII-compatible) encoding.
       -b / -A / -8    Shorthands for specifying encoding as BINARY / ASCII / UTF-8
     EOS
@@ -535,7 +556,7 @@ OptParse.new do |op|
   op.on '--[no-]color[=WHEN]', :WHEN, 'When to enable visual effects. (WHEN is always, never, auto).',
                                       'auto checks FORCE_COLOR/NO_COLOR, and if not set, enables only',
                                       'when stdout is a tty [default: auto]' do |color|
-    $use_color = (color == :auto ? USE_COLOR : color)
+    Color.enabled = (color == :auto ? Color::DEFAULT : color)
   end
 
   op.on '--[no-]prefixes[=WHEN]',:WHEN, 'When to output "prefixes". (WHEN is always, never, auto). auto',
@@ -829,9 +850,9 @@ $quiet                     and $stdout = File.open(File::NULL, 'w')
 $prefixes == :auto         and $prefixes = $*.length > 1
 $trailing_newline == :auto and $trailing_newline = $*.length >= 1
 
-if $use_color
-  $standout_begin = STANDOUT_BEGIN
-  $standout_end = STANDOUT_END
+if Color.enabled?
+  $standout_begin = Color::STANDOUT_BEGIN
+  $standout_end = Color::STANDOUT_END
 end
 
 PatternAndAction.build!
@@ -874,7 +895,7 @@ end
 
 # Visualizes `string` by surrounding it with the color escape sequences if color mode is enabled.
 # Also, sets the variable `$SOMETHING_ESCAPED` regardless of color mode for `--check-escapes`.
-if $use_color
+if Color.enabled?
   def visualize(string)
     $SOMETHING_ESCAPED = true
     "#$standout_begin#{string}#$standout_end"
@@ -901,8 +922,8 @@ ESCAPES_CACHE = Hash.new do |hash, key|
 
       # Replace the global variables for just this invocation.
       begin
-        $standout_begin = STANDOUT_ERR_BEGIN
-        $standout_end   = STANDOUT_ERR_END
+        $standout_begin = Color::STANDOUT_ERR_BEGIN
+        $standout_end   = Color::STANDOUT_ERR_END
         Action.error.call key
       ensure
         $standout_begin = STANDOUT_BEGIN
@@ -1043,7 +1064,7 @@ ARGV.each_with_index do |filename, idx|
 
   ## Print out the filename, a colon, and a space if prefixes were requested.
   puts if idx.nonzero?
-  print (BOLD_BEGIN if $use_color), "==[#{filename}]==", (BOLD_END), "\n" if $prefixes
+  puts Color.bold("==[#{filename}]==") if $prefixes
 
   ## Print the escapes for the file
   print_escapes file
