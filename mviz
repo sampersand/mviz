@@ -565,7 +565,7 @@ OptParse.new do |op|
   end
 
   op.on '-1', 'Same as --no-prefixes' do
-    $prefixes = false
+    $prefixes = false; $trailing_newline = true
   end
 
   op.on '-n', 'Same as --no-prefixes --no-trailing-newline' do
