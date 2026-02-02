@@ -433,7 +433,7 @@ $from_stdin = :auto
 OptParse.new do |op|
   op.program_name = PROGRAM_NAME
   op.version = VERSION
-  def op.banner = <<~BANNER
+  def op.banner; <<~BANNER end
   #{Color.standout 'usage'}: #{Color.bold "#{PROGRAM_NAME} [options]"}#{' '*30}read from stdin
          #{Color.bold "#{PROGRAM_NAME} [options] STRING [STRING...]"} #{' '*10}print strings
          #{Color.bold "#{PROGRAM_NAME} [options] -f FILE [FILE...]"}  #{' '*10}read from files
