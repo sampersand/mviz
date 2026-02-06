@@ -25,7 +25,7 @@
 ##
 ARGV.replace ARGV.map { |arg| (+arg).force_encoding('binary') }
 
-VERSION = '0.17.1' # Put the version at the top, so it's easily viewable
+VERSION = '0.17.2' # Put the version at the top, so it's easily viewable
 
 ####################################################################################################
 #                                                                                                  #
@@ -921,8 +921,8 @@ ESCAPES_CACHE = Hash.new do |hash, key|
         $standout_end   = Color::STANDOUT_ERR_END
         Action.error.call key
       ensure
-        $standout_begin = STANDOUT_BEGIN
-        $standout_end = STANDOUT_END
+        $standout_begin = Color::STANDOUT_BEGIN
+        $standout_end = Color::STANDOUT_END
       end
     else
       PatternAndAction.handle(key)
