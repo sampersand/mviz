@@ -863,7 +863,7 @@ $ENCODING_FAILED = $SOMETHING_ESCAPED = false
 
 # Optimization: Early exit for `--malformed-error` and `--check-escapes` if we're in quiet mode.
 if $quiet
-  $malformed_error and trace_var :$ENCODING_FAILED do exit 1 end
+  $malformed_error and trace_var :$ENCODING_FAILED do exit 2 end
   $escape_error    and trace_var :$SOMETHING_ESCAPED do exit 1 end
 end
 
