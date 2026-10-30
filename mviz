@@ -25,7 +25,7 @@
 ##
 ARGV.replace ARGV.map { |arg| (+arg).force_encoding('binary') }
 
-VERSION = '0.18.1' # Put the version at the top, so it's easily viewable
+VERSION = '0.18.2' # Put the version at the top, so it's easily viewable
 
 ####################################################################################################
 #                                                                                                  #
@@ -417,14 +417,13 @@ end
 
 ## Set defaults for globals; user-supplied options can change these.
 $encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
+$source = :auto
 $malformed_error = true
 $escape_error = false
 $quiet = false
-$files = false
 $prefixes = :auto
 $trailing_newline = :auto
 $escape_surronding_spaces = true
-$from_stdin = :auto
 
 ## Parse Options
 OptParse.new do |op|
@@ -434,7 +433,7 @@ OptParse.new do |op|
   #{Color.standout 'usage'}: #{Color.bold "#{PROGRAM_NAME} [options]"}#{' '*30}read from stdin
          #{Color.bold "#{PROGRAM_NAME} [options] STRING [STRING...]"} #{' '*10}print strings
          #{Color.bold "#{PROGRAM_NAME} [options] -f FILE [FILE...]"}  #{' '*10}read from files
-         #{Color.bold "#{PROGRAM_NAME} [options] -s "}                #{' '*10}read from stdin
+         #{Color.bold "#{PROGRAM_NAME} [options] -s"}                 #{' '*10}read from stdin
   BANNER
 
   # Support `--debug`, but don't show it in the argument list
@@ -484,10 +483,10 @@ OptParse.new do |op|
     puts <<~EOS
     #{Color.bold "usage: #{PROGRAM_NAME} [options] [string ...]"}
       --help          Print a longer help message with more options
-      -f              Interpret all arguments as filenames, not strings
-      -s              Read input from stdin if no 'string's are supplied.
-      -c              Check if any escapes are printed, and exit nonzero if so.
-      -q              Don't output anything. (Useful with -c)
+      -f              Interpret 'string' as files names.
+      -s              Read input from stdin; omit 'string'
+      --check         Check if any escapes are printed, and exit nonzero if so.
+      -q              Don't output anything. (Useful with --check)
       -1 / -n         Disable prefixes (-n also disables trailing newline)
     #{Color.bold 'ESCAPES'} (Mutually exclusive; Uppercase escapes control illegal bytes)
       -x (-X)         Print in hex notation
@@ -525,17 +524,16 @@ OptParse.new do |op|
     exit
   end
 
-  op.on '-f', '--[no-]files', 'Interpret all args as filenames, instead of literal strings' do |f|
-    $files = f
+  op.on '-f', '--files', 'Interpret args as filenames to read, not strings' do
+    $source = :files
   end
 
-  op.on '--[no-]stdin[=WHEN]', :WHEN, 'Read from stdin if no arguments given. [default: auto,',
-                                            'which means only if stdin isnt a tty and stdout is]' do |stdin|
-    $from_stdin = stdin
+  op.on '-s', '--stdin', 'Read from stdin if no arguments given; no strings accepted' do
+    $source = :stdin
   end
 
-  op.on '-s', 'Same as --stdin' do
-    $from_stdin = true
+  op.on '--strings', 'Interpret arguments as strings always' do
+    $source = :strings
   end
 
   ##################################################################################################
@@ -543,7 +541,7 @@ OptParse.new do |op|
   ##################################################################################################
   op.section 'OUTPUTS & ERROR CHECKING'
 
-  op.on '-q', '--[no-]quiet', 'Do not output anything. (Useful with -c or --malformed-error)' do |q|
+  op.on '-q', '--[no-]quiet', 'Do not output anything. (Useful with --check or --malformed-error)' do |q|
     $quiet = q
   end
 
@@ -576,8 +574,8 @@ OptParse.new do |op|
     $malformed_error = me
   end
 
-  op.on '-c', '--[no-]check-escapes', 'Exits with status 1 if any character is escaped. Useful to',
-                                      'check inputs programmatically to ensure they are "normal".' do |ee|
+  op.on '--[no-]check-escapes', 'Exits with status 1 if any character is escaped. Useful to',
+                                'check inputs programmatically to ensure they are "normal".' do |ee|
     $escape_error = ee
   end
 
@@ -820,26 +818,18 @@ end
 #                                                                                                  #
 ####################################################################################################
 
-if $from_stdin == :auto # Unsure if I want this
-  $from_stdin = !$stdin.tty? && $stdout.tty?
+if $source == :auto
+  if $*.empty? && !$stdin.tty? && $stdout.tty?
+    $source = :stdin
+  else
+    $source = :strings
+  end
 end
 
-# Handle when there's no arguments
-if $*.empty?
-  # If `-f` was explicitly supplied, then we must always have arguments
-  if $files
-    abort '-f/--files supplied, but no files given'
-  end
-
-  # Exit early unless `--stdin` was supplied
-  unless $from_stdin
-    PatternAndAction.build! # to make sure no syntax errors in patterns occur
-    exit
-  end
-
-  # Handle the no-argument case as if `--no-prefixes -f -` were passed
+if $source == :stdin
+  $*.empty? or abort "cannot supply arguments with -s (#{$*.length} given)"
   $*.replace %w[-]
-  $files = true
+  $source = :files
   $prefixes = false
   $trailing_newline = false if $trailing_newline == :auto
 end
@@ -855,6 +845,8 @@ end
 
 PatternAndAction.build!
 
+$*.empty? and exit # nothing to do with no arguments
+
 ####################################################################################################
 #                                                                                                  #
 #                                          Exit Statuses                                           #
@@ -865,8 +857,9 @@ PatternAndAction.build!
 $ENCODING_FAILED = $SOMETHING_ESCAPED = false
 
 # Optimization: Early exit for `--malformed-error` and `--check-escapes` if we're in quiet mode.
+# TODO: this optimization changes outputs on eg `mviz --check $'\t\xff'` vs `mviz -q --check $'\t\xff'`
 if $quiet
-  $malformed_error and trace_var :$ENCODING_FAILED do exit 2 end
+  $malformed_error and trace_var :$ENCODING_FAILED   do exit 2 end
   $escape_error    and trace_var :$SOMETHING_ESCAPED do exit 1 end
 end
 
@@ -968,7 +961,7 @@ def print_escapes(has_each_char, suffix = nil)
   #    newline was unescaped (eg `-l`), then the last character may be a newline. This condition is
   #    to prevent a blank line in the output. (Kinda like how `puts "a\n"` only prints one newline.)
   # puts if $prefixes && last != "\n" && (last != nil || $prefixes) # <-- TODO: make sure this is the format we want
-  # puts if $prefixes && $files
+  # puts if $prefixes && $source == :files
 rescue Interrupt
   # If we receive an interrupt (CTRL-C), then just exit with status 130.
   exit 130
@@ -981,7 +974,9 @@ end
 ####################################################################################################
 
 ## Interpret arguments as strings
-unless $files
+if $source == :strings
+  puts "#{ARGV.length} arguments:" if $prefixes
+
   ARGV.each_with_index do |string, idx|
     # Print out the prefix if a header was requested
     puts if idx.nonzero?
