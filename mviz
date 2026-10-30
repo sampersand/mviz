@@ -25,7 +25,7 @@
 ##
 ARGV.replace ARGV.map { |arg| (+arg).force_encoding('binary') }
 
-VERSION = '0.18.0' # Put the version at the top, so it's easily viewable
+VERSION = '0.18.1' # Put the version at the top, so it's easily viewable
 
 ####################################################################################################
 #                                                                                                  #
@@ -533,7 +533,10 @@ OptParse.new do |op|
                                             'which means only if stdin isnt a tty and stdout is]' do |stdin|
     $from_stdin = stdin
   end
-  op.on '-s', 'Same as --stdin' do $from_stdin = true end
+
+  op.on '-s', 'Same as --stdin' do
+    $from_stdin = true
+  end
 
   ##################################################################################################
   #                                            Outputs                                             #
@@ -828,6 +831,12 @@ if $*.empty?
     abort '-f/--files supplied, but no files given'
   end
 
+  # Exit early unless `--stdin` was supplied
+  unless $from_stdin
+    PatternAndAction.build! # to make sure no syntax errors in patterns occur
+    exit
+  end
+
   # Handle the no-argument case as if `--no-prefixes -f -` were passed
   $*.replace %w[-]
   $files = true
@@ -1053,7 +1062,7 @@ ARGV.each_with_index do |filename, idx|
 
   ## Print out the filename, a colon, and a space if prefixes were requested.
   puts if idx.nonzero?
-  puts Color.bold("==[#{filename}]==") if $prefixes
+  puts Color.bold("==[#{filename.inspect}]==") if $prefixes # TODO: escape thru visualize
 
   ## Print the escapes for the file
   print_escapes file
