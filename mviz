@@ -939,18 +939,38 @@ end
 $stdout.binmode
 $stdin.binmode.set_encoding $encoding
 
-def print_escapes(has_each_char, suffix = nil)
+def print_escapes(has_each_char)
   ## Print out each character in the file, or their escapes. We capture the last printed character,
   # so that we can match it in the following block. (We don't want to print newlines if the last
   # character in a file was a newline.)
   last = nil
+  was_newline = true
+  acc = +''
   has_each_char.each_char do |char|
-    print last = ESCAPES_CACHE[char]
+    if $escape_surronding_spaces
+      case char
+      when "\n"
+        print visualize acc unless acc.empty?
+        acc.clear
+        was_newline = ESCAPES_CACHE[char] == char # only set if we're ignoring newlines
+      when ' '
+        acc << ESCAPES_CACHE[char]
+        next
+      else
+        print was_newline ? visualize(acc) : acc unless acc.empty?
+        acc.clear
+        was_newline = false
+      end
+    end
+
+    print ESCAPES_CACHE[char]
   end
+
+  print visualize(acc) unless acc.empty?
 
   ## If a suffix is given (eg trailing spaces with `--escape-surrounding-space)`, then print it out
   # before printing a (possible) trailing newline.
-  print suffix if suffix
+  # print suffix if suffix
 
   ## Print a newline if the following are satisfied:
   # 1. It was requested. (This is the default, but can be suppressed by `--no-prefixes-or-newline`.)
@@ -987,19 +1007,8 @@ if $source == :strings
     # we need to duplicate the string here.
     string = +string
 
-    # If we're escaping surrounding spaces, check for them.
-    if $escape_surronding_spaces
-      # TODO: If we ever end up not needing to modify `string` via `.force_encoding` down below (ie
-      # if there's a way to iterate over chars without changing encodings/duplicating the string
-      # beforehand), this should be changed to use `byteslice`. The method used here is more
-      # convenient, but is destructive. ALSO. It doesn't work wtih non-utf8 characters
-      string.force_encoding Encoding::BINARY
-      leading_spaces  = string.slice!(/\A +/) and print visualize(ESCAPES_CACHE[' '] * $&.length)
-      trailing_spaces = string.slice!(/ +\z/) && visualize(ESCAPES_CACHE[' '] * $&.length)
-    end
-
     # handle the input string
-    print_escapes string.force_encoding($encoding), trailing_spaces
+    print_escapes string.force_encoding($encoding)
   end
 
   puts if $trailing_newline
