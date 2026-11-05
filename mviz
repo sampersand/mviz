@@ -234,6 +234,12 @@ module Action
     constant.is_a?(Proc) && constant
   end
 
+  def self.list
+    Action.constants
+      .select { |x| Action.const_get(x).is_a? Proc }
+      .map { |x| x.to_s.downcase.tr('_', '-') }
+  end
+
   ################################################################################
   #                          Default and Error Actions                           #
   ################################################################################
@@ -562,6 +568,11 @@ OptParse.new do |op|
     $trailing_newline = tnl
   end
 
+  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces in strings. Doesn't work with",
+                                           "the --file option. [default]" do |ess|
+    $escape_surronding_spaces = ess
+  end
+
   op.on '-1', 'Same as --no-prefixes' do
     $prefixes = false; $trailing_newline = true
   end
@@ -585,6 +596,17 @@ OptParse.new do |op|
 
   op.section 'ESCAPES', '(Multiple may be specified; ties go to the last one specified)'
 
+
+  op.on '--[no-]default-action ACTION', :ACTION, 'Specify the fallback action (or do nothing)' do |action|
+    Action.default = action || Action::PRINT
+  end
+
+  op.on '--invalid-action=ACTION', :ACTION, 'Specify the action to be used for invalid bytes. [default: hex]' do |action|
+    # These options expect codepoints, so you cant use the default option.
+    raise OptionParser::InvalidArgument if action == Action::CODEPOINTS || action == Action::DEFAULT
+    Action.error = action
+  end
+
   op.on '--escape ACTION=PATTERN', 'Escapes characters matching PATTERN with ACTION' do |arg|
     action_name, pattern = arg.split('=', 2)
     abort "missing pattern in --escape" if pattern.nil?
@@ -592,70 +614,22 @@ OptParse.new do |op|
     PatternAndAction.add_pattern_and_action("--escape", pattern, action)
   end
 
-  op.on '--escape-all=action', "Escapes _every character_ with the specified action" do |action_name|
-    action = Action.get_action(action_name) or abort "invalid argument --escape-all: invalid action name: #{action_name}"
+  op.on '--escape-all ACTION', :ACTION, "Escapes every character with the specified ACTION" do |action|
     PatternAndAction.add_pattern_and_action("--escape-all", Pattern::ALL, action)
   end
 
-  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces in strings. Doesn't work with",
-                                           "the --file option. [default]" do |ess|
-    $escape_surronding_spaces = ess
-  end
-
-  op.on '-l', "Don't escape newlines. (Same as --print='\\n')" do
-    PatternAndAction.add_pattern_and_action('-l', /\n/, Action::PRINT)
-  end
-
-  op.on '-w', "Don't escape newline, tab, or space. (Same as --print='\\n\\t ')" do
-    PatternAndAction.add_pattern_and_action('-w', /[\n\t ]/, Action::PRINT)
-  end
-
-  op.on '-S', "Escape spaces with highlights. (Same as --highlight=' ')" do
-    PatternAndAction.add_pattern_and_action('-S', / /, Action::HIGHLIGHT)
-  end
-
-  op.on '-_', "Escape spaces with a \"picture\". (Same as --picture=' ')" do
-    PatternAndAction.add_pattern_and_action('-_', / /, Action::PICTURE)
-  end
-
-  op.on '-B', "Escape backslashes as '\\\\'. (Same as --c-escapes='\\\\')",
-              '[default when no --no-color, and no --default-action is given]' do |eb|
-    PatternAndAction.add_pattern_and_action('-B', /\\/, Action::C_ESCAPES)
-  end
-
-  op.on '-m', "Use codepoints for multibyte chars. (Same as --codepoints='\\m')",
-                                        '(Not useful in single-byte-only encodings)' do
-    PatternAndAction.add_pattern_and_action('-m', Pattern::MULTIBYTE, Action::CODEPOINTS)
+  op.on '--list-actions', 'Prints out every action, then exits' do
+    puts "Available actions: #{Action.list.join ', '}"
+    exit
   end
 
 
   ##################################################################################################
   ##################################################################################################
 
-  op.section 'DEFAULT ESCAPES', '(Performed if no ESCAPES match)'
+  op.section 'DEFAULT ESCAPES', '(Performed if no ESCAPES match); to not do anything use --print.'
 
-  op.on '--default-pattern=PATTERN', 'Explicitly set the default pattern. [default: \x00-\x1F\x7F]' do |cs|
-    Pattern.raw_default = cs
-  end
-
-  op.on '--default-action=ACTION', :ACTION, "Set the default action that's used when no ESCAPES match.",
-                                            '[default: default]' do |action|
-    Action.default = action
-  end
-
-  op.on '--no-default-pattern',
-        '--no-default-action', 'Specify either of these to disable the default functionality,',
-                               'and to print verbatim any characters that dont match ESCAPES.' do
-    # Technically we could also set `Action.default = Action::PRINT`; it doesn't really matter, as
-    # "pattern that never matches" and "action that always prints" do the same thing.
-    Pattern.raw_default = Pattern::NONE
-  end
-
-  op.on '--default', 'use the default default action' do
-    Action.default = Action::DEFAULT
-  end
-
-  op.on '-u', '--print', 'Print characters, verbatim, without escaping them' do
+  op.on '--print', 'Print characters, verbatim, without escaping them' do
     Action.default = Action::PRINT
   end
 
@@ -684,57 +658,35 @@ OptParse.new do |op|
     Action.default = Action::PICTURE
   end
 
-  op.on '--codepoints', 'Prints out UTF-8 codepoints (\u{...}). Only works with UTF-8' do
-    Action.default = Action::CODEPOINTS
-  end
-
-  op.on '--highlight', 'Prints the character unchanged, but considers it "escaped"' do
-    Action.default = Action::HIGHLIGHT
-  end
-
-  op.on '--subtract-top-bit', '[EXPERIMENTAL] Subtract 0x80, then prints out picture/itself' do
-    Action.default = Action::SUBTRACT_TOP_BIT
-  end
-
-  op.on '--c-escapes', "Use c-style escapes for #{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}; others chars",
-                              'will yield a warning.' do
-    Action.default = Action::C_ESCAPES
-  end
-
   ##################################################################################################
-  #                                            Escapes                                             #
+  #                                        Shorthands                                        #
   ##################################################################################################
 
-  op.section 'INVALID BYTE ESCAPES', '(Performed on invalid bytes for the --encoding)'
-
-  op.on '--invalid-action=ACTION', :ACTION, 'Specify the action to be used for invalid bytes. [default: hex]' do |action|
-    # These options expect codepoints, so you cant use the default option.
-    raise OptionParser::InvalidArgument if action == Action::CODEPOINTS || action == Action::DEFAULT
-    Action.error = action
+  op.section 'Shorthands'
+  op.on '-l', "Don't escape newlines. (Same as --print='\\n')" do
+    PatternAndAction.add_pattern_and_action('-l', /\n/, Action::PRINT)
   end
 
-  op.on '-X', 'Same as --invalid-action=hex' do
-    Action.error = Action::HEX
+  op.on '-w', "Don't escape newline, tab, or space. (Same as --print='\\n\\t ')" do
+    PatternAndAction.add_pattern_and_action('-w', /[\n\t ]/, Action::PRINT)
   end
 
-  op.on '-O', 'Same as --invalid-action=octal' do
-    Action.error = Action::OCTAL
+  op.on '-S', "Escape spaces with highlights. (Same as --highlight=' ')" do
+    PatternAndAction.add_pattern_and_action('-S', / /, Action::HIGHLIGHT)
   end
 
-  op.on '-D', 'Same as --invalid-action=delete' do
-    Action.error = Action::DELETE
+  op.on '-_', "Escape spaces with a \"picture\". (Same as --picture=' ')" do
+    PatternAndAction.add_pattern_and_action('-_', / /, Action::PICTURE)
   end
 
-  op.on '-U', 'Same as --invalid-action=print' do
-    Action.error = Action::PRINT
+  op.on '-B', "Escape backslashes as '\\\\'. (Same as --c-escapes='\\\\')",
+              '[default when no --no-color, and no --default-action is given]' do |eb|
+    PatternAndAction.add_pattern_and_action('-B', /\\/, Action::C_ESCAPES)
   end
 
-  op.on '-@', 'Same as --invalid-action=dot' do
-    Action.error = Action::DOT
-  end
-
-  op.on '-R', 'Same as --invalid-action=replace' do
-    Action.error = Action::REPLACE
+  op.on '-m', "Use codepoints for multibyte chars. (Same as --codepoints='\\m')",
+                                        '(Not useful in single-byte-only encodings)' do
+    PatternAndAction.add_pattern_and_action('-m', Pattern::MULTIBYTE, Action::CODEPOINTS)
   end
 
   ##################################################################################################
