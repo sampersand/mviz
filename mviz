@@ -662,30 +662,30 @@ OptParse.new do |op|
   #                                        Shorthands                                        #
   ##################################################################################################
 
-  op.section 'Shorthands'
-  op.on '-l', "Don't escape newlines. (Same as --print='\\n')" do
+  op.section 'SHORTHANDS FOR COMMON ESCAPES', '(equivalent --escape option is shown)'
+  op.on '-l', "Don't escape newlines. (print=\\n)" do
     PatternAndAction.add_pattern_and_action('-l', /\n/, Action::PRINT)
   end
 
-  op.on '-w', "Don't escape newline, tab, or space. (Same as --print='\\n\\t ')" do
+  op.on '-w', "Don't escape newline, tab, or space. (print='\\n\\t ')" do
     PatternAndAction.add_pattern_and_action('-w', /[\n\t ]/, Action::PRINT)
   end
 
-  op.on '-S', "Escape spaces with highlights. (Same as --highlight=' ')" do
+  op.on '-S', "Escape spaces with highlights. (highlight=' ')" do
     PatternAndAction.add_pattern_and_action('-S', / /, Action::HIGHLIGHT)
   end
 
-  op.on '-_', "Escape spaces with a \"picture\". (Same as --picture=' ')" do
+  op.on '-_', "Escape spaces with a \"picture\". (picture=' ')" do
     PatternAndAction.add_pattern_and_action('-_', / /, Action::PICTURE)
   end
 
-  op.on '-B', "Escape backslashes as '\\\\'. (Same as --c-escapes='\\\\')",
+  op.on '-B', "Escape backslashes as '\\\\'. (c-escapes='\\\\')",
               '[default when no --no-color, and no --default-action is given]' do |eb|
     PatternAndAction.add_pattern_and_action('-B', /\\/, Action::C_ESCAPES)
   end
 
-  op.on '-m', "Use codepoints for multibyte chars. (Same as --codepoints='\\m')",
-                                        '(Not useful in single-byte-only encodings)' do
+  op.on '-m', "Use codepoints for multibyte chars. (codepoints='\\m')",
+              '(Not useful in single-byte-only encodings)' do
     PatternAndAction.add_pattern_and_action('-m', Pattern::MULTIBYTE, Action::CODEPOINTS)
   end
 
