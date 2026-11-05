@@ -25,7 +25,7 @@
 ##
 ARGV.replace ARGV.map { |arg| (+arg).force_encoding('binary') }
 
-VERSION = '0.18.2' # Put the version at the top, so it's easily viewable
+VERSION = '0.20.0' # Put the version at the top, so it's easily viewable
 
 ####################################################################################################
 #                                                                                                  #
@@ -585,55 +585,16 @@ OptParse.new do |op|
 
   op.section 'ESCAPES', '(Multiple may be specified; ties go to the last one specified)'
 
-  op.on '--print=PATTERN', 'Print characters, verbatim, without escaping them' do |pattern|
-    PatternAndAction.add_pattern_and_action('--print', pattern, Action::PRINT)
+  op.on '--escape ACTION=PATTERN', 'Escapes characters matching PATTERN with ACTION' do |arg|
+    action_name, pattern = arg.split('=', 2)
+    abort "missing pattern in --escape" if pattern.nil?
+    action = Action.get_action(action_name) or abort "invalid argument --escape: invalid action name: #{action_name}"
+    PatternAndAction.add_pattern_and_action("--escape", pattern, action)
   end
 
-  op.on '--delete=PATTERN', 'Delete characters from the output' do |pattern|
-    PatternAndAction.add_pattern_and_action('--delete', pattern, Action::DELETE)
-  end
-
-  op.on '--dot=PATTERN', 'Replaces characters by with a single period (`.`)' do |pattern|
-    PatternAndAction.add_pattern_and_action('--dot', pattern, Action::DOT)
-  end
-
-  op.on '--replace=PATTERN', "Replaces characters with the replacement character (#{Action::REPLACEMENT_CHARACTER_REPR})" do |pattern|
-    PatternAndAction.add_pattern_and_action('--replace', pattern, Action::REPLACE)
-  end
-
-  op.on '--hex=PATTERN', "Prints out a char's hex value (\\xHH)" do |pattern|
-    PatternAndAction.add_pattern_and_action('--hex', pattern, Action::HEX)
-  end
-
-  op.on '--octal=PATTERN', "Prints out a char's octal value (\\###)" do |pattern|
-    PatternAndAction.add_pattern_and_action('--octal', pattern, Action::OCTAL)
-  end
-
-  op.on '--picture=PATTERN', 'Print out "pictures" (U+240x-U+242x) for the character. Only',
-                             'works for \x00-\x20 and \x7F; other chars yield a warning' do |pattern|
-    PatternAndAction.add_pattern_and_action('--picture', pattern, Action::PICTURE)
-  end
-
-  op.on '--codepoints=PATTERN', 'Prints out UTF-8 codepoints (\u{...}). Only works with UTF-8'  do |pattern|
-    # TODO: check if encoding is utf-8, and warn if it isn't
-    PatternAndAction.add_pattern_and_action('--codepoints', pattern, Action::CODEPOINTS)
-  end
-
-  op.on '--highlight=PATTERN', 'Prints the character unchanged, but considers it "escaped"' do |pattern|
-    PatternAndAction.add_pattern_and_action('--highlight', pattern, Action::HIGHLIGHT)
-  end
-
-  op.on '--subtract-top-bit=PATTERN', '[EXPERIMENTAL] Subtract 0x80, then prints out picture/itself.' do |pattern|
-    PatternAndAction.add_pattern_and_action('--subtract-top-bit', pattern, Action::SUBTRACT_TOP_BIT)
-  end
-
-  op.on '--c-escapes=PATTERN', "Use c-style escapes for #{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}; others chars",
-                              'will yield a warning.' do |pattern|
-    PatternAndAction.add_pattern_and_action('--c-escapes', pattern, Action::C_ESCAPES)
-  end
-
-  op.on '--default=PATTERN', 'Use the default patterns for chars in PATTERN' do |pattern|
-    PatternAndAction.add_pattern_and_action('--default', pattern, Action::DEFAULT)
+  op.on '--escape-all=action', "Escapes _every character_ with the specified action" do |action_name|
+    action = Action.get_action(action_name) or abort "invalid argument --escape-all: invalid action name: #{action_name}"
+    PatternAndAction.add_pattern_and_action("--escape-all", Pattern::ALL, action)
   end
 
   op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces in strings. Doesn't work with",
@@ -677,7 +638,6 @@ OptParse.new do |op|
     Pattern.raw_default = cs
   end
 
-
   op.on '--default-action=ACTION', :ACTION, "Set the default action that's used when no ESCAPES match.",
                                             '[default: default]' do |action|
     Action.default = action
@@ -691,37 +651,54 @@ OptParse.new do |op|
     Pattern.raw_default = Pattern::NONE
   end
 
-  op.on '-u', 'Same as --default-action=print (-u b/c "unchanged")' do
+  op.on '--default', 'use the default default action' do
+    Action.default = Action::DEFAULT
+  end
+
+  op.on '-u', '--print', 'Print characters, verbatim, without escaping them' do
     Action.default = Action::PRINT
   end
 
-  op.on '-d', 'Same as --default-action=delete' do
+  op.on '-d', '--delete', 'Delete characters from the output' do
     Action.default = Action::DELETE
   end
 
-  op.on '-.', 'Same as --default-action=dot' do
+  op.on '-.', '--dot', 'Replaces characters by with a single period (`.`)' do
     Action.default = Action::DOT
   end
 
-  op.on '-r', 'Same as --default-action=replace' do
+  op.on '-r', '--replace', "Replaces characters with the replacement character (#{Action::REPLACEMENT_CHARACTER_REPR})" do
     Action.default = Action::REPLACE
   end
 
-  op.on '-x', 'Same as --default-action=hex' do
+  op.on '-x', '--hex', "Prints out a char's hex value (\\xHH)" do
     Action.default = Action::HEX
   end
 
-  op.on '-o', 'Same as --default-action=octal' do
+  op.on '-o', '--octal', "Prints out a char's octal value (\\###)" do
     Action.default = Action::OCTAL
   end
 
-  op.on '-p', 'Same as --default-action=picture' do
+  op.on '-p', '--picture', 'Print out "pictures" (U+240x-U+242x) for the character. Only',
+                             'works for \x00-\x20 and \x7F; other chars yield a warning' do
     Action.default = Action::PICTURE
   end
 
-  op.on '-a', '--escape-all', "Same as --default-pattern='\\A'. (Does nothing on its own,",
-                              'and should be combined with a --default-action=XXX flag.)' do
-    Pattern.raw_default = Pattern::ALL
+  op.on '--codepoints', 'Prints out UTF-8 codepoints (\u{...}). Only works with UTF-8' do
+    Action.default = Action::CODEPOINTS
+  end
+
+  op.on '--highlight', 'Prints the character unchanged, but considers it "escaped"' do
+    Action.default = Action::HIGHLIGHT
+  end
+
+  op.on '--subtract-top-bit', '[EXPERIMENTAL] Subtract 0x80, then prints out picture/itself' do
+    Action.default = Action::SUBTRACT_TOP_BIT
+  end
+
+  op.on '--c-escapes', "Use c-style escapes for #{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}; others chars",
+                              'will yield a warning.' do
+    Action.default = Action::C_ESCAPES
   end
 
   ##################################################################################################

@@ -1,0 +1,1094 @@
+#!/usr/bin/env -S ruby --disable=all
+# -*- encoding: UTF-8; frozen-string-literal: true -*-
+# (NOTE: The UTF-8 encoding above is to override whatever `RUBYOPT` may have supplied, as we want
+# strings in this file to be UTF-8, because I haven't tested with others.)
+
+####################################################################################################
+# The `mviz` command is a command to display "weird" character. Use `mviz -h` for a short help,    #
+# message or `mviz --help` for a long one. The README contains additional details.                 #
+####################################################################################################
+
+## Ensure all of the command-line arguments are binary-encoded.
+# This is required because the regexes that `optparse` uses to handle arguments expect the arguments
+# to be valid in whatever their source encoding is, and since `mviz` intentionally accepts invalid
+# strings (part of its purpose after all is to display the invalid bytes!), we need to convert all
+# the strings to binary (where all bytes are valid).
+#
+# Sadly, this requires duping (via `+@`) all the strings, as Ruby freezes command-line argument
+# strings. However, the maximum length of command-line arguments (which you can get for your system
+# via the shell command `getconf ARG_MAX`) is pretty low usually (on mine, just 1MB), which means
+# duplicating won't be a huge memory issue.
+#
+# (An alternative to this, which doesn't require duplicating all strings is to specify `-Ebinary`
+# when invoking ruby. This is possible via `/usr/bin/env -S ruby -Ebinary`, however `-S` isn't
+# fully portable, and `dup`ing 1MB isn't that big of a deal.)
+##
+ARGV.replace ARGV.map { |arg| (+arg).force_encoding('binary') }
+
+VERSION = '0.18.2' # Put the version at the top, so it's easily viewable
+
+####################################################################################################
+#                                                                                                  #
+#                                             Prelude                                              #
+#                                                                                                  #
+####################################################################################################
+
+## Import `optparse`, which is a default gem (and thus should always be available). Note that we
+# target older versions of Ruby (2.4.0 and above), so we don't use some of the new features of
+# optparse.
+require 'optparse'
+
+## Enable YJIT, for speed improvements. If there's _any_ problems (including running on a version
+# where YJIT doesn't exist), just silently ignore them.
+begin
+  RubyVM::YJIT.enable
+rescue Exception
+  # Completely ignore the exception
+end
+
+## Redefine the top-level `abort` and `warn` methods to prepend the program name to the message, in
+# traditional UNIX style.
+PROGRAM_NAME = File.basename($0, '.*')
+def abort(message) super "#{PROGRAM_NAME}: #{message}" end
+def warn(message)  super "#{PROGRAM_NAME}: #{message}" end
+
+####################################################################################################
+#                                                                                                  #
+#                                              Colors                                              #
+#                                                                                                  #
+####################################################################################################
+
+# List of colours that are used. We support both the `NO_COLOR` and `FORCE_COLOR` standards.
+module Color
+  # Strings to surround all escaped characters with; Defaults to "invert color"
+  STANDOUT_BEGIN = ENV.fetch('P_STANDOUT_BEGIN', "\e[7m")
+  STANDOUT_END   = ENV.fetch('P_STANDOUT_END',   "\e[27m")
+
+  # Like `STANDOUT_XXX`, but for encoding errors. Defaults to "red background, light grey foreground"
+  STANDOUT_ERR_BEGIN = ENV.fetch('P_STANDOUT_ERR_BEGIN', "\e[37m\e[41m")
+  STANDOUT_ERR_END   = ENV.fetch('P_STANDOUT_ERR_END',   "\e[49m\e[39m")
+
+  # Bold escape sequences; Bold is only used in help message and headers when files are given.
+  BOLD_BEGIN = ENV.fetch('P_BOLD_BEGIN', "\e[1m")
+  BOLD_END   = ENV.fetch('P_BOLD_END',   "\e[0m")
+
+  # Whether visual effects should be enabled by default.
+  DEFAULT = @enabled =
+    if ENV.fetch('FORCE_COLOR', '') != ''
+      true
+    elsif ENV.fetch('NO_COLOR', '') != ''
+      false
+    else
+      $stdout.tty?
+    end
+
+  class << self
+    attr_writer :enabled
+
+    def enabled?; @enabled end
+
+    def bold(msg)
+      enabled? ? "#{BOLD_BEGIN}#{msg}#{BOLD_END}" : msg
+    end
+
+    def standout(msg)
+      enabled? ? "#{STANDOUT_BEGIN}#{msg}#{STANDOUT_END}" : msg
+    end
+  end
+end
+
+####################################################################################################
+#                                                                                                  #
+#                                              Action                                              #
+#                                                                                                  #
+####################################################################################################
+
+## `Action`s are the way characters are output. They're all `Proc`s, but really all they need is to
+# have a `.call` method on them.
+#
+# These shouldn't do any internal form of "caching" results, as the `ESCAPES_CACHE` ensures that
+# each of these is only called once per character.
+module Action
+  ################################################################################
+  #                            Constants for Actions                             #
+  ################################################################################
+
+  # List of C escapes that the `C_ESCPAES` action uses.
+  C_ESCAPES_MAP = {
+    "\0" => '\0', "\a" => '\a', "\b" => '\b', "\t" => '\t', "\n" => '\n',
+    "\v" => '\v', "\f" => '\f', "\r" => '\r', "\e" => '\e', "\\" => '\\\\',
+  }
+
+  # Used with `REPLACE`, to be the character we replace things with.
+  REPLACEMENT_CHARACTER = '�'
+  REPLACEMENT_CHARACTER_REPR = '\uFFFD'
+
+  ################################################################################
+  #                                   Actions                                    #
+  ################################################################################
+
+  ## Returns the character unchanged
+  PRINT = ->char do
+    char
+  end
+
+  ## Returns nothing, but sets `$SOMETHING_ESCAPED` to true as this is a way to escape something.
+  DELETE = ->_char do
+    $SOMETHING_ESCAPED = true
+    ''
+  end
+
+  ## Returns a single `.`
+  DOT = ->_char do
+    visualize '.'
+  end
+
+  ## Returns the replacement character, `REPLACEMENT_CHARACTER`
+  REPLACE = ->_char do
+    visualize REPLACEMENT_CHARACTER
+  end
+
+  ## Returns the bytes of the character in hexadecimal format, `\xHH`
+  HEX = ->char do
+    visualize char.each_byte.map { |byte| '\x%02X' % byte }.join
+  end
+
+  ## Returns the bytes of the character in octal format, `\OOO`
+  OCTAL = ->char do
+    visualize char.each_byte.map { |byte| '\%03o' % byte }.join
+  end
+
+  ## Returns the unicode codepoint for the character, `\u{HHHH}`.
+  CODEPOINTS = ->char do
+    visualize '\u{%04X}' % char.ord
+  end
+
+  ## Simply visualizes the character without changing it
+  HIGHLIGHT = ->char do
+    visualize char
+  end
+
+  ## Returns the C-style escape for the character, if it exists. If it doesn't, a warning is
+  # printed, and it falls back on hex escapes
+  C_ESCAPES = ->char do
+    c_escape = C_ESCAPES_MAP.fetch char do
+      warn "character #{char.inspect} does not have a c escape; falling back on hex escape"
+      return HEX.call(char)
+    end
+
+    visualize c_escape
+  end
+
+  ## Returns Unicode "pictures" for certain characters (0x00 thru 0x20, and 0x7f). Other characters
+  # yield a warning with a fallback on hex escapes.
+  PICTURE = ->char do
+    case char
+    when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
+    when "\x7F"       then visualize "\u{2421}"
+    when ' '          then visualize "\u{2423}"
+    else
+      warn "character #{char.inspect} does not have a picture; falling back on hex escapes"
+      HEX.call(char)
+    end
+  end
+
+  ## Possible idea, where top-bit is subtracted
+  SUBTRACT_TOP_BIT = ->char do
+    char = (char.bytes[0] & 0x7f).chr
+    char <= "\x1F" || char == "\x7F" ? PICTURE.call(char) : visualize(char)
+    # PICTURE.call  (char.bytes[0] & 0x7f).chr
+    # visualize (char.ord & 0x7f).chr
+  end
+
+  ## The sensible, default action for characters:
+  # 1. Backslash is escaped if not showing visual escapes (as otherwise you couldn't distinguish
+  #    between two unescaped backslashes and one escaped one)
+  # 2. C-escapable characters are escaped
+  # 3. Hex for C0 control character (0x00-0x1F, 0x7F), as well as 0x7F-0xFF when in binary encoding.
+  # 4. When in UTF-8, C1 control characters have codepoints printed
+  # 5. Everything else is printed verbatim
+  DEFAULT = ->char do
+    case char
+    when Color.enabled? && '\\' # Early return the backslash when using colors so C_ESCAPES wont take it
+      char
+    when C_ESCAPES_MAP.method(:key?)
+      C_ESCAPES.call(char)
+    when "\0".."\x1F", "\x7F", $encoding == Encoding::BINARY && ("\x7F".."\xFF")
+      HEX.call(char)
+    when $encoding == Encoding::UTF_8 && /\p{Cntrl}/
+      CODEPOINTS.call(char)
+    else
+      char
+    end
+  end
+
+  ################################################################################
+  #                               Fetching Actions                               #
+  ################################################################################
+
+  ## `get_action` is used to dynamically lookup an action based on its name.
+  # It takes a case-insensitive String, and returns the `Action` that corresponds to it, or a falsey
+  # value if no action is found.
+  def self.get_action(name)
+    constant = Action.const_get(name.upcase.tr('-', '_')) rescue return
+    constant.is_a?(Proc) && constant
+  end
+
+  ################################################################################
+  #                          Default and Error Actions                           #
+  ################################################################################
+
+  # The default action happens when no more specific actions match. The error action happens when
+  # an invalid byte for the encoding occurs.
+  class << self
+    attr_accessor :default
+    attr_accessor :error
+  end
+  self.default = DEFAULT
+  self.error   = HEX
+end
+
+####################################################################################################
+#                                                                                                  #
+#                                             Pattern                                              #
+#                                                                                                  #
+####################################################################################################
+
+## Like a `Regexp`, except the `===` method calls `.match?`, instead of `=~` (which sets global
+# variables, and is less efficient).
+class RegexpFasterEqq < Regexp
+  alias === match?
+end
+
+## Helpers for matching against characters. All that a "Pattern" needs to have is the `===` method
+# defined on it, which is used to determine if the pattern matches or not.
+module Pattern
+  ## A pattern which matches all characters.
+  ALL = ->char { true }
+
+  ## A pattern which matches no characters.
+  NONE = ->char { false }
+
+  ## A pattern which matches characters composed of more than one byte.
+  MULTIBYTE = ->char { char.bytesize > 1 }
+
+  ## A pattern which matches characters composed of exactly one byte.
+  SINGLEBYTE = ->char { char.bytesize == 1 }
+
+  ## A pattern which matches "invisible" characters. Currently unimplemented, as what "invisible"
+  # means is pretty vague.
+  # INVISIBLE = /[\x09\x0A\x0B\x0C\x0D\x20\xA0\xAD\u034F\u061C]/
+
+  module_function
+
+  ## Creates a Pattern based on `selector`.
+  def build(selector)
+    case selector
+    when '\A'         then ALL
+    when '\N'         then NONE
+    when '\@'         then default
+    when '\m'         then MULTIBYTE
+    when '\M'         then SINGLEBYTE
+    when String       then RegexpFasterEqq.new( (+"[#{selector}]").force_encoding($encoding) )
+    when Regexp, Proc then selector
+    else raise ArgumentError, "bad pattern '#{selector.inspect}'"
+    end
+  end
+
+  # We use `raw_default` instead of `default`, as the default pattern's only accessible after all
+  # command-line arguments have been processed (as the encoding may come at the end).
+  @raw_default = nil
+
+  ## Set the default pattern; This can only be called before `build_default_pattern!` is run. If
+  def raw_default=(pattern)
+    fail if @default # internal bug; `raw_default=` is only used before `build_default_pattern!`
+
+    @raw_default =
+      case pattern
+      when '\@'    then nil   # Handle `\@` here to mean "whatever the default is"
+      when '', '^' then NONE  # empty patterns are equivalent to no default pattern.
+      else              pattern
+      end
+  end
+
+  ## Constructs the default pattern; This should only ever be called once, after any calls to the
+  # `default_pattern=` method have been performed.
+  def build_default_pattern!
+    fail if @default # internal bug; `build_default_pattern!` is only calledonce
+
+    @default =
+      if @raw_default
+        # If the raw default's supplied, then use that directly
+        build @raw_default
+      else
+        # Universal default character class; encode it in whatever the encoding we're using is.
+        regex = (+'[').force_encoding $encoding
+        regex.concat(
+          case $encoding
+          when Encoding::UTF_8  then '\p{Cntrl}'        # Cntrl covers everything
+          when Encoding::BINARY then '\0-\x1F\x7F-\xFF' # add upper range for binary
+          else                       '\0-\x1F\x7F'      # everything else is just ASCII control
+          end
+        )
+
+        # If we're using the default action, and we're using colors, then also add backslash to the
+        # list of escapes. We need to use a double backslash so it interpolates correctly.
+        regex.concat '\\\\' if Action.default == Action::DEFAULT && !Color.enabled?
+
+        # Finish the character class
+        regex.concat ']'
+        RegexpFasterEqq.new regex
+      end
+  end
+
+  ## Get the default pattern; This should only be called after `build_default_pattern!` is called,
+  # as the encoding for the pattern isn't known until all command-line options are parsed.
+  def default
+    @default or fail
+  end
+end
+
+####################################################################################################
+#                                                                                                  #
+#                                         PatternAndAction                                         #
+#                                                                                                  #
+####################################################################################################
+
+## The list of patterns the user has supplied in command-line flags
+module PatternAndAction
+  @raw_patterns = []
+
+  module_function
+
+  ## Adds a pattern (comprise of a `Pattern` and its `Action`) to the start of the list of patterns.
+  # This means that later patterns take priority over earlier ones. Should not be called after
+  # `.build!` is called.
+  def add_pattern_and_action(flag, pattern, action)
+    fail if @patterns # Ensure that we're called only before `.build!`
+
+    # Ignore patterns which are empty. This isn't just an optimization: Without this check, the
+    # eventual call to `Pattern.build` will fail because `[]` and `[^]` aren't valid regex character
+    # classes.
+    return if pattern == '' || pattern == '^'
+
+    # Add the pattern and its action to the list of raw patterns
+    @raw_patterns.prepend [flag, pattern, action]
+  end
+
+  ## Finalizes all the patterns, constructing the patterns with the current encoding. Should only
+  # ever be called once, after all user-supplied patterns are added via `add_pattern_and_action`.
+  def build!
+    fail if @patterns # Ensure that we're only called once.
+
+    # Construct the default pattern, so that any user-supplied patterns can reference it.
+    Pattern.build_default_pattern!
+
+    # Build the patterns via `Pattern.build`.
+    @patterns = @raw_patterns.map do |flag, pattern, action|
+      pat = Pattern.build(pattern) rescue abort("invalid pattern for argument #{flag}: #$!")
+      [pat, action]
+    end
+  end
+
+  ## Returns the representation of a character; Should only be called after `.build!`.
+  def handle(char)
+    # (No need for a `fail unless @patterns`, as `@patterns.each` will fail if `.build!` wasn't
+    # called first (as `@patterns` will be nil.))
+
+    # Check user-supplied patterns to see if any match
+    @patterns.each do |condition, action|
+      return action.call(char) if condition === char
+    end
+
+    # No user-supplied actions match, so check the default one
+    return Action.default.call(char) if Pattern.default === char
+
+    # The default one didn't match either, so just return the character unchanged.
+    char
+  end
+end
+
+####################################################################################################
+#                                                                                                  #
+#                                         Parse Arguments                                          #
+#                                                                                                  #
+####################################################################################################
+
+
+## Set defaults for globals; user-supplied options can change these.
+$encoding = ENV.key?('POSIXLY_CORRECT') ? Encoding.find('locale') : Encoding::UTF_8
+$source = :auto
+$malformed_error = true
+$escape_error = false
+$quiet = false
+$prefixes = :auto
+$trailing_newline = :auto
+$escape_surronding_spaces = true
+
+## Parse Options
+OptParse.new do |op|
+  op.program_name = PROGRAM_NAME
+  op.version = VERSION
+  def op.banner; <<~BANNER end
+  #{Color.standout 'usage'}: #{Color.bold "#{PROGRAM_NAME} [options]"}#{' '*30}read from stdin
+         #{Color.bold "#{PROGRAM_NAME} [options] STRING [STRING...]"} #{' '*10}print strings
+         #{Color.bold "#{PROGRAM_NAME} [options] -f FILE [FILE...]"}  #{' '*10}read from files
+         #{Color.bold "#{PROGRAM_NAME} [options] -s"}                 #{' '*10}read from stdin
+  BANNER
+
+  # Support `--debug`, but don't show it in the argument list
+  def (op.define('--debug') { $-d = $-v = true }).summarize(*) end
+  # op.base.long['debug'] = OptParse::Switch::NoArgument.new { $-d = $-v = true }
+
+  ## Accept actions
+  # (There's no `op.accept :PATTERN`, as patterns are only created after all arguments are parsed,
+  # as the encoding can be specified at any point);
+  op.accept :ACTION do |action|
+    Action.get_action(action) or raise OptionParser::InvalidArgument
+  end
+
+  # Support for `WHEN`s: returns true/false/:auto depending on the arguments.
+  op.accept :WHEN do |option|
+    # Oddly enough, `--no-foo` doesn't pass `false` to this function, but `--foo` (when `WHEN` is
+    # optional) does pass `nil` in. In case this changes in a future version of `optparse`, we still
+    # check for `, false` even though it's redundant.
+    case option
+    when 'always', nil  then true
+    when 'never', false then false
+    when 'auto'         then :auto
+    else raise OptionParser::InvalidArgument
+    end
+  end
+
+  # Define a custom `separator` function to add bold to each section. We have to use
+  # this hack to ensure `NO_COLOR=1 mviz --color=always --help` prints out colour help
+  # messages
+  def op.section(title, additional = nil)
+    sep = Object.new
+    sep.define_singleton_method(:summarize) do |*, &bl|
+      "\n#{Color.bold title}#{additional && ' '}#{additional}".each_line(&bl)
+    end
+    separator sep
+  end
+
+  # We can't use an `op.accept :PATTERN` here to create regex patterns because we only know the
+  # encoding after parsing all options, at which point we'd have already created all the regexes.
+
+  ##################################################################################################
+  #                                        Generic Options                                         #
+  ##################################################################################################
+  op.section 'GENERIC OPTIONS'
+
+  op.on '-h', 'Print a shorter help message and exit' do
+    puts <<~EOS
+    #{Color.bold "usage: #{PROGRAM_NAME} [options] [string ...]"}
+      --help          Print a longer help message with more options
+      -f              Interpret 'string' as files names.
+      -s              Read input from stdin; omit 'string'
+      --check         Check if any escapes are printed, and exit nonzero if so.
+      -q              Don't output anything. (Useful with --check)
+      -1 / -n         Disable prefixes (-n also disables trailing newline)
+    #{Color.bold 'ESCAPES'} (Mutually exclusive; Uppercase escapes control illegal bytes)
+      -x (-X)         Print in hex notation
+      -o (-O)         Print in octal notation
+      -d (-D)         Delete from the output
+      -u (-U)         Print unchanged
+      -. (-@)         Replace with a period ('.')
+      -r (-R)         Replace with the replacement character (#{Action::REPLACEMENT_CHARACTER_REPR})
+      -p              Replace escaped chars with "pictures"
+    #{Color.bold 'ESCAPE SHORTHANDS'}
+      -l / -w         Don't escape newlines / newlines, tabs, or spaces.
+      -S / -_         Escape spaces by highlighting it / with "pictures".
+      -B              Escape backslashes. (default unless color or "ESCAPES" given)
+      -m              Escape multibyte characters with their Unicode codepoint.
+      -a              Escape _every_ character. (Must be used with an "ESCAPES")
+    #{Color.bold 'INPUT DATA'} (UTF-8 is default unless POSIXLY_CORRECT is set)
+      -E encoding     Specify the (ASCII-compatible) encoding.
+      -b / -A / -8    Shorthands for specifying encoding as BINARY / ASCII / UTF-8
+    EOS
+    exit
+  end
+
+  op.on '--help', 'Print a longer usage message and exit' do
+    # Newer versions of OptParse have `op.help_exit`, but we also support older ones
+    if defined? op.help_exit
+      op.help_exit
+    else
+      puts op.help
+      exit
+    end
+  end
+
+  op.on '--version', 'Print the version and exit' do
+    puts op.ver
+    exit
+  end
+
+  op.on '-f', '--files', 'Interpret args as filenames to read, not strings' do
+    $source = :files
+  end
+
+  op.on '-s', '--stdin', 'Read from stdin if no arguments given; no strings accepted' do
+    $source = :stdin
+  end
+
+  op.on '--strings', 'Interpret arguments as strings always' do
+    $source = :strings
+  end
+
+  ##################################################################################################
+  #                                            Outputs                                             #
+  ##################################################################################################
+  op.section 'OUTPUTS & ERROR CHECKING'
+
+  op.on '-q', '--[no-]quiet', 'Do not output anything. (Useful with --check or --malformed-error)' do |q|
+    $quiet = q
+  end
+
+  # (Support `--color`, `--no-color`, and `--color=...`)
+  op.on '--[no-]color[=WHEN]', :WHEN, 'When to enable visual effects. (WHEN is always, never, auto).',
+                                      'auto checks FORCE_COLOR/NO_COLOR, and if not set, enables only',
+                                      'when stdout is a tty [default: auto]' do |color|
+    Color.enabled = (color == :auto ? Color::DEFAULT : color)
+  end
+
+  op.on '--[no-]prefixes[=WHEN]',:WHEN, 'When to output "prefixes". (WHEN is always, never, auto). auto',
+                                        'enables prefixes only when stdout is a tty. [default: auto]' do |pfx|
+    $prefixes = pfx
+  end
+
+  op.on '--[no-]trailing-newline[=WHEN]',:WHEN, 'When to output trailing newlines. (WHEN is always, never, auto). auto',
+                                        'disables trailing newlines only when reading from stdin [default: auto]' do |tnl|
+    $trailing_newline = tnl
+  end
+
+  op.on '-1', 'Same as --no-prefixes' do
+    $prefixes = false; $trailing_newline = true
+  end
+
+  op.on '-n', 'Same as --no-prefixes --no-trailing-newline' do
+    $prefixes = $trailing_newline = false
+  end
+
+  op.on '--[no-]malformed-error', 'Invalid chars in the --encoding cause exit status 2. [default]' do |me|
+    $malformed_error = me
+  end
+
+  op.on '--[no-]check-escapes', 'Exits with status 1 if any character is escaped. Useful to',
+                                'check inputs programmatically to ensure they are "normal".' do |ee|
+    $escape_error = ee
+  end
+
+  ##################################################################################################
+  #                                        Specific Escapes                                        #
+  ##################################################################################################
+
+  op.section 'ESCAPES', '(Multiple may be specified; ties go to the last one specified)'
+
+  op.on '--print=PATTERN', 'Print characters, verbatim, without escaping them' do |pattern|
+    PatternAndAction.add_pattern_and_action('--print', pattern, Action::PRINT)
+  end
+
+  op.on '--delete=PATTERN', 'Delete characters from the output' do |pattern|
+    PatternAndAction.add_pattern_and_action('--delete', pattern, Action::DELETE)
+  end
+
+  op.on '--dot=PATTERN', 'Replaces characters by with a single period (`.`)' do |pattern|
+    PatternAndAction.add_pattern_and_action('--dot', pattern, Action::DOT)
+  end
+
+  op.on '--replace=PATTERN', "Replaces characters with the replacement character (#{Action::REPLACEMENT_CHARACTER_REPR})" do |pattern|
+    PatternAndAction.add_pattern_and_action('--replace', pattern, Action::REPLACE)
+  end
+
+  op.on '--hex=PATTERN', "Prints out a char's hex value (\\xHH)" do |pattern|
+    PatternAndAction.add_pattern_and_action('--hex', pattern, Action::HEX)
+  end
+
+  op.on '--octal=PATTERN', "Prints out a char's octal value (\\###)" do |pattern|
+    PatternAndAction.add_pattern_and_action('--octal', pattern, Action::OCTAL)
+  end
+
+  op.on '--picture=PATTERN', 'Print out "pictures" (U+240x-U+242x) for the character. Only',
+                             'works for \x00-\x20 and \x7F; other chars yield a warning' do |pattern|
+    PatternAndAction.add_pattern_and_action('--picture', pattern, Action::PICTURE)
+  end
+
+  op.on '--codepoints=PATTERN', 'Prints out UTF-8 codepoints (\u{...}). Only works with UTF-8'  do |pattern|
+    # TODO: check if encoding is utf-8, and warn if it isn't
+    PatternAndAction.add_pattern_and_action('--codepoints', pattern, Action::CODEPOINTS)
+  end
+
+  op.on '--highlight=PATTERN', 'Prints the character unchanged, but considers it "escaped"' do |pattern|
+    PatternAndAction.add_pattern_and_action('--highlight', pattern, Action::HIGHLIGHT)
+  end
+
+  op.on '--subtract-top-bit=PATTERN', '[EXPERIMENTAL] Subtract 0x80, then prints out picture/itself.' do |pattern|
+    PatternAndAction.add_pattern_and_action('--subtract-top-bit', pattern, Action::SUBTRACT_TOP_BIT)
+  end
+
+  op.on '--c-escapes=PATTERN', "Use c-style escapes for #{Action::C_ESCAPES_MAP.map{ |key, _| key.inspect[1..-2].sub('u000', '') }.join}; others chars",
+                              'will yield a warning.' do |pattern|
+    PatternAndAction.add_pattern_and_action('--c-escapes', pattern, Action::C_ESCAPES)
+  end
+
+  op.on '--default=PATTERN', 'Use the default patterns for chars in PATTERN' do |pattern|
+    PatternAndAction.add_pattern_and_action('--default', pattern, Action::DEFAULT)
+  end
+
+  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces in strings. Doesn't work with",
+                                           "the --file option. [default]" do |ess|
+    $escape_surronding_spaces = ess
+  end
+
+  op.on '-l', "Don't escape newlines. (Same as --print='\\n')" do
+    PatternAndAction.add_pattern_and_action('-l', /\n/, Action::PRINT)
+  end
+
+  op.on '-w', "Don't escape newline, tab, or space. (Same as --print='\\n\\t ')" do
+    PatternAndAction.add_pattern_and_action('-w', /[\n\t ]/, Action::PRINT)
+  end
+
+  op.on '-S', "Escape spaces with highlights. (Same as --highlight=' ')" do
+    PatternAndAction.add_pattern_and_action('-S', / /, Action::HIGHLIGHT)
+  end
+
+  op.on '-_', "Escape spaces with a \"picture\". (Same as --picture=' ')" do
+    PatternAndAction.add_pattern_and_action('-_', / /, Action::PICTURE)
+  end
+
+  op.on '-B', "Escape backslashes as '\\\\'. (Same as --c-escapes='\\\\')",
+              '[default when no --no-color, and no --default-action is given]' do |eb|
+    PatternAndAction.add_pattern_and_action('-B', /\\/, Action::C_ESCAPES)
+  end
+
+  op.on '-m', "Use codepoints for multibyte chars. (Same as --codepoints='\\m')",
+                                        '(Not useful in single-byte-only encodings)' do
+    PatternAndAction.add_pattern_and_action('-m', Pattern::MULTIBYTE, Action::CODEPOINTS)
+  end
+
+
+  ##################################################################################################
+  ##################################################################################################
+
+  op.section 'DEFAULT ESCAPES', '(Performed if no ESCAPES match)'
+
+  op.on '--default-pattern=PATTERN', 'Explicitly set the default pattern. [default: \x00-\x1F\x7F]' do |cs|
+    Pattern.raw_default = cs
+  end
+
+
+  op.on '--default-action=ACTION', :ACTION, "Set the default action that's used when no ESCAPES match.",
+                                            '[default: default]' do |action|
+    Action.default = action
+  end
+
+  op.on '--no-default-pattern',
+        '--no-default-action', 'Specify either of these to disable the default functionality,',
+                               'and to print verbatim any characters that dont match ESCAPES.' do
+    # Technically we could also set `Action.default = Action::PRINT`; it doesn't really matter, as
+    # "pattern that never matches" and "action that always prints" do the same thing.
+    Pattern.raw_default = Pattern::NONE
+  end
+
+  op.on '-u', 'Same as --default-action=print (-u b/c "unchanged")' do
+    Action.default = Action::PRINT
+  end
+
+  op.on '-d', 'Same as --default-action=delete' do
+    Action.default = Action::DELETE
+  end
+
+  op.on '-.', 'Same as --default-action=dot' do
+    Action.default = Action::DOT
+  end
+
+  op.on '-r', 'Same as --default-action=replace' do
+    Action.default = Action::REPLACE
+  end
+
+  op.on '-x', 'Same as --default-action=hex' do
+    Action.default = Action::HEX
+  end
+
+  op.on '-o', 'Same as --default-action=octal' do
+    Action.default = Action::OCTAL
+  end
+
+  op.on '-p', 'Same as --default-action=picture' do
+    Action.default = Action::PICTURE
+  end
+
+  op.on '-a', '--escape-all', "Same as --default-pattern='\\A'. (Does nothing on its own,",
+                              'and should be combined with a --default-action=XXX flag.)' do
+    Pattern.raw_default = Pattern::ALL
+  end
+
+  ##################################################################################################
+  #                                            Escapes                                             #
+  ##################################################################################################
+
+  op.section 'INVALID BYTE ESCAPES', '(Performed on invalid bytes for the --encoding)'
+
+  op.on '--invalid-action=ACTION', :ACTION, 'Specify the action to be used for invalid bytes. [default: hex]' do |action|
+    # These options expect codepoints, so you cant use the default option.
+    raise OptionParser::InvalidArgument if action == Action::CODEPOINTS || action == Action::DEFAULT
+    Action.error = action
+  end
+
+  op.on '-X', 'Same as --invalid-action=hex' do
+    Action.error = Action::HEX
+  end
+
+  op.on '-O', 'Same as --invalid-action=octal' do
+    Action.error = Action::OCTAL
+  end
+
+  op.on '-D', 'Same as --invalid-action=delete' do
+    Action.error = Action::DELETE
+  end
+
+  op.on '-U', 'Same as --invalid-action=print' do
+    Action.error = Action::PRINT
+  end
+
+  op.on '-@', 'Same as --invalid-action=dot' do
+    Action.error = Action::DOT
+  end
+
+  op.on '-R', 'Same as --invalid-action=replace' do
+    Action.error = Action::REPLACE
+  end
+
+  ##################################################################################################
+  #                                        Specific Escapes                                        #
+  ##################################################################################################
+  op.section 'ENCODINGS'
+
+  op.on '-E', '--encoding ENCODING', "Specify the input's encoding. Case-insensitive. Encodings that",
+                                     "aren't ASCII-compatible encodings (eg UTF-16) are invalid." do |enc|
+    $encoding = Encoding.find enc rescue abort $!
+    abort "Encoding #$encoding is not ASCII-compatible!" unless $encoding.ascii_compatible?
+  end
+
+  op.on '--list-encodings', 'List all possible encodings, and exit' do
+    # Don't list external or internal encodings, as they're not really options
+    possible_encodings = (Encoding.name_list - %w[external internal])
+      .select { |name| Encoding.find(name).ascii_compatible? }
+      .join(', ')
+
+    puts "available encodings: #{possible_encodings}"
+    exit
+  end
+
+  op.on '-b', '--binary', '--bytes', 'Escapes high-bit bytes. (Same as --encoding=BINARY)' do
+    $encoding = Encoding::BINARY
+  end
+
+  op.on '-A', '--ascii', 'Like -b, but high-bits are invalid. (Same as --encoding=ASCII)' do
+    $encoding = Encoding::ASCII
+  end
+
+  op.on '-8', '--utf8', 'Sets encoding to utf-8. (Same as --encoding=UTF-8). [default',
+                        'when POSIXLY_CORRECT is not set]' do
+    $encoding = Encoding::UTF_8
+  end
+
+  op.on '--locale', 'Chooses the encoding based on environment variables. (Same',
+                    'as --encoding=locale.) [default when POSIXLY_CORRECT is set]' do
+    $encoding = Encoding.find('locale') # Chooses based on `LC_ALL`, `LC_CTYPE`, and `LANG`, in that order
+  end
+
+  ##################################################################################################
+  #                                         Parse Options                                          #
+  ##################################################################################################
+
+  # Parse the options; Note that `op.order!` requires flags to come first. I've found this is better
+  # than letting them be interspersed, as occasionally i'll do `p $@` and end up with a random falg
+  begin
+    op.order!
+  rescue OptionParser::ParseError => err # Only gracefully exit with optparse errors.
+    abort err
+  end
+end
+
+####################################################################################################
+#                                                                                                  #
+#                                      Defaults for Arguments                                      #
+#                                                                                                  #
+####################################################################################################
+
+if $source == :auto
+  if $*.empty? && !$stdin.tty? && $stdout.tty?
+    $source = :stdin
+  else
+    $source = :strings
+  end
+end
+
+if $source == :stdin
+  $*.empty? or abort "cannot supply arguments with -s (#{$*.length} given)"
+  $*.replace %w[-]
+  $source = :files
+  $prefixes = false
+  $trailing_newline = false if $trailing_newline == :auto
+end
+
+$quiet                     and $stdout = File.open(File::NULL, 'w')
+$prefixes == :auto         and $prefixes = $*.length > 1
+$trailing_newline == :auto and $trailing_newline = $*.length >= 1
+
+if Color.enabled?
+  $standout_begin = Color::STANDOUT_BEGIN
+  $standout_end = Color::STANDOUT_END
+end
+
+PatternAndAction.build!
+
+$*.empty? and exit # nothing to do with no arguments
+
+####################################################################################################
+#                                                                                                  #
+#                                          Exit Statuses                                           #
+#                                                                                                  #
+####################################################################################################
+
+# Set the defaults for the options
+$ENCODING_FAILED = $SOMETHING_ESCAPED = false
+
+# Optimization: Early exit for `--malformed-error` and `--check-escapes` if we're in quiet mode.
+# TODO: this optimization changes outputs on eg `mviz --check $'\t\xff'` vs `mviz -q --check $'\t\xff'`
+if $quiet
+  $malformed_error and trace_var :$ENCODING_FAILED   do exit 2 end
+  $escape_error    and trace_var :$SOMETHING_ESCAPED do exit 1 end
+end
+
+# Change the exit status to reflect `--malformed-error` / `--no-check-escapes`
+at_exit do
+  # `at_exit` runs even when exiting via an exception, but we only change the exit status upon a
+  # normal return.
+  next if $!
+
+  # We have specific exit codes for the different conditions, but they're documented as just
+  # "non-zero exit statuses."
+  if $malformed_error && $ENCODING_FAILED
+    exit 2
+  elsif $escape_error && $SOMETHING_ESCAPED
+    exit 1
+  end
+end
+
+####################################################################################################
+#                                                                                                  #
+#                                       Visualizing Escapes                                        #
+#                                                                                                  #
+####################################################################################################
+
+# Visualizes `string` by surrounding it with the color escape sequences if color mode is enabled.
+# Also, sets the variable `$SOMETHING_ESCAPED` regardless of color mode for `--check-escapes`.
+if Color.enabled?
+  def visualize(string)
+    $SOMETHING_ESCAPED = true
+    "#$standout_begin#{string}#$standout_end"
+  end
+else
+  def visualize(string)
+    $SOMETHING_ESCAPED = true
+    string
+  end
+end
+
+####################################################################################################
+#                                                                                                  #
+#                                        Create Escape Hash                                        #
+#                                                                                                  #
+####################################################################################################
+
+## Construct the `ESCAPES_CACHE` hash, whose keys are characters, and values are the corresponding
+# sequences to be printed.
+ESCAPES_CACHE = Hash.new do |hash, key|
+  hash[key] =
+    if !key.valid_encoding?
+      $ENCODING_FAILED = true # for the exit status with `$malformed_error`.
+
+      # Replace the global variables for just this invocation.
+      begin
+        $standout_begin = Color::STANDOUT_ERR_BEGIN
+        $standout_end   = Color::STANDOUT_ERR_END
+        Action.error.call key
+      ensure
+        $standout_begin = Color::STANDOUT_BEGIN
+        $standout_end = Color::STANDOUT_END
+      end
+    else
+      PatternAndAction.handle(key)
+    end
+end
+
+####################################################################################################
+#                                                                                                  #
+#                                         Handle Arguments                                         #
+#                                                                                                  #
+####################################################################################################
+
+## Put both stdin and stdout in bin(ary)mode: Disable newline conversion (which is used by Windows),
+# no encoding conversion done, and defaults the encoding to Encoding::BINARY (ie ascii-8bit). We
+# need this to ensure that we're handling exactly what we're given, and ruby's not trying to be
+# smart. Note that we set the encoding of `$stdin` (which doesn't undo the other binmode things),
+# as we might be iterating over `$encoding`'s characters from `$stdin` (if `-` was given).
+$stdout.binmode
+$stdin.binmode.set_encoding $encoding
+
+def print_escapes(has_each_char)
+  ## Print out each character in the file, or their escapes. We capture the last printed character,
+  # so that we can match it in the following block. (We don't want to print newlines if the last
+  # character in a file was a newline.)
+  last = nil
+  was_newline = true
+  acc = +''
+  has_each_char.each_char do |char|
+    if $escape_surronding_spaces
+      case char
+      when "\n"
+        print visualize acc unless acc.empty?
+        acc.clear
+        was_newline = ESCAPES_CACHE[char] == char # only set if we're ignoring newlines
+      when ' '
+        acc << ESCAPES_CACHE[char]
+        next
+      else
+        print was_newline ? visualize(acc) : acc unless acc.empty?
+        acc.clear
+        was_newline = false
+      end
+    end
+
+    print ESCAPES_CACHE[char]
+  end
+
+  print visualize(acc) unless acc.empty?
+
+  ## If a suffix is given (eg trailing spaces with `--escape-surrounding-space)`, then print it out
+  # before printing a (possible) trailing newline.
+  # print suffix if suffix
+
+  ## Print a newline if the following are satisfied:
+  # 1. It was requested. (This is the default, but can be suppressed by `--no-prefixes-or-newline`.)
+  # 2. At least one character was printed, or prefixes were enabled; If no characters are printed,
+  #    we normally don't want to add a newline, when prefixes are being output we want each filename
+  #    to be on their own lines.
+  # 3. The last character to be printed was not a newline; This is normally the case, but if the
+  #    newline was unescaped (eg `-l`), then the last character may be a newline. This condition is
+  #    to prevent a blank line in the output. (Kinda like how `puts "a\n"` only prints one newline.)
+  # puts if $prefixes && last != "\n" && (last != nil || $prefixes) # <-- TODO: make sure this is the format we want
+  # puts if $prefixes && $source == :files
+rescue Interrupt
+  # If we receive an interrupt (CTRL-C), then just exit with status 130.
+  exit 130
+end
+
+####################################################################################################
+#                                                                                                  #
+#                                Handle when arguments are strings                                 #
+#                                                                                                  #
+####################################################################################################
+
+## Interpret arguments as strings
+if $source == :strings
+  puts "#{ARGV.length} arguments:" if $prefixes
+
+  ARGV.each_with_index do |string, idx|
+    # Print out the prefix if a header was requested
+    puts if idx.nonzero?
+    printf '%5d: ', idx + 1 if $prefixes
+
+    # Unfortunately, `ARGV` strings are frozen, and we need to forcibly change the string's encoding
+    # within `handle` so can iterate over the contents of the string in the new encoding. As such,
+    # we need to duplicate the string here.
+    string = +string
+
+    # handle the input string
+    print_escapes string.force_encoding($encoding)
+  end
+
+  puts if $trailing_newline
+
+  # Exit early so we don't deal with the chunk below. Note however, the `at_exit` earlier in this
+  # file for dealing with the `--malformed-error` flag.
+  return
+end
+
+####################################################################################################
+#                                                                                                  #
+#                                          Handle --files                                          #
+#                                                                                                  #
+####################################################################################################
+
+# Sadly, we can't use `ARGF` for numerous reasons:
+# 1. `ARGF#each_char` will completely skip empty files, and won't call its block. So there's no easy
+#    way for us to print prefixes for empty files. (We _could_ keep our own `ARGV` list, but that
+#    would be incredibly hacky.) And, we have to check file names _each time_ we get a new char.
+# 2. `ARGF#readpartial` gives empty strings when a new file is read, which lets us more easily print
+#    out prefixes. However, it doesn't give an empty string for the first line (which is solvable,
+#    but annoying). However, the main problem is that you might read the first half of a multibyte
+#    sequence, which then wouldn't be escaped. Since we support utf-8, utf-16, and utf-32, it's not
+#    terribly easy (from my experiments with) to make a generalized way to detect half-finished seq-
+#    uence.
+# 3. `ARGF` in general prints out very ugly error messages for missing/unopenable files, and it's a
+#    pain to easily capture them, especially since we want to dump all files, even if there's a
+#    problem with one of them.
+# 4. `ARGF#filename` is not a usable way to see if new files are given: Using `old == ARGF.filename`
+#    in a loop doesn't work in the case of two identical files (eg `mviz ab.txt ab.txt`).
+#    But, `old.equal? ARGF.filename` also doesn't work because a brand new `"-"` is returned for
+#    each `.filename` call when `ARGV` started out empty (i.e. `mviz` with no arguments).
+#
+# Unfortunately, manually iterating over `ARGV` also has its issues:
+# 1. You need to manually check for `ARGV.empty?` and then default it to `/dev/stdin` if no files
+#    were given. However, neither `/dev/stdin` nor `/dev/fd/1` are technically portable, and
+#    what I can tell Ruby does not automatically recognize them and use the appropriate filenos.
+# 2. We have to manually check for `-` ourselves and redirect it to `/dev/stdin`, which is janky.
+# 3. It's much more verbose
+
+## If no arguments are given, default to `-`
+ARGV.replace %w[-] if ARGV.empty?
+
+## Iterate over each file in `ARGV`, and print their contents.
+ARGV.each_with_index do |filename, idx|
+  ## Open the file that was requested. As a special case, if the value `-` is given, it reads from
+  # stdin. (We can't use `/dev/stdin` because it's not portable to Windows, so we have to use
+  # `$stdin` directly.)
+  file =
+    if filename == '-'
+      $stdin
+    else
+      File.open(filename, 'rb', encoding: $encoding)
+    end
+
+  ## Print out the filename, a colon, and a space if prefixes were requested.
+  puts if idx.nonzero?
+  puts Color.bold("==[#{filename.inspect}]==") if $prefixes # TODO: escape thru visualize
+
+  ## Print the escapes for the file
+  print_escapes file
+rescue => err
+  ## Whenever an error occurs, we want to handle it, but not bail out: We want to print every file
+  # we're given (like `cat`), reporting errors along the way, and then exiting with a non-zero exit
+  # status if there's a problem.
+  warn err           # Warn of the problem
+  $FILE_ERROR = true # For use when we're exiting
+ensure
+  ## Regardless of whether an exception occurred, attempt to close the file after each execution.
+  # However, do not close `$stdin` (which occurs when `-` is passed in as a filename), as we might
+  # be reading from it later on. Additionally any problems closing the file are silently swallowed,
+  # as we only care about problems opening/reading files, not closing them.
+  unless file.nil? || file.equal?($stdin) # file can be `nil` if opening it failed
+    file.close rescue nil # We don't care about problems closing it
+  end
+end
+
+puts if $trailing_newline
+
+## If there was a problem reading a file, exit with a non-zero exit status. Note that we do this
+# instead of `exit !$FILE_ERROR`, as the `--invalid-bytes-failure` flag sets an `at_exit` earlier in
+# this file which checks for the exiting exception, which `exit false` would still raise.
+exit 1 if $FILE_ERROR
