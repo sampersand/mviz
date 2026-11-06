@@ -108,7 +108,7 @@ end
 #
 # These shouldn't do any internal form of "caching" results, as the `ESCAPES_CACHE` ensures that
 # each of these is only called once per character.
-module Action
+class Action
   ################################################################################
   #                            Constants for Actions                             #
   ################################################################################
@@ -488,28 +488,27 @@ OptParse.new do |op|
   op.on '-h', 'Print a shorter help message and exit' do
     puts <<~EOS
     #{Color.bold "usage: #{PROGRAM_NAME} [options] [string ...]"}
-      --help          Print a longer help message with more options
-      -f              Interpret 'string' as files names.
-      -s              Read input from stdin; omit 'string'
-      --check         Check if any escapes are printed, and exit nonzero if so.
-      -q              Don't output anything. (Useful with --check)
+    #{Color.bold "COMMON FLAGS"} (use --help for full list)
+      -f, --files     Interpret 'string' as files names.
+      -s, --stdin     Read input from stdin; omit 'string'
+          --check     Check if any escapes are printed, and exit nonzero if so.
+      -q, --quiet     Don't output anything. (Useful with --check)
       -1 / -n         Disable prefixes (-n also disables trailing newline)
-    #{Color.bold 'ESCAPES'} (Mutually exclusive; Uppercase escapes control illegal bytes)
-      -x (-X)         Print in hex notation
-      -o (-O)         Print in octal notation
-      -d (-D)         Delete from the output
-      -u (-U)         Print unchanged
-      -. (-@)         Replace with a period ('.')
-      -r (-R)         Replace with the replacement character (#{Action::REPLACEMENT_CHARACTER_REPR})
-      -p              Replace escaped chars with "pictures"
+    #{Color.bold 'ESCAPES'} (Specifies default action)
+      --escape ACTION=PATTERN  Add an additional escape
+      -x, --hex       Print in hex notation
+      -o, --octal     Print in octal notation
+      -d, --delete    Delete from the output
+      -r, --replace   Replace with the replacement character (#{Action::REPLACEMENT_CHARACTER_REPR})
+      -., --dot       Replace with a period ('.')
+      -p, --picture   Replace escaped chars with "pictures"
     #{Color.bold 'ESCAPE SHORTHANDS'}
       -l / -w         Don't escape newlines / newlines, tabs, or spaces.
       -S / -_         Escape spaces by highlighting it / with "pictures".
       -B              Escape backslashes. (default unless color or "ESCAPES" given)
       -m              Escape multibyte characters with their Unicode codepoint.
-      -a              Escape _every_ character. (Must be used with an "ESCAPES")
     #{Color.bold 'INPUT DATA'} (UTF-8 is default unless POSIXLY_CORRECT is set)
-      -E encoding     Specify the (ASCII-compatible) encoding.
+      -E ENCODING     Specify the (ASCII-compatible) encoding.
       -b / -A / -8    Shorthands for specifying encoding as BINARY / ASCII / UTF-8
     EOS
     exit
@@ -596,18 +595,28 @@ OptParse.new do |op|
 
   op.section 'ESCAPES', '(Multiple may be specified; ties go to the last one specified)'
 
-
-  op.on '--[no-]default-action ACTION', :ACTION, 'Specify the fallback action (or do nothing)' do |action|
+  op.on '--[no-]default-action ACTION', :ACTION, 'Explicitly specify the default action. Common actions (such',
+                                                 '  as -x/--hex) have dedicated helper flags to do this. Disabling',
+                                                 '  the default action prints characters unchanged.' do |action|
     Action.default = action || Action::PRINT
   end
 
-  op.on '--invalid-action=ACTION', :ACTION, 'Specify the action to be used for invalid bytes. [default: hex]' do |action|
+  op.on '--invalid-action ACTION', :ACTION, 'Specify the action to be used for invalid bytes in',
+                                            '  the input encoding [default: hex]' do |action|
     # These options expect codepoints, so you cant use the default option.
     raise OptionParser::InvalidArgument if action == Action::CODEPOINTS || action == Action::DEFAULT
     Action.error = action
   end
 
-  op.on '--escape ACTION=PATTERN', 'Escapes characters matching PATTERN with ACTION' do |arg|
+  op.on '--list-actions', 'Prints out every action, then exits' do
+    puts "Available actions: #{Action.list.join ', '}"
+    exit
+  end
+
+  op.on '--escape ACTION=PATTERN', 'Escapes characters matching PATTERN with ACTION. This',
+                                   'lets you be more fine-grained in your escaping beyond',
+                                   'just the default escape. Last one specified that matches',
+                                   'wins.' do |arg|
     action_name, pattern = arg.split('=', 2)
     abort "missing pattern in --escape" if pattern.nil?
     action = Action.get_action(action_name) or abort "invalid argument --escape: invalid action name: #{action_name}"
@@ -616,11 +625,6 @@ OptParse.new do |op|
 
   op.on '--escape-all ACTION', :ACTION, "Escapes every character with the specified ACTION" do |action|
     PatternAndAction.add_pattern_and_action("--escape-all", Pattern::ALL, action)
-  end
-
-  op.on '--list-actions', 'Prints out every action, then exits' do
-    puts "Available actions: #{Action.list.join ', '}"
-    exit
   end
 
 
@@ -694,14 +698,18 @@ OptParse.new do |op|
   ##################################################################################################
   op.section 'ENCODINGS'
 
-  op.on '-E', '--encoding ENCODING', "Specify the input's encoding. Case-insensitive. Encodings that",
-                                     "aren't ASCII-compatible encodings (eg UTF-16) are invalid." do |enc|
-    $encoding = Encoding.find enc rescue abort $!
-    abort "Encoding #$encoding is not ASCII-compatible!" unless $encoding.ascii_compatible?
+  op.on '-E', '--encoding ENCODING', "Specify the input's encoding; Case-Insensitive" do |enc|
+    $encoding = Encoding.find enc rescue raise OptionParser::InvalidArgument, $!
+
+    # We only support ASCII-compatible encodings for ease of use.
+    unless $encoding.ascii_compatible?
+      raise OptionParser::InvalidArgument, "encoding #$encoding is not ASCII-compatible"
+    end
   end
 
   op.on '--list-encodings', 'List all possible encodings, and exit' do
-    # Don't list external or internal encodings, as they're not really options
+    # Don't list external or internal encodings, as they're not really options. Also,
+    # we don't support non-ASCII compatible encodings, so no need to list them out either.
     possible_encodings = (Encoding.name_list - %w[external internal])
       .select { |name| Encoding.find(name).ascii_compatible? }
       .join(', ')
@@ -718,7 +726,7 @@ OptParse.new do |op|
     $encoding = Encoding::ASCII
   end
 
-  op.on '-8', '--utf8', 'Sets encoding to utf-8. (Same as --encoding=UTF-8). [default',
+  op.on '-8', '--utf8', 'Sets encoding to UTF-8. (Same as --encoding=UTF-8). [default',
                         'when POSIXLY_CORRECT is not set]' do
     $encoding = Encoding::UTF_8
   end
