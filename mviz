@@ -25,7 +25,7 @@
 ##
 ARGV.replace ARGV.map { |arg| (+arg).force_encoding('binary') }
 
-VERSION = '0.20.0' # Put the version at the top, so it's easily viewable
+VERSION = '0.20.1' # Put the version at the top, so it's easily viewable
 
 ####################################################################################################
 #                                                                                                  #
@@ -495,13 +495,13 @@ OptParse.new do |op|
       -q, --quiet     Don't output anything. (Useful with --check)
       -1 / -n         Disable prefixes (-n also disables trailing newline)
     #{Color.bold 'ESCAPES'} (Specifies default action)
-      --escape ACTION=PATTERN  Add an additional escape
-      -x, --hex       Print in hex notation
-      -o, --octal     Print in octal notation
-      -d, --delete    Delete from the output
-      -r, --replace   Replace with the replacement character (#{Action::REPLACEMENT_CHARACTER_REPR})
-      -., --dot       Replace with a period ('.')
-      -p, --picture   Replace escaped chars with "pictures"
+      --do ACTION=PATTERN  Add an additional escape
+      -x, --hex            Print in hex notation
+      -o, --octal          Print in octal notation
+      -d, --delete         Delete from the output
+      -r, --replace        Replace with the replacement character (#{Action::REPLACEMENT_CHARACTER_REPR})
+      -., --dot            Replace with a period ('.')
+      -p, --picture        Replace escaped chars with "pictures"
     #{Color.bold 'ESCAPE SHORTHANDS'}
       -l / -w         Don't escape newlines / newlines, tabs, or spaces.
       -S / -_         Escape spaces by highlighting it / with "pictures".
@@ -613,18 +613,17 @@ OptParse.new do |op|
     exit
   end
 
-  op.on '--escape ACTION=PATTERN', 'Escapes characters matching PATTERN with ACTION. This',
-                                   'lets you be more fine-grained in your escaping beyond',
-                                   'just the default escape. Last one specified that matches',
-                                   'wins.' do |arg|
+  op.on '--do ACTION=PATTERN', 'Performs ACTION on characters matching PATTERN. This lets',
+                               'you be more fine-grained in your escaping beyond just',
+                               'the default escape. Last one specified that matches wins.' do |arg|
     action_name, pattern = arg.split('=', 2)
-    abort "missing pattern in --escape" if pattern.nil?
-    action = Action.get_action(action_name) or abort "invalid argument --escape: invalid action name: #{action_name}"
-    PatternAndAction.add_pattern_and_action("--escape", pattern, action)
+    abort "missing pattern in --do" if pattern.nil?
+    action = Action.get_action(action_name) or abort "invalid argument --do: invalid action name: #{action_name}"
+    PatternAndAction.add_pattern_and_action("--do", pattern, action)
   end
 
-  op.on '--escape-all ACTION', :ACTION, "Escapes every character with the specified ACTION" do |action|
-    PatternAndAction.add_pattern_and_action("--escape-all", Pattern::ALL, action)
+  op.on '--do-all ACTION', :ACTION, "Escapes every character with the specified ACTION" do |action|
+    PatternAndAction.add_pattern_and_action("--do-all", Pattern::ALL, action)
   end
 
 
@@ -666,7 +665,7 @@ OptParse.new do |op|
   #                                        Shorthands                                        #
   ##################################################################################################
 
-  op.section 'SHORTHANDS FOR COMMON ESCAPES', '(equivalent --escape option is shown)'
+  op.section 'SHORTHANDS FOR COMMON ESCAPES', '(equivalent --do option is shown)'
   op.on '-l', "Don't escape newlines. (print=\\n)" do
     PatternAndAction.add_pattern_and_action('-l', /\n/, Action::PRINT)
   end
