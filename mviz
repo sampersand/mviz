@@ -189,6 +189,11 @@ class Action
     end
   end
 
+  ## TRANSLATE
+  TRANSLATE = ->from, to, char do
+    char.tr(from, to)
+  end
+
   ## Possible idea, where top-bit is subtracted
   SUBTRACT_TOP_BIT = ->char do
     char = (char.bytes[0] & 0x7f).chr
@@ -567,8 +572,7 @@ OptParse.new do |op|
     $trailing_newline = tnl
   end
 
-  op.on '--[no-]escape-surrounding-space', "Escape leading/trailing spaces in strings. Doesn't work with",
-                                           "the --file option. [default]" do |ess|
+  op.on '--[no-]escape-surrounding-spaces', "Escape leading/trailing spaces in strings. [default]" do |ess|
     $escape_surronding_spaces = ess
   end
 
@@ -584,8 +588,8 @@ OptParse.new do |op|
     $malformed_error = me
   end
 
-  op.on '--[no-]check-escapes', 'Exits with status 1 if any character is escaped. Useful to',
-                                'check inputs programmatically to ensure they are "normal".' do |ee|
+  op.on '--[no-]check', 'Exits with status 1 if any character is escaped. Useful to',
+                        'check inputs programmatically to ensure they are "normal".' do |ee|
     $escape_error = ee
   end
 
@@ -619,10 +623,22 @@ OptParse.new do |op|
     action_name, pattern = arg.split('=', 2)
     abort "missing pattern in --do" if pattern.nil?
     action = Action.get_action(action_name) or abort "invalid argument --do: invalid action name: #{action_name}"
+
+    if action == Action::TRANSLATE
+      if pattern[/(?<!\\);/]
+        pattern1=pattern
+        to = $' || ""
+        pattern = $` or abort "invalid argument --do: missing pattern in #{pattern1.inspect}"
+      else
+        to = ''
+      end
+      action = action.curry.call(pattern, to)
+    end
+
     PatternAndAction.add_pattern_and_action("--do", pattern, action)
   end
 
-  op.on '--do-all ACTION', :ACTION, "Escapes every character with the specified ACTION" do |action|
+  op.on '-a', '--do-all=ACTION', :ACTION, "Escapes every character with the specified ACTION" do |action|
     PatternAndAction.add_pattern_and_action("--do-all", Pattern::ALL, action)
   end
 
@@ -640,7 +656,7 @@ OptParse.new do |op|
     Action.default = Action::DELETE
   end
 
-  op.on '-.', '--dot', 'Replaces characters by with a single period (`.`)' do
+  op.on '-.', '--dot', 'Replaces characters by with a single period (".")' do
     Action.default = Action::DOT
   end
 
@@ -780,8 +796,6 @@ if Color.enabled?
 end
 
 PatternAndAction.build!
-
-$*.empty? and exit # nothing to do with no arguments
 
 ####################################################################################################
 #                                                                                                  #
@@ -925,7 +939,7 @@ end
 
 ## Interpret arguments as strings
 if $source == :strings
-  puts "#{ARGV.length} arguments:" if $prefixes
+  puts "#{ARGV.length} argument#{ARGV.length == 1 ? '' : 's'}:" if $prefixes
 
   ARGV.each_with_index do |string, idx|
     # Print out the prefix if a header was requested
