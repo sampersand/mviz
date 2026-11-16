@@ -250,6 +250,7 @@ class Action
     attr_accessor :default
     attr_accessor :error
   end
+
   self.default = DEFAULT
   self.error   = HEX
 end
@@ -854,7 +855,7 @@ ESCAPES_CACHE = Hash.new do |hash, key|
         Action.error.call key
       ensure
         $standout_begin = Color::STANDOUT_BEGIN
-        $standout_end = Color::STANDOUT_END
+        $standout_end   = Color::STANDOUT_END
       end
     else
       PatternAndAction.handle(key)
