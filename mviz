@@ -129,63 +129,60 @@ class Action
 
   ## Returns the character unchanged
   PRINT = ->char do
-    char
+    nil # nothing to visualize
   end
 
   ## Returns nothing, but sets `$SOMETHING_ESCAPED` to true as this is a way to escape something.
   DELETE = ->_char do
-    $SOMETHING_ESCAPED = true
     ''
   end
 
   ## Returns a single `.`
   DOT = ->_char do
-    visualize '.'
+    '.'
   end
 
   ## Returns the replacement character, `REPLACEMENT_CHARACTER`
   REPLACE = ->_char do
-    visualize REPLACEMENT_CHARACTER
+    REPLACEMENT_CHARACTER
   end
 
   ## Returns the bytes of the character in hexadecimal format, `\xHH`
   HEX = ->char do
-    visualize char.each_byte.map { |byte| '\x%02X' % byte }.join
+    char.each_byte.map { |byte| '\x%02X' % byte }.join
   end
 
   ## Returns the bytes of the character in octal format, `\OOO`
   OCTAL = ->char do
-    visualize char.each_byte.map { |byte| '\%03o' % byte }.join
+    char.each_byte.map { |byte| '\%03o' % byte }.join
   end
 
   ## Returns the unicode codepoint for the character, `\u{HHHH}`.
   CODEPOINTS = ->char do
-    visualize '\u{%04X}' % char.ord
+    '\u{%04X}' % char.ord
   end
 
   ## Simply visualizes the character without changing it
   HIGHLIGHT = ->char do
-    visualize char
+    char
   end
 
   ## Returns the C-style escape for the character, if it exists. If it doesn't, a warning is
   # printed, and it falls back on hex escapes
   C_ESCAPES = ->char do
-    c_escape = C_ESCAPES_MAP.fetch char do
+    C_ESCAPES_MAP.fetch char do
       warn "character #{char.inspect} does not have a c escape; falling back on hex escape"
       return HEX.call(char)
     end
-
-    visualize c_escape
   end
 
   ## Returns Unicode "pictures" for certain characters (0x00 thru 0x20, and 0x7f). Other characters
   # yield a warning with a fallback on hex escapes.
   PICTURE = ->char do
     case char
-    when "\0".."\x1F" then visualize (0x2400 + char.ord).chr(Encoding::UTF_8)
-    when "\x7F"       then visualize "\u{2421}"
-    when ' '          then visualize "\u{2423}"
+    when "\0".."\x1F" then (0x2400 + char.ord).chr(Encoding::UTF_8)
+    when "\x7F"       then "\u{2421}"
+    when ' '          then "\u{2423}"
     else
       warn "character #{char.inspect} does not have a picture; falling back on hex escapes"
       HEX.call(char)
@@ -195,7 +192,7 @@ class Action
   ## Possible idea, where top-bit is subtracted
   SUBTRACT_TOP_BIT = ->char do
     char = (char.bytes[0] & 0x7f).chr
-    char <= "\x1F" || char == "\x7F" ? PICTURE.call(char) : visualize(char)
+    char <= "\x1F" || char == "\x7F" ? PICTURE.call(char) : char
     # PICTURE.call  (char.bytes[0] & 0x7f).chr
     # visualize (char.ord & 0x7f).chr
   end
@@ -210,7 +207,7 @@ class Action
   DEFAULT = ->char do
     case char
     when Color.enabled? && '\\' # Early return the backslash when using colors so C_ESCAPES wont take it
-      char
+      nil
     when C_ESCAPES_MAP.method(:key?)
       C_ESCAPES.call(char)
     when "\0".."\x1F", "\x7F", $encoding == Encoding::BINARY && ("\x7F".."\xFF")
@@ -218,7 +215,7 @@ class Action
     when $encoding == Encoding::UTF_8 && /\p{Cntrl}/
       CODEPOINTS.call(char)
     else
-      char
+      nil
     end
   end
 
@@ -395,6 +392,8 @@ module PatternAndAction
       pat = Pattern.build(pattern) rescue abort("invalid pattern for argument #{flag}: #$!")
       [pat, action]
     end
+
+    @patterns << [Pattern.default, Action.default]
   end
 
   ## Returns the representation of a character; Should only be called after `.build!`.
@@ -407,11 +406,11 @@ module PatternAndAction
       return action.call(char) if condition === char
     end
 
-    # No user-supplied actions match, so check the default one
-    return Action.default.call(char) if Pattern.default === char
+    # # No user-supplied actions match, so check the default one
+    # return Action.default.call(char) if Pattern.default === char
 
     # The default one didn't match either, so just return the character unchanged.
-    char
+    nil
   end
 end
 
@@ -848,17 +847,11 @@ ESCAPES_CACHE = Hash.new do |hash, key|
     if !key.valid_encoding?
       $ENCODING_FAILED = true # for the exit status with `$malformed_error`.
 
-      # Replace the global variables for just this invocation.
-      begin
-        $standout_begin = Color::STANDOUT_ERR_BEGIN
-        $standout_end   = Color::STANDOUT_ERR_END
-        Action.error.call key
-      ensure
-        $standout_begin = Color::STANDOUT_BEGIN
-        $standout_end   = Color::STANDOUT_END
-      end
+      chr = Action.error.call(key)
+      chr.nil? ? key : "#{Color::STANDOUT_ERR_BEGIN}#{chr}#{Color::STANDOUT_ERR_END}"
     else
-      PatternAndAction.handle(key)
+      chr = PatternAndAction.handle(key)
+      chr.nil? ? key : visualize(chr)
     end
 end
 
