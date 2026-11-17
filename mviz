@@ -857,6 +857,8 @@ end
 $stdout.binmode
 $stdin.binmode.set_encoding $encoding
 
+# Prints the escapes for the argument (which must respond to `has_each_char`). Returns the final
+# character sequence that was printed
 def print_escapes(has_each_char)
   ## Print out each character in the file, or their escapes. We capture the last printed character,
   # so that we can match it in the following block. (We don't want to print newlines if the last
@@ -864,11 +866,12 @@ def print_escapes(has_each_char)
   last = nil
   was_newline = true
   acc = +''
+
   has_each_char.each_char do |char|
     if $escape_surronding_spaces
       case char
       when "\n"
-        print Color.visualize acc unless acc.empty?
+        print Color.visualize(acc) unless acc.empty?
         acc.clear
         was_newline = ESCAPES_CACHE[char] == char # only set if we're ignoring newlines
       when ' '
@@ -885,22 +888,8 @@ def print_escapes(has_each_char)
   end
 
   print Color.visualize(acc) unless acc.empty?
+
   last
-
-  ## If a suffix is given (eg trailing spaces with `--escape-surrounding-space)`, then print it out
-  # before printing a (possible) trailing newline.
-  # print suffix if suffix
-
-  ## Print a newline if the following are satisfied:
-  # 1. It was requested. (This is the default, but can be suppressed by `--no-prefixes-or-newline`.)
-  # 2. At least one character was printed, or prefixes were enabled; If no characters are printed,
-  #    we normally don't want to add a newline, when prefixes are being output we want each filename
-  #    to be on their own lines.
-  # 3. The last character to be printed was not a newline; This is normally the case, but if the
-  #    newline was unescaped (eg `-l`), then the last character may be a newline. This condition is
-  #    to prevent a blank line in the output. (Kinda like how `puts "a\n"` only prints one newline.)
-  # puts if $prefixes && last != "\n" && (last != nil || $prefixes) # <-- TODO: make sure this is the format we want
-  # puts if $prefixes && $source == :files
 rescue Interrupt
   # If we receive an interrupt (CTRL-C), then just exit with status 130.
   exit 130
