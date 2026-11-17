@@ -304,50 +304,28 @@ module Pattern
     end
   end
 
-  # We use `raw_default` instead of `default`, as the default pattern's only accessible after all
-  # command-line arguments have been processed (as the encoding may come at the end).
-  @raw_default = nil
-
-  ## Set the default pattern; This can only be called before `build_default_pattern!` is run. If
-  def raw_default=(pattern)
-    fail if @default # internal bug; `raw_default=` is only used before `build_default_pattern!`
-
-    @raw_default =
-      case pattern
-      when '\@'    then nil   # Handle `\@` here to mean "whatever the default is"
-      when '', '^' then NONE  # empty patterns are equivalent to no default pattern.
-      else              pattern
-      end
-  end
-
   ## Constructs the default pattern; This should only ever be called once, after any calls to the
   # `default_pattern=` method have been performed.
   def build_default_pattern!
     fail if @default # internal bug; `build_default_pattern!` is only calledonce
 
-    @default =
-      if @raw_default
-        # If the raw default's supplied, then use that directly
-        build @raw_default
-      else
-        # Universal default character class; encode it in whatever the encoding we're using is.
-        regex = (+'[').force_encoding $encoding
-        regex.concat(
-          case $encoding
-          when Encoding::UTF_8  then '\p{Cntrl}'        # Cntrl covers everything
-          when Encoding::BINARY then '\0-\x1F\x7F-\xFF' # add upper range for binary
-          else                       '\0-\x1F\x7F'      # everything else is just ASCII control
-          end
-        )
-
-        # If we're using the default action, and we're using colors, then also add backslash to the
-        # list of escapes. We need to use a double backslash so it interpolates correctly.
-        regex.concat '\\\\' if Action.default == Action::DEFAULT && !Color.enabled?
-
-        # Finish the character class
-        regex.concat ']'
-        RegexpFasterEqq.new regex
+    # Universal default character class; encode it in whatever the encoding we're using is.
+    regex = (+'[').force_encoding $encoding
+    regex.concat(
+      case $encoding
+      when Encoding::UTF_8  then '\p{Cntrl}'        # Cntrl covers everything
+      when Encoding::BINARY then '\0-\x1F\x7F-\xFF' # add upper range for binary
+      else                       '\0-\x1F\x7F'      # everything else is just ASCII control
       end
+    )
+
+    # If we're using the default action, and we're using colors, then also add backslash to the
+    # list of escapes. We need to use a double backslash so it interpolates correctly.
+    regex.concat '\\\\' if Action.default == Action::DEFAULT && !Color.enabled?
+
+    # Finish the character class
+    regex.concat ']'
+    @default = RegexpFasterEqq.new regex
   end
 
   ## Get the default pattern; This should only be called after `build_default_pattern!` is called,
@@ -411,9 +389,6 @@ module PatternAndAction
       return action.call(char) if condition === char
     end
 
-    # # No user-supplied actions match, so check the default one
-    # return Action.default.call(char) if Pattern.default === char
-
     # The default one didn't match either, so just return the character unchanged.
     nil
   end
@@ -441,15 +416,14 @@ OptParse.new do |op|
   op.program_name = PROGRAM_NAME
   op.version = VERSION
   def op.banner; <<~BANNER end
-  #{Color.standout 'usage'}: #{Color.bold "#{PROGRAM_NAME} [options]"}#{' '*30}read from stdin
-         #{Color.bold "#{PROGRAM_NAME} [options] STRING [STRING...]"} #{' '*10}print strings
-         #{Color.bold "#{PROGRAM_NAME} [options] -f FILE [FILE...]"}  #{' '*10}read from files
-         #{Color.bold "#{PROGRAM_NAME} [options] -s"}                 #{' '*10}read from stdin
+  #{Color.standout 'usage'}: #{Color.bold "#{PROGRAM_NAME} [options] [STRING...]"} #{' '*10}print strings
+         #{Color.bold "#{PROGRAM_NAME} [options] -f [FILE...]"}  #{' '*8}read from files
+         #{Color.bold "#{PROGRAM_NAME} [options] -s"}            #{' '*8}read from stdin
+         #{Color.bold "#{PROGRAM_NAME} [options]"}#{' '*23}read from stdin if stdout is a tty
   BANNER
 
   # Support `--debug`, but don't show it in the argument list
-  def (op.define('--debug') { $-d = $-v = true }).summarize(*) end
-  # op.base.long['debug'] = OptParse::Switch::NoArgument.new { $-d = $-v = true }
+  op.base.long['debug'] = OptParse::Switch::NoArgument.new { $-d = $-v = true }
 
   ## Accept actions
   # (There's no `op.accept :PATTERN`, as patterns are only created after all arguments are parsed,
@@ -493,6 +467,7 @@ OptParse.new do |op|
   op.on '-h', 'Print a shorter help message and exit' do
     puts <<~EOS
     #{Color.bold "usage: #{PROGRAM_NAME} [options] [string ...]"}
+    Prints strings/files with invisible, control, and invalid charcaters escaped
     #{Color.bold "COMMON FLAGS"} (use --help for full list)
       -f, --files     Interpret 'string' as files names.
       -s, --stdin     Read input from stdin; omit 'string'
@@ -500,7 +475,7 @@ OptParse.new do |op|
       -q, --quiet     Don't output anything. (Useful with --check)
       -1 / -n         Disable prefixes (-n also disables trailing newline)
     #{Color.bold 'ESCAPES'} (Specifies default action)
-      --do ACTION=PATTERN  Add an additional escape
+           --do ACTION=PATTERN  Add an additional escape
       -x, --hex            Print in hex notation
       -o, --octal          Print in octal notation
       -d, --delete         Delete from the output
@@ -790,11 +765,6 @@ $quiet                     and $stdout = File.open(File::NULL, 'w')
 $prefixes == :auto         and $prefixes = $*.length > 1
 $trailing_newline == :auto and $trailing_newline = $*.length >= 1
 
-if Color.enabled?
-  $standout_begin = Color::STANDOUT_BEGIN
-  $standout_end = Color::STANDOUT_END
-end
-
 PatternAndAction.build!
 
 ####################################################################################################
@@ -839,10 +809,19 @@ end
 if Color.enabled?
   def visualize(string)
     $SOMETHING_ESCAPED = true
-    "#$standout_begin#{string}#$standout_end"
+    "#{Color::STANDOUT_BEGIN}#{string}#{Color::STANDOUT_BEGIN}"
+  end
+  def visualize_err(string)
+    $ENCODING_FAILED = true
+    "#{Color::STANDOUT_ERR_BEGIN}#{string}#{Color::STANDOUT_ERR_END}"
   end
 else
   def visualize(string)
+    $SOMETHING_ESCAPED = true
+    string
+  end
+
+  def visualize_err(string)
     $SOMETHING_ESCAPED = true
     string
   end
@@ -862,7 +841,7 @@ ESCAPES_CACHE = Hash.new do |hash, key|
       $ENCODING_FAILED = true # for the exit status with `$malformed_error`.
 
       chr = Action.error.call(key)
-      chr.nil? ? key : "#{Color::STANDOUT_ERR_BEGIN}#{chr}#{Color::STANDOUT_ERR_END}"
+      chr.nil? ? key : visualize_err(chr)
     else
       chr = PatternAndAction.handle(key)
       chr.nil? ? key : visualize(chr)
@@ -993,11 +972,7 @@ end
 # 2. We have to manually check for `-` ourselves and redirect it to `/dev/stdin`, which is janky.
 # 3. It's much more verbose
 
-## If no arguments are given, default to `-`
-ARGV.replace %w[-] if ARGV.empty?
-
-## Iterate over each file in `ARGV`, and print their contents.
-ARGV.each_with_index do |filename, idx|
+def print_file_escapes(filename, idx)
   ## Open the file that was requested. As a special case, if the value `-` is given, it reads from
   # stdin. (We can't use `/dev/stdin` because it's not portable to Windows, so we have to use
   # `$stdin` directly.)
@@ -1014,6 +989,9 @@ ARGV.each_with_index do |filename, idx|
 
   ## Print the escapes for the file
   print_escapes file
+rescue Errno::EPIPE
+  # When stdout is a closed pipe, then just reraise.
+  raise
 rescue => err
   ## Whenever an error occurs, we want to handle it, but not bail out: We want to print every file
   # we're given (like `cat`), reporting errors along the way, and then exiting with a non-zero exit
@@ -1030,7 +1008,20 @@ ensure
   end
 end
 
-puts if $trailing_newline
+## If no arguments are given, default to `-`
+ARGV.replace %w[-] if ARGV.empty?
+
+## Iterate over each file in `ARGV`, and print their contents.
+begin
+  ARGV.each_with_index do |filename, idx|
+    print_file_escapes(filename, idx)
+  end
+
+  puts if $trailing_newline
+rescue Errno::EPIPE
+  # do nothing, we're exiting
+  # When stdout is a closed pipe, then just reraise.
+end
 
 ## If there was a problem reading a file, exit with a non-zero exit status. Note that we do this
 # instead of `exit !$FILE_ERROR`, as the `--invalid-bytes-failure` flag sets an `at_exit` earlier in
