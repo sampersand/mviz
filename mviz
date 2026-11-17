@@ -58,7 +58,7 @@ def warn(message)  super "#{PROGRAM_NAME}: #{message}" end
 #                                                                                                  #
 ####################################################################################################
 
-# List of colours that are used. We support both the `NO_COLOR` and `FORCE_COLOR` standards.
+# List of colors that are used. We support both the `NO_COLOR` and `FORCE_COLOR` standards.
 module Color
   # Strings to surround all escaped characters with; Defaults to "invert color"
   STANDOUT_BEGIN = ENV.fetch('P_STANDOUT_BEGIN', "\e[7m")
@@ -84,16 +84,34 @@ module Color
 
   class << self
     attr_writer :enabled
+  end
 
-    def enabled?; @enabled end
+  module_function
 
-    def bold(msg)
-      enabled? ? "#{BOLD_BEGIN}#{msg}#{BOLD_END}" : msg
-    end
+  # Whether color escapes are enabled at all
+  def enabled?
+    @enabled
+  end
 
-    def standout(msg)
-      enabled? ? "#{STANDOUT_BEGIN}#{msg}#{STANDOUT_END}" : msg
-    end
+  # Bolds a string if colors are enabled
+  def bold(msg)
+    enabled? ? "#{BOLD_BEGIN}#{msg}#{BOLD_END}" : msg
+  end
+
+  # Adds "standout" to a string if standouts are enabled
+  def standout(msg)
+    enabled? ? "#{STANDOUT_BEGIN}#{msg}#{STANDOUT_END}" : msg
+  end
+
+
+  def visualize(string)
+    $SOMETHING_ESCAPED = true
+    enabled? ? "#{STANDOUT_BEGIN}#{string}#{STANDOUT_END}" : string
+  end
+
+  def visualize_err(string)
+    $ENCODING_FAILED = true
+    enabled? ? "#{STANDOUT_ERR_BEGIN}#{string}#{STANDOUT_ERR_END}" : string
   end
 end
 
@@ -446,7 +464,7 @@ OptParse.new do |op|
   end
 
   # Define a custom `separator` function to add bold to each section. We have to use
-  # this hack to ensure `NO_COLOR=1 mviz --color=always --help` prints out colour help
+  # this hack to ensure `NO_COLOR=1 mviz --color=always --help` prints out color help
   # messages
   def op.section(title, additional = nil)
     sep = Object.new
@@ -745,25 +763,31 @@ end
 #                                                                                                  #
 ####################################################################################################
 
+# If no source is supplied (i.e. `--files`, `--stdin`, or `--strings`), then default to `--strings`,
+# with the exception that if no arguments were supplied, and stdin is not a tty and stdout is,
+# then we default to `--stdin`. (This is a convenience for `echo ... | mviz`)
 if $source == :auto
-  if $*.empty? && !$stdin.tty? && $stdout.tty?
-    $source = :stdin
-  else
-    $source = :strings
-  end
+  $source = ARGV.empty? && !$stdin.tty? && $stdout.tty? ? :stdin : :strings
 end
 
+# Handle `--stdin` as actually the same as `--files /dev/stdin`, except `--trailing-newline`
+# defaults to false if it's not given (so you can do `echo ... | mviz -s | ...`, and mviz
+# won't append a trailing newline)
 if $source == :stdin
-  $*.empty? or abort "cannot supply arguments with -s (#{$*.length} given)"
-  $*.replace %w[-]
+  ARGV.empty? or abort "cannot supply arguments with --stdin (#{ARGV.length} given)"
+  ARGV.replace %w[/dev/stdin]
   $source = :files
-  $prefixes = false
   $trailing_newline = false if $trailing_newline == :auto
 end
 
-$quiet                     and $stdout = File.open(File::NULL, 'w')
-$prefixes == :auto         and $prefixes = $*.length > 1
-$trailing_newline == :auto and $trailing_newline = $*.length >= 1
+# If `--quiet` is given, then redirect stdout to /dev/null
+$stdout = File.open(File::NULL, 'w') if $quiet
+
+# Have `--prefixes` default to whether more than one argument is given. Convenient for `mviz $arg`.
+$prefixes = 1 < ARGV.length if $prefixes == :auto
+
+# Have `--trailing-newline` default to true if at least one argument is supplied
+$trailing_newline = ARGV.length.positive? if $trailing_newline == :auto
 
 PatternAndAction.build!
 
@@ -800,35 +824,6 @@ end
 
 ####################################################################################################
 #                                                                                                  #
-#                                       Visualizing Escapes                                        #
-#                                                                                                  #
-####################################################################################################
-
-# Visualizes `string` by surrounding it with the color escape sequences if color mode is enabled.
-# Also, sets the variable `$SOMETHING_ESCAPED` regardless of color mode for `--check-escapes`.
-if Color.enabled?
-  def visualize(string)
-    $SOMETHING_ESCAPED = true
-    "#{Color::STANDOUT_BEGIN}#{string}#{Color::STANDOUT_END}"
-  end
-  def visualize_err(string)
-    $ENCODING_FAILED = true
-    "#{Color::STANDOUT_ERR_BEGIN}#{string}#{Color::STANDOUT_ERR_END}"
-  end
-else
-  def visualize(string)
-    $SOMETHING_ESCAPED = true
-    string
-  end
-
-  def visualize_err(string)
-    $SOMETHING_ESCAPED = true
-    string
-  end
-end
-
-####################################################################################################
-#                                                                                                  #
 #                                        Create Escape Hash                                        #
 #                                                                                                  #
 ####################################################################################################
@@ -841,10 +836,10 @@ ESCAPES_CACHE = Hash.new do |hash, key|
       $ENCODING_FAILED = true # for the exit status with `$malformed_error`.
 
       chr = Action.error.call(key)
-      chr.nil? ? key : visualize_err(chr)
+      chr.nil? ? key : Color.visualize_err(chr)
     else
       chr = PatternAndAction.handle(key)
-      chr.nil? ? key : visualize(chr)
+      chr.nil? ? key : Color.visualize(chr)
     end
 end
 
@@ -873,14 +868,14 @@ def print_escapes(has_each_char)
     if $escape_surronding_spaces
       case char
       when "\n"
-        print visualize acc unless acc.empty?
+        print Color.visualize acc unless acc.empty?
         acc.clear
         was_newline = ESCAPES_CACHE[char] == char # only set if we're ignoring newlines
       when ' '
         acc << ESCAPES_CACHE[char]
         next
       else
-        print was_newline ? visualize(acc) : acc unless acc.empty?
+        print was_newline ? Color.visualize(acc) : acc unless acc.empty?
         acc.clear
         was_newline = false
       end
@@ -889,7 +884,7 @@ def print_escapes(has_each_char)
     print ESCAPES_CACHE[char]
   end
 
-  print visualize(acc) unless acc.empty?
+  print Color.visualize(acc) unless acc.empty?
 
   ## If a suffix is given (eg trailing spaces with `--escape-surrounding-space)`, then print it out
   # before printing a (possible) trailing newline.
@@ -1007,9 +1002,6 @@ ensure
     file.close rescue nil # We don't care about problems closing it
   end
 end
-
-## If no arguments are given, default to `-`
-ARGV.replace %w[-] if ARGV.empty?
 
 ## Iterate over each file in `ARGV`, and print their contents.
 begin
