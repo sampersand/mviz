@@ -16,14 +16,21 @@ enum action_type
 	ACTION_PICTURE,
 };
 
+struct action;
+typedef void (*action_fn)(const struct action *, struct rune);
+
 struct action
 {
-	enum action_type type;
+	action_fn fn;
 
 	union {
 		char *replacement;
 	};
 };
+
+static inline void perform_action(const struct action *a, struct rune r) {
+	return a->fn(a, r);
+}
 
 void action_fn_default(const struct action *, struct rune);
 void action_fn_print(const struct action *, struct rune);

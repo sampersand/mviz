@@ -11,5 +11,13 @@ struct charclass {
 	struct range *ranges;
 };
 
-bool parse_charclass(struct charclass *cc, const char *source);
-bool class_match(const struct charclass *cc, char_codepoint cp);
+struct pattern {
+	struct charclass *ccs;
+	int nccs;
+};
+
+// parses a pattern, returns non-zero if there's an error
+int parse_pattern(struct pattern *pat, const char *source);
+
+// returns true if the pattern matches
+bool pattern_match(const struct pattern *pat, char_codepoint cp);

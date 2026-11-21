@@ -1,54 +1,65 @@
 #include "options.h"
+#include "color.h"
 #include "shared.h"
 #include <stdio.h>
+#include <string.h>
 
-char *program_name;
+const char *program_name;
 struct options options;
 
-char **
+void
 parse_options(int argc, char **argv)
 {
-	(void) argc;
+	const char **orig_argv = (const char **)argv;
+	if (argc == 0) {
+		program_name = "p";
+		return;
+	}
+
 	program_name = argv[0];
 	argv++;
 
-	while (*argv != NULL) {
-		char *arg = *argv;
+	// Parse each option out
+	for (; *argv != NULL; ++argv) {
+		const char *arg = *argv;
 
-		// If it's not a flag, then we're done
+		// If it's not a flag, then we're done parsing options.
 		if (arg[0] != '-')
-			goto done;
-
-		switch (*arg++) {
-		// If it's just a `-`, that's also end.
-		case '\0':
-			goto done;
-		case 'h':
-			die("todo");
-
-		case 'f':
-			die("todo");
-		}
-		arg++;
-		if (arg[0] == '\0')
 			break;
 
-		// For `--`, that's end but first reduce argv
-		if (arg[0] == '-' && arg[1] == '\0') {
+		arg++; // go past the `-` to figure out what's next
+		char opt = *arg;
+
+		if (opt == '\0') break; // just a `-`, that's a normal arg
+		if (opt == '-' && arg[1] == '\0') { // that's `--`, incr arg and stop
 			argv++;
 			break;
 		}
 
-		if (arg[0] == '-' && arg[1] == '-') goto long_option;
-
-
-	long_option:
-		die("todo");
-		argc--;
-		argv++;
+	reparse:
+		// otherwise, let's see what short option we just got
+		switch (opt) {
+		case 'h':
+			die("todo1");
+		case 'f':
+			die("todo2");
+		default:
+			die("todo arg");
+		case '-':
+			arg++;
+			if (!strcmp(arg, "color")) {
+				color_enabled = true;
+				continue;
+			} else if (!strcmp(arg, "no-color")) {
+				color_enabled = false;
+				continue;
+			}
+			;
+		}
 	}
 
 done:
-	options.params = argv;
+	options.args = (const char **) argv;
+	options.nargs = options.args - orig_argv;
 }
 

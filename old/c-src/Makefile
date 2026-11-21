@@ -6,7 +6,7 @@ SRCS = $(wildcard *.c)
 OBJS = $(SRCS:.c=.o)
 
 run: $(TARGET)
-	@-./mviz  -qx  --check --default-action=hex
+	@-env NO_COLOR=1 ./mviz "$(shell printf 'hello\tworld')👍"
 
 # Link all object files into the final executable
 $(TARGET): $(OBJS)
